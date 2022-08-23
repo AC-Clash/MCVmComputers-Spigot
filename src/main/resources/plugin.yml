@@ -1,0 +1,21 @@
+name: Project_Magisha
+version: '${project.version}'
+main: me.acclashcorporation.project_magisha.Project_Magisha
+api-version: 1.19
+authors: [ Anston_Sorensen ]
+description: A classified project.
+website: www.acclash.com
+depend: [ProtocolLib]
+commands:
+  createc:
+    description: Creates a computer of the specified type.
+  removec:
+    description: Removes a computer.
+  testmap:
+    description: Test the Magisha map.
+  magisha:
+    description: A classified command.
+  armstest:
+    description: Poo
+  darpatrain:
+    description: Delivers you a new experimental DARPA train.
