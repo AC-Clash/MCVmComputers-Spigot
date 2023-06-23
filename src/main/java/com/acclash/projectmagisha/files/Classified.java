@@ -1,4 +1,4 @@
-package me.acclashcorporation.project_magisha.files;
+package com.acclash.projectmagisha.files;
 
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;

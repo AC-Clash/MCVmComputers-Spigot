@@ -1,21 +1,32 @@
-name: Project_Magisha
+name: ProjectMagisha
 version: '${project.version}'
-main: me.acclashcorporation.project_magisha.Project_Magisha
-api-version: 1.19
+main: com.acclash.projectmagisha.ProjectMagisha
+api-version: 1.13
 authors: [ Anston_Sorensen ]
 description: A classified project.
 website: www.acclash.com
-depend: [ProtocolLib]
 commands:
-  createc:
-    description: Creates a computer of the specified type.
-  removec:
-    description: Removes a computer.
+  computer:
+    description: Manages various actions with computers.
   testmap:
     description: Test the Magisha map.
+  givetestmap:
+    description: Get the Magisha map.
   magisha:
     description: A classified command.
   armstest:
     description: Poo
   darpatrain:
     description: Delivers you a new experimental DARPA train.
+  serialize:
+    description: Serializes the current held item and writes it in the Classified yml file.
+  deserialize:
+    description: Deserializes the last item in the Classified yml file.
+  lightpo:
+    description: Test the light update
+  summonpo:
+    description: Summon Po!
+  fallingblocktest:
+    description: Test the mysterious falling block
+  control:
+    description: Control an entity!

@@ -1,25 +1,20 @@
-package me.acclashcorporation.project_magisha.commands;
+package com.acclash.projectmagisha.commands;
 
-import me.acclashcorporation.project_magisha.Project_Magisha;
-import org.bukkit.Bukkit;
+import com.acclash.projectmagisha.ProjectMagisha;
 import org.bukkit.ChatColor;
-import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.util.Vector;
 
 public class Magisha implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 
-        if (sender instanceof Player) {
-
-            Player player = (Player) sender;
+        if (sender instanceof Player player) {
 
             if (args.length == 0) {
                 player.sendMessage(ChatColor.RED + "You need to enter some arguments.");
@@ -47,7 +42,7 @@ public class Magisha implements CommandExecutor {
                         }
                         tick++;
                     }
-                }.runTaskTimer(Project_Magisha.getPlugin(), 0L, 2L);
+                }.runTaskTimer(ProjectMagisha.getPlugin(), 0L, 2L);
 
             } else {
                 player.sendMessage(ChatColor.RED + "Too many arguments.");

@@ -1,4 +1,4 @@
-package me.acclashcorporation.project_magisha;
+package com.acclash.projectmagisha.util;
 
 import org.bukkit.entity.Player;
 import org.bukkit.map.*;
@@ -8,6 +8,8 @@ import java.awt.*;
 public class MagishaMapRenderer extends MapRenderer {
 
     private final Image image;
+
+
 
     public MagishaMapRenderer(Image image) {
         this.image = image;

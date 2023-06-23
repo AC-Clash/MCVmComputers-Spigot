@@ -1,6 +1,6 @@
-package me.acclashcorporation.project_magisha.commands;
+package com.acclash.projectmagisha.commands;
 
-import me.acclashcorporation.project_magisha.MagishaMapRenderer;
+import com.acclash.projectmagisha.util.MagishaMapRenderer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
@@ -9,7 +9,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.MapMeta;
-import org.bukkit.map.MapRenderer;
 import org.bukkit.map.MapView;
 
 import javax.imageio.ImageIO;
@@ -24,9 +23,7 @@ public class SampleCrap implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 
-        if (sender instanceof Player) {
-
-            Player player = (Player) sender;
+        if (sender instanceof Player player) {
 
             ItemStack mapItem = new ItemStack(Material.FILLED_MAP);
             MapMeta mapmeta = (MapMeta) mapItem.getItemMeta();
