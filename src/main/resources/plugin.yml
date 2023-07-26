@@ -1,0 +1,18 @@
+name: MagishaComputerDivision
+version: '${version}'
+main: com.acclash.magishacomputerdivision.MagishaComputerDivision
+api-version: 1.13
+authors: [Anston_Sorensen]
+description: The part of project magisha that handles the computers
+website: www.accclash.com
+commands:
+  computer:
+    description: Manages various actions with computers.
+  test:
+    description: Tests the decompressing of the image files.
+  resetdb:
+    description: l
+libraries:
+  - org.apache.commons:commons-compress:1.23.0
+  - org.tukaani:xz:1.9
+  - commons-io:commons-io:2.13.0
