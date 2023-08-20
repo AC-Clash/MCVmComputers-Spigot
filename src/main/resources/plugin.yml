@@ -1,6 +1,6 @@
-name: MagishaComputerDivision
+name: VMComputers
 version: '${version}'
-main: com.acclash.magishacomputerdivision.MagishaComputerDivision
+main: com.acclash.vmcomputers.VMComputers
 api-version: 1.13
 authors: [Anston_Sorensen]
 description: The part of project magisha that handles the computers

@@ -9,7 +9,7 @@
     <version>0.8</version>
     <packaging>jar</packaging>
 
-    <name>MagishaComputerDivision</name>
+    <name>VMComputers</name>
 
     <description>The part of project magisha that handles the computers</description>
     <properties>
@@ -97,14 +97,14 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.3.0</version>
                 <configuration>
-                    <outputDirectory>C:\Users\Anston Sorensen\Desktop\Minecraft Servers\AC Clash Server Network\Backups\Hub\plugins</outputDirectory>
+                    <outputDirectory>C:\Users\Anston Sorensen\OneDrive - Warrensburg R-VI School District\Documents\Minecraft Servers\AC Clash Server Network\Backups\Hub\plugins</outputDirectory>
                 </configuration>
             </plugin>
         </plugins>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
-                <filtering>true</filtering>
+                <filtering>false</filtering>
             </resource>
         </resources>
     </build>
@@ -117,6 +117,10 @@
         <repository>
             <id>sonatype</id>
             <url>https://oss.sonatype.org/content/groups/public/</url>
+        </repository>
+        <repository>
+            <id>clojars</id>
+            <url>https://clojars.org/repo/</url>
         </repository>
     </repositories>
 
@@ -145,6 +149,26 @@
             <artifactId>commons-io</artifactId>
             <version>2.13.0</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.javassist</groupId>
+            <artifactId>javassist</artifactId>
+            <version>3.29.2-GA</version>
+        </dependency>
+        <dependency>
+            <groupId>jnetpcap</groupId>
+            <artifactId>jnetpcap</artifactId>
+            <version>1.4.r1425-1g</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.20.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.20.0</version>
         </dependency>
     </dependencies>
 </project>
