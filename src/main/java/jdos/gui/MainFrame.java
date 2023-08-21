@@ -1,7 +1,6 @@
 package jdos.gui;
 
 import com.acclash.vmcomputers.VMComputers;
-import com.acclash.vmcomputers.commands.SampleCrap;
 import com.acclash.vmcomputers.utils.ComputerFunctions;
 import jdos.Dosbox;
 import jdos.ints.Mouse;
@@ -114,8 +113,8 @@ public class MainFrame implements GUI {
         panel.setPreferredSize(new Dimension(width, height));
         frame.getContentPane().doLayout();
         frame.pack();
-        if (!frame.isVisible())
-            frame.setVisible(true);
+        if (/*!*/frame.isVisible())
+            frame.setVisible(/*true*/false);
     }
     public void dopaint() {
         panel.repaint();

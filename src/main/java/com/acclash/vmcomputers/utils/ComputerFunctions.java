@@ -1,6 +1,7 @@
 package com.acclash.vmcomputers.utils;
 
 import com.acclash.vmcomputers.VMComputers;
+import jdos.gui.Main;
 import jdos.gui.MainFrame;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -18,11 +19,18 @@ import org.bukkit.scheduler.BukkitTask;
 import java.awt.*;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.Optional;
 
 public class ComputerFunctions {
 
-    public static BukkitTask task;
+    static HashMap<Integer, Integer> taskMap = new HashMap<>();
+
+    static HashMap<Integer, MainFrame> frameMap = new HashMap<>();
+
+    public static HashMap<Integer, MainFrame> getFrameMap() {
+        return frameMap;
+    }
 
     public static void sendSpaceInput(Player player) {
             Location blockLoc = player.getLocation().getBlock().getLocation().add(0, 1, 0);
@@ -37,10 +45,13 @@ public class ComputerFunctions {
                         if (resultSet.getString("type").equals("Dell Dimension l500R")) {
                             String sql2 = "UPDATE computers SET state = 'ON' WHERE id = " + id + ";";
                             VMComputers.getPlugin().getDB().executeUpdate(sql2);
-                            task = Bukkit.getScheduler().runTask(VMComputers.getPlugin(), () -> {
-                                String[] args = {String.valueOf(id)};
-                                MainFrame.main(args);
+                            BukkitTask task = Bukkit.getScheduler().runTask(VMComputers.getPlugin(), () -> {
+                                String[] args = {};
+                                MainFrame mainFrame = new MainFrame();
+                                Main.main(mainFrame, args);
+                                frameMap.put(id, mainFrame);
                             });
+                            taskMap.put(id, task.getTaskId());
                         } else {
                             player.sendMessage("Not implemented yet");
                         }
@@ -50,7 +61,8 @@ public class ComputerFunctions {
                         if (resultSet.getString("type").equals("Dell Dimension l500R")) {
                             String sql2 = "UPDATE computers SET state = 'OFF' WHERE id = " + id + ";";
                             VMComputers.getPlugin().getDB().executeUpdate(sql2);
-                            task.cancel();
+                            Bukkit.getScheduler().cancelTask(taskMap.get(id));
+                            taskMap.put(id, null);
                         } else {
                             player.sendMessage("Not implemented yet");
                         }
@@ -59,6 +71,10 @@ public class ComputerFunctions {
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
+    }
+
+    public static HashMap<Integer, Integer> getTaskMap() {
+        return taskMap;
     }
 
     public static void refreshImage(int id, Image image) {
@@ -70,8 +86,11 @@ public class ComputerFunctions {
                 Optional<Entity> monitor = monitorLoc.getWorld().getNearbyEntities(monitorLoc, 1, 1, 1).stream().filter(entity -> entity.getPersistentDataContainer().has(new NamespacedKey(VMComputers.getPlugin(), "isMonitor"), PersistentDataType.STRING)).findFirst();
                 if (resultSet.next()) {
                     if (resultSet.getString("state").equals("OFF")) {
-                        System.out.println("This wasn't supposed to happen. Shutting down now...");
-                        Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+                        VMComputers.getPlugin().getLogger().severe("This wasn't supposed to happen. Shutting down now...");
+                        if (taskMap.get(id) != null) {
+                            Bukkit.getScheduler().cancelTask(taskMap.get(id));
+                            taskMap.put(id, null);
+                        }
                     } else {
                         if (monitor.isPresent()) {
                             ItemFrame fmonitor = (ItemFrame) monitor.get();
@@ -89,6 +108,10 @@ public class ComputerFunctions {
                             fmonitor.setItem(screen);
                         } else {
                             Bukkit.broadcastMessage(ChatColor.YELLOW + "You weren't supposed to be able to break the monitor! You'll have to re-create the computer now!");
+                            if (taskMap.get(id) != null) {
+                                Bukkit.getScheduler().cancelTask(taskMap.get(id));
+                                taskMap.put(id, null);
+                            }
                         }
                     }
                 }

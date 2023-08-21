@@ -1,7 +1,7 @@
 name: VMComputers
 version: '${version}'
 main: com.acclash.vmcomputers.VMComputers
-api-version: 1.13
+api-version: 1.20
 authors: [Anston_Sorensen]
 description: The part of project magisha that handles the computers
 website: www.accclash.com
@@ -12,7 +12,3 @@ commands:
     description: Tests the decompressing of the image files.
   resetdb:
     description: l
-libraries:
-  - org.apache.commons:commons-compress:1.23.0
-  - org.tukaani:xz:1.9
-  - commons-io:commons-io:2.13.0

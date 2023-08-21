@@ -8,7 +8,7 @@ import java.sql.*;
 import java.util.logging.Level;
 
 public class SQLite extends Database {
-    String dbname = "computers";
+    String dbname = "hardware";
 
     public SQLite(VMComputers instance) {
         super(instance);
@@ -30,9 +30,13 @@ public class SQLite extends Database {
     // SQL creation stuff, You can leave the blow stuff untouched.
     public Connection getSQLConnection() {
         File dataFolder = VMComputers.getPlugin().getDataFolder();
-        File dataFile = new File(VMComputers.getPlugin().getDataFolder(), dbname + ".db");
-        if (!dataFolder.exists()) {
-            dataFolder.mkdir();
+        File newFolder =  new File("plugins" + File.separator + "vm_computers");
+        File isoFolder =  new File(newFolder, "isos");
+        File hddFolder =  new File(newFolder, "hdds");
+        File dataFile = new File(newFolder, dbname + ".db");
+        System.out.println(dataFolder);
+        if (!newFolder.exists()) {
+            newFolder.mkdir();
         }
         if (!dataFile.exists()) {
             try {
@@ -40,6 +44,12 @@ public class SQLite extends Database {
             } catch (IOException e) {
                 VMComputers.getPlugin().getLogger().log(Level.SEVERE, "File write error: " + dbname + ".db");
             }
+        }
+        if (!isoFolder.exists()) {
+            isoFolder.mkdir();
+        }
+        if (!hddFolder.exists()) {
+            hddFolder.mkdir();
         }
         try {
             if (connection != null && !connection.isClosed()) {

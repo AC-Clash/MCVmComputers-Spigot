@@ -78,7 +78,7 @@ public class Main extends MainBase {
             } else if (event.getID() == MouseEvent.MOUSE_PRESSED) {
                 if (mouse_requestlock && !mouse_locked) {
                     GFX_CaptureMouse();
-                    // Dont pass klick to mouse handler
+                    // Don't pass click to mouse handler
                     return;
                 }
                 if (!mouse_autoenable && mouse_autolock && event.getButton() == MouseEvent.BUTTON3) {

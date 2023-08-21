@@ -5,12 +5,15 @@ import com.acclash.vmcomputers.net.InboundHandler;
 import io.netty.channel.ChannelPipeline;
 import net.minecraft.network.Connection;
 import net.minecraft.server.MinecraftServer;
+import org.bukkit.NamespacedKey;
 import org.bukkit.craftbukkit.v1_20_R1.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.net.InetSocketAddress;
 import java.util.NoSuchElementException;
@@ -50,6 +53,17 @@ public class PlayerListener implements Listener {
 
         Player player = e.getPlayer();
         player.setResourcePack("https://www.dropbox.com/s/gvovwkn4mw11muu/Project%20Magisha.zip?dl=1", null, true);
+
+    }
+
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent e) {
+
+        Player player = e.getPlayer();
+        if (!player.isInsideVehicle()) return;
+        if (player.getVehicle().getPersistentDataContainer().has(new NamespacedKey(VMComputers.getPlugin(), "isEChair"), PersistentDataType.STRING)) {
+            e.setCancelled(true);
+        }
 
     }
 }
