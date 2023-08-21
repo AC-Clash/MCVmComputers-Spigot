@@ -27,6 +27,9 @@ public class InboundHandler extends ChannelInboundHandlerAdapter {
     public final Player player;
     public final UUID playerUUID;
 
+    long lastAttack = 0;
+    long cooldownTime = 1000; // 1000 milliseconds
+
     public InboundHandler(Player player) {
         this.player = player;
         this.playerUUID = player.getUniqueId();
@@ -53,7 +56,11 @@ public class InboundHandler extends ChannelInboundHandlerAdapter {
             boolean jumping = input.isJumping();
             if (jumping) {
                 if (vehicle.getPersistentDataContainer().has(new NamespacedKey(VMComputers.getPlugin(), "isEChair"), PersistentDataType.STRING)) {
+                    long time = System.currentTimeMillis();
+                    if (time > lastAttack + cooldownTime) {
                         ComputerFunctions.sendSpaceInput(player);
+                        lastAttack = time;
+                    }
                 }
             }
         }

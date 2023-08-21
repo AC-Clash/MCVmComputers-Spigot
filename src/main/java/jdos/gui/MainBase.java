@@ -460,7 +460,7 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
     protected static final Vector events = new Vector();
     protected static long startupTime;
 
-    static void main(GUI g, String[] args) {
+    public static void main(GUI g, String[] args) {
         gui = g;
         while (true) {
             CPU.initialize();

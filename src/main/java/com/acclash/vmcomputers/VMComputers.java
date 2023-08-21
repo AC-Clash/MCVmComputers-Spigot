@@ -1,9 +1,6 @@
 package com.acclash.vmcomputers;
 
 import com.acclash.vmcomputers.commands.ComputerCM;
-import com.acclash.vmcomputers.commands.ResetDB;
-import com.acclash.vmcomputers.commands.SampleCrap;
-import com.acclash.vmcomputers.commands.Tets;
 import com.acclash.vmcomputers.listeners.ClickListener;
 import com.acclash.vmcomputers.listeners.PlayerListener;
 import com.acclash.vmcomputers.listeners.PreventionListener;
@@ -11,7 +8,6 @@ import com.acclash.vmcomputers.net.InboundHandler;
 import com.acclash.vmcomputers.sql.Database;
 import com.acclash.vmcomputers.sql.SQLite;
 import com.acclash.vmcomputers.utils.ComputerFunctions;
-import jdos.gui.MainFrame;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -36,9 +32,7 @@ public final class VMComputers extends JavaPlugin {
         // Plugin startup logic
         plugin = this;
 
-        getCommand("test").setExecutor(new Tets());
-        getCommand("computer").setExecutor(new ComputerCM());
-        getCommand("resetdb").setExecutor(new ResetDB());
+        getCommand("vmcomputers").setExecutor(new ComputerCM());
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(), this);
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
@@ -55,6 +49,9 @@ public final class VMComputers extends JavaPlugin {
     @Override
     public void onDisable() {
         // Plugin shutdown logic
+        for (int id : ComputerFunctions.getTaskMap().values()) {
+            Bukkit.getScheduler().cancelTask(id);
+        }
         try {
             getDB().getSQLConnection().close();
         } catch (SQLException e) {
