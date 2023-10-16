@@ -1,7 +1,6 @@
 package jdos.hardware;
 
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
+import jdos.misc.Log;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -63,7 +62,7 @@ public class IPXServer {
                     try {
                         ipxServerSocket.send(outPacket);
                     } catch (Exception e) {
-                        Log.getLogger().log(Level.ERROR, "IPX: Could not send packet ", e);
+                        e.printStackTrace();
                     }
                     //LOG_MSG("IPXSERVER: Packet of %d bytes sent from %d.%d.%d.%d to %d.%d.%d.%d (BROADCAST) (%x CRC)", bufSize, CONVIP(srchost), CONVIP(ipconn[i].host), packetCRC(&buffer[30], bufSize-30));
                 }
@@ -76,7 +75,7 @@ public class IPXServer {
                     try {
                         ipxServerSocket.send(outPacket);
                     } catch (Exception e) {
-                        Log.getLogger().log(Level.ERROR, "IPX: Could not send packet ", e);
+                        e.printStackTrace();
                     }
                     //LOG_MSG("IPXSERVER: Packet sent from %d.%d.%d.%d to %d.%d.%d.%d", CONVIP(srchost), CONVIP(desthost));
                 }
@@ -111,7 +110,7 @@ public class IPXServer {
         try {
             ipxServerSocket.send(outPacket);
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "IPX: Could not send packet ", e);
+            e.printStackTrace();
         }
     }
 
@@ -142,11 +141,11 @@ public class IPXServer {
                                 ipconn[i].port = receivePacket.getPort();
 
                                 connBuffer[i].connected = true;
-                                Log.getLogger().info("IPXSERVER: Connect from " + receivePacket.getAddress().getHostAddress());
+                                System.out.println("IPXSERVER: Connect from " + receivePacket.getAddress().getHostAddress());
                                 ackClient(ipconn[i]);
                                 break;
                             } else if((ipconn[i].host == tmpHeader.src.addr.host()) && (ipconn[i].port == tmpHeader.src.addr.port())) {
-                                Log.getLogger().info("IPXSERVER: Reconnect from " + receivePacket.getAddress().getHostAddress());
+                                System.out.println("IPXSERVER: Reconnect from " + receivePacket.getAddress().getHostAddress());
                                 // Update anonymous port number if changed
                                 ipconn[i].port = receivePacket.getPort();
                                 ackClient(ipconn[i]);
@@ -159,7 +158,7 @@ public class IPXServer {
                     }
                 } catch (Exception e) {
                     if (ipxServerSocket.isClosed()) break;
-                    Log.getLogger().log(Level.ERROR, "IPX: Could not send packet ", e);
+                    e.printStackTrace();
                 }
             }
         }
@@ -167,9 +166,7 @@ public class IPXServer {
 
     static void IPX_StopServer() {
         ipxServerSocket.close();
-        try {serverThread.join();} catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-        }
+        try {serverThread.join();} catch (Exception e) {}
     }
 
     static boolean IPX_StartServer(/*Bit16u*/int portnum) {

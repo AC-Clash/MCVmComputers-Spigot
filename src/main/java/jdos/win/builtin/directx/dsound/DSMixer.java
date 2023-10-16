@@ -27,11 +27,11 @@ public class DSMixer extends IDirectSoundBuffer {
      * unsampled frame (writepos), translating frequency (pitch), stereo/mono
      * and bits-per-sample so that it is ideal for the primary buffer.
      * Doesn't perform any mixing - this is a straight copy/convert operation.
-     * <p>
+     *
      * dsb = the secondary buffer
      * writepos = Starting position of changed buffer
      * len = number of bytes to resample from writepos
-     * <p>
+     *
      * NOTE: writepos + len <= buflen. When called by mixer, MixOne makes sure of this.
      */
     static void DSOUND_MixToTemporary(IDirectSoundBuffer.Data dsb, int writepos, int len)
@@ -44,7 +44,7 @@ public class DSMixer extends IDirectSoundBuffer {
 
         int	iAdvance = wfx.nBlockAlign;
         int oAdvance = DEVICE_BLOCK_ALIGN;
-        int freqAcc = 0, target_writepos, overshot, maxlen;
+        int freqAcc = 0, target_writepos = 0, overshot, maxlen;
 
         assert(writepos + len <= dsb.buflen);
 
@@ -98,7 +98,7 @@ public class DSMixer extends IDirectSoundBuffer {
      * Should be called when one of the following things occur:
      * - Primary buffer format is changed
      * - This buffer format (frequency) is changed
-     * <p>
+     *
      * After this, DSOUND_MixToTemporary(dsb, 0, dsb.buflen) should
      * be called to refill the temporary buffer with data.
      */
@@ -108,9 +108,13 @@ public class DSMixer extends IDirectSoundBuffer {
         boolean needresample = dsb.freq != DEVICE_SAMPLE_RATE;
         WAVEFORMATEX wfx = dsb.wfx();
         int bAlign = wfx.nBlockAlign;
+        int pAlign = DEVICE_BLOCK_ALIGN;
 
         WAVEFORMATEXTENSIBLE pwfxe = dsb.wfxe();
-        boolean ieee = (pwfxe.Format.wFormatTag == WAVE_FORMAT_IEEE_FLOAT) || (pwfxe.Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE && pwfxe.SubFormat.equals(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+        boolean ieee = false;
+
+        if ((pwfxe.Format.wFormatTag == WAVE_FORMAT_IEEE_FLOAT) || (pwfxe.Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE && pwfxe.SubFormat.equals(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)))
+            ieee = true;
 
         /* calculate the 10ms write lead */
         dsb.writelead=(dsb.freq / 100) * wfx.nBlockAlign;
@@ -132,7 +136,7 @@ public class DSMixer extends IDirectSoundBuffer {
             if (needresample)
                 DSOUND_RecalcFreqAcc(dsb);
             else
-                dsb.tmp_buffer_len = dsb.buflen / bAlign * DEVICE_BLOCK_ALIGN;
+                dsb.tmp_buffer_len = dsb.buflen / bAlign * pAlign;
             dsb.max_buffer_len = dsb.tmp_buffer_len;
             if (dsb.tmp_buffer==null || dsb.tmp_buffer_len>dsb.tmp_buffer.length || dsb.tmp_buffer_copied)
                 dsb.tmp_buffer = new byte[dsb.max_buffer_len];
@@ -192,9 +196,9 @@ public class DSMixer extends IDirectSoundBuffer {
         /* FIXME: dwPan{Left|Right}AmpFactor */
 
         /* FIXME: use calculated vol and pan ampfactors */
-        temp = volpan.lVolume - (Math.max(volpan.lPan, 0));
+        temp = (double) (volpan.lVolume - (volpan.lPan > 0 ? volpan.lPan : 0));
         volpan.dwTotalLeftAmpFactor = (int) (Math.pow(2.0, temp / 600.0) * 0xffff);
-        temp = volpan.lVolume + (Math.min(volpan.lPan, 0));
+        temp = (double) (volpan.lVolume + (volpan.lPan < 0 ? volpan.lPan : 0));
         volpan.dwTotalRightAmpFactor = (int) (Math.pow(2.0, temp / 600.0) * 0xffff);
     }
 

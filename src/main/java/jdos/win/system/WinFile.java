@@ -1,10 +1,8 @@
 package jdos.win.system;
 
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
 import jdos.win.utils.FilePath;
-import org.apache.logging.log4j.Level;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -24,7 +22,7 @@ public class WinFile extends WinObject {
 
     static public WinFile get(int handle) {
         WinObject object = getObject(handle);
-        if (!(object instanceof WinFile))
+        if (object == null || !(object instanceof WinFile))
             return null;
         return (WinFile)object;
     }
@@ -56,7 +54,9 @@ public class WinFile extends WinObject {
 
         public boolean accept(File pathname) {
             String name = pathname.getName().toLowerCase();
-            return name.startsWith(begin) && name.endsWith(end);
+            if (name.startsWith(begin) && name.endsWith(end))
+                return true;
+            return false;
         }
     }
     public static final int STD_OUT = 1;
@@ -92,7 +92,7 @@ public class WinFile extends WinObject {
     }
 
     public static long readFileTime(int address) {
-        return (Memory.mem_readd(address) & 0xFFFFFFFFL) | ((Memory.mem_readd(address+4)  & 0xFFFFFFFFL) << 32);
+        return (Memory.mem_readd(address) & 0xFFFFFFFFl) | ((Memory.mem_readd(address+4)  & 0xFFFFFFFFl) << 32);
     }
 
     public WinFile(int type, int handle) {
@@ -115,7 +115,6 @@ public class WinFile extends WinObject {
         try {
             return file.length();
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
         }
         return 0;
     }
@@ -202,12 +201,11 @@ public class WinFile extends WinObject {
         try {
             file.close();
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
         }
     }
 
     private FilePath file = null;
     public int shareMode;
     public int attributes;
-    public final int type;
+    public int type;
 }

@@ -14,12 +14,15 @@ public class NetworkUtil {
         try {
             if (connectionField == null) {
                 Field f = null;
-                for (Field check : ServerGamePacketListenerImpl.class.getDeclaredFields()) {
-                    if (check.getType().isAssignableFrom(Connection.class)) {
-                        f = check;
-                        break;
+                Class<?> clazz = ServerGamePacketListenerImpl.class;
+                do {
+                    for (Field check : clazz.getDeclaredFields()) {
+                        if (check.getType().isAssignableFrom(Connection.class)) {
+                            f = check;
+                            break;
+                        }
                     }
-                }
+                } while (f == null && (clazz = clazz.getSuperclass()) != null);
                 f.setAccessible(true);
                 connectionField = f;
             }
@@ -28,5 +31,6 @@ public class NetworkUtil {
             throw new RuntimeException("Error while getting network connection", e);
         }
     }
+
 
 }

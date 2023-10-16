@@ -1,11 +1,11 @@
 package jdos.cpu.core_dynamic;
 
+import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Core_dynamic;
 import jdos.cpu.Paging;
 import jdos.hardware.Memory;
 import jdos.hardware.RAM;
-import jdos.util.Log;
 import jdos.util.Ptr;
 
 final public class CodePageHandlerDynRec extends Paging.PageHandler {
@@ -118,7 +118,7 @@ final public class CodePageHandlerDynRec extends Paging.PageHandler {
 	}
 	public void writed(/*PhysPt*/int address,/*Bitu*/int val){
 		int addr = (address & 4095);
-		if (RAM.readd(hostmem + addr)==(val)) return;
+		if (RAM.readd(hostmem + addr)==(val & 0xFFFFFFFF)) return;
 		RAM.writed(hostmem + addr, val);
 		// see if there's code where we are writing to
 		if (write_map.readd(addr)==0) {
@@ -144,7 +144,7 @@ final public class CodePageHandlerDynRec extends Paging.PageHandler {
         activeCount++;
         usedCount++;
         if ((usedCount % 1000)==0) {
-            Log.getLogger().info("Dynamic code cache: "+activeCount+"/"+usedCount);
+            System.out.println("Dynamic code cache: "+activeCount+"/"+usedCount);
         }
 	}
 	// there's a block whose code started in a different page
@@ -247,14 +247,14 @@ final public class CodePageHandlerDynRec extends Paging.PageHandler {
 	}
 
 	// the write map, there are write_map[i] cache blocks that cover the byte at address i
-	public final /*Bit8u*/Ptr write_map=new Ptr(4096);
+	public /*Bit8u*/Ptr write_map=new Ptr(4096);
 	public /*Bit8u*/ Ptr invalidation_map;
 	CodePageHandlerDynRec next, prev;	// page linking
 
 	private Paging.PageHandler old_pagehandler;
 
 	// hash map to quickly find the cache blocks in this page
-	private final CacheBlockDynRec[] hash_map = new CacheBlockDynRec[1+ Core_dynamic.DYN_PAGE_HASH];
+	private CacheBlockDynRec[] hash_map = new CacheBlockDynRec[1+ Core_dynamic.DYN_PAGE_HASH];
 
 	private /*Bitu*/int active_blocks;		// the number of cache blocks in this page
 	private /*Bitu*/int active_count;		// delaying parameter to not immediately release a page

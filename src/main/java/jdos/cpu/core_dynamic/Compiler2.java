@@ -1,8 +1,7 @@
 package jdos.cpu.core_dynamic;
 
 import jdos.cpu.CPU_Regs;
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
+import jdos.misc.Log;
 
 public class Compiler2 extends Compiler {
     static boolean compile_op(Op op, int setFlags, StringBuilder method, String preException, Seg seg) {
@@ -642,15 +641,16 @@ public class Compiler2 extends Compiler {
                     memory_start(o.get_eaa, seg, method);
                     if ((setFlags & o.sets())==0) {
                         declareVal(method);
-                        method.append("val = Memory.mem_readb(eaa);Memory.mem_writeb(eaa,val+");method.append(nameGet8(o.rb));
+                        method.append("val = Memory.mem_readb(eaa);Memory.mem_writeb(eaa,val+");method.append(nameGet8(o.rb));method.append(");");
+                        method.append(nameSet8(o.rb, "val"));
+                        method.append(";");
                     } else {
                         declareVal(method);
                         method.append("val = Memory.mem_readb(eaa);");
-                        method.append("Memory.mem_writeb(eaa,");method.append("Instructions.ADDB(");method.append(nameGet8(o.rb));method.append(", val)");
+                        method.append("Memory.mem_writeb(eaa,");method.append("Instructions.ADDB(");method.append(nameGet8(o.rb));method.append(", val)");method.append(");");
+                        method.append(nameSet8(o.rb, "val"));
+                        method.append(";");
                     }
-                    method.append(");");
-                    method.append(nameSet8(o.rb, "val"));
-                    method.append(";");
                     return true;
                 }
                 break;
@@ -686,6 +686,8 @@ public class Compiler2 extends Compiler {
                     if ((setFlags & o.sets())==0) {
                         declareVal(method);
                         method.append("val = Memory.mem_readw(eaa);Memory.mem_writew(eaa,val+");method.append(nameGet16(o.rw));method.append(");");
+                        nameSet16(o.rw, "val", method);
+                        method.append(";");
                     } else {
                         declareVal(method);
                         method.append("val = Memory.mem_readw(eaa);");
@@ -693,9 +695,9 @@ public class Compiler2 extends Compiler {
                         method.append("val2 = Instructions.ADDW(");
                         method.append(nameGet16(o.rw));
                         method.append(", val);Memory.mem_writew(eaa,val2);");
+                        nameSet16(o.rw, "val", method);
+                        method.append(";");
                     }
-                    nameSet16(o.rw, "val", method);
-                    method.append(";");
                     return true;
                 }
                 break;
@@ -3752,7 +3754,7 @@ public class Compiler2 extends Compiler {
                     method.append("=val;");
                     return true;
                 } else {
-                    Log.exit("[Compiler] Unhandled op: " + op, Level.ERROR);
+                    Log.exit("[Compiler] Unhandled op: " + op);
                 }
                 break;
             case 0x380: // JO
@@ -4490,6 +4492,8 @@ public class Compiler2 extends Compiler {
                     if ((setFlags & o.sets())==0) {
                         declareVal(method);
                         method.append("val = Memory.mem_readd(eaa);Memory.mem_writed(eaa,val+");method.append(nameGet32(o.rd));method.append(");");
+                        method.append(nameSet32(o.rd));
+                        method.append("=val;");
                     } else {
                         declareVal(method);
                         method.append("val = Memory.mem_readd(eaa);");
@@ -4497,9 +4501,9 @@ public class Compiler2 extends Compiler {
                         method.append("val2 = Instructions.ADDD(");
                         method.append(nameGet32(o.rd));
                         method.append(",val);Memory.mem_writed(eaa,val2);");
+                        method.append(nameSet32(o.rd));
+                        method.append("=val;");
                     }
-                    method.append(nameSet32(o.rd));
-                    method.append("=val;");
                     return true;
                 }
                 break;
@@ -4594,7 +4598,7 @@ public class Compiler2 extends Compiler {
             default:
                 if (op instanceof Inst1.Illegal) {
                     Inst1.Illegal o = (Inst1.Illegal) op;
-                    method.append("  Log.specializedLog(LogType.LOG_CPU, Level.ERROR,");
+                    method.append("Log.log(LogTypes.LOG_CPU, LogSeverities.LOG_ERROR,");
                     method.append(o.msg);
                     method.append(");return Constants.BR_Illegal;");
                     return false;
@@ -4613,7 +4617,7 @@ public class Compiler2 extends Compiler {
                     method.append(";return ModifiedDecode.call();");
                     return false;
                 } else {
-                    Log.exit("[Compiler] Unhandled op: " + op, Level.ERROR);
+                    Log.exit("[Compiler] Unhandled op: " + op);
                 }
         }
         return true;

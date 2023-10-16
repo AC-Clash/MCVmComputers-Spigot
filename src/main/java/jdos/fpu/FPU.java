@@ -4,18 +4,18 @@ import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Flags;
 import jdos.hardware.Memory;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Section;
 import jdos.misc.setup.Section_prop;
-import jdos.types.LogType;
-import org.apache.logging.log4j.Level;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 
 public class FPU {
     static public final boolean shouldInline = true;
     static private final boolean LOG = false;
 
-    public static final double[] regs = new double[9];
-    public static final int[] tags = new int[9];
+    public static double[] regs = new double[9];
+    public static int[] tags = new int[9];
     public static int cw;
     public static int cw_mask_all;
     public static int sw;
@@ -61,8 +61,7 @@ public class FPU {
 
     static private void FPU_SetCW(/*Bitu*/int word) {
         cw = word;
-        /*Bit16u*/
-        cw_mask_all = word | 0x3f;
+        cw_mask_all = (/*Bit16u*/int) (word | 0x3f);
         round = ((word >>> 10) & 3);
     }
 
@@ -174,12 +173,12 @@ public class FPU {
             round = 0x7FF;
         }
         /*Bit64s*/
-        long mant64 = ((eind + round) >>> 11) & 0xfffffffffffffL;
+        long mant64 = ((eind + round) >>> 11) & 0xfffffffffffffl;
         /*Bit64s*/
         long sign = (begin & 0x8000) != 0 ? 1 : 0;
         double result = Double.longBitsToDouble((sign << 63) | (exp64final << 52) | mant64);
 
-        if (eind == 0x8000000000000000L && (begin & 0x7fff) == 0x7fff) {
+        if (eind == 0x8000000000000000l && (begin & 0x7fff) == 0x7fff) {
             //Detect INF and -INF (score 3.11 when drawing a slur.)
             result = sign != 0 ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
         }
@@ -191,18 +190,18 @@ public class FPU {
     static private void FPU_ST80(/*PhysPt*/int addr,/*Bitu*/int reg) {
         long value = Double.doubleToRawLongBits(regs[reg]);
         /*Bit64s*/
-        long sign80 = (value & (0x8000000000000000L)) != 0 ? 1 : 0;
+        long sign80 = (value & (0x8000000000000000l)) != 0 ? 1 : 0;
         /*Bit64s*/
-        long exp80 = value & (0x7ff0000000000000L);
+        long exp80 = value & (0x7ff0000000000000l);
         /*Bit64s*/
         long exp80final = (exp80 >> 52);
         /*Bit64s*/
-        long mant80 = value & (0x000fffffffffffffL);
+        long mant80 = value & (0x000fffffffffffffl);
         /*Bit64s*/
         long mant80final = (mant80 << 11);
         if (regs[reg] != 0) { //Zero is a special case
             // Elvira wants the 8 and tcalc doesn't
-            mant80final |= 0x8000000000000000L;
+            mant80final |= 0x8000000000000000l;
             //Ca-cyber doesn't like this when result is zero.
             exp80final += (BIAS80 - BIAS64);
         }
@@ -240,7 +239,7 @@ public class FPU {
         /*Bit64u*/
         long val = 0;
         /*Bitu*/
-        int in;
+        int in = 0;
         /*Bit64u*/
         long base = 1;
         for (/*Bitu*/int i = 0; i < 9; i++) {
@@ -306,7 +305,7 @@ public class FPU {
     static private void FPU_FBST(/*PhysPt*/int addr) {
         boolean sign = false;
         double val = regs[top];
-        if ((Double.doubleToRawLongBits(val) & 0x8000000000000000L) != 0) { //sign
+        if ((Double.doubleToRawLongBits(val) & 0x8000000000000000l) != 0) { //sign
             sign = true;
             val = -val;
         }
@@ -516,7 +515,7 @@ public class FPU {
 
     static private void FPU_FXAM() {
         long bits = Double.doubleToRawLongBits(regs[top]);
-        if ((bits & 0x8000000000000000L) != 0)    //sign
+        if ((bits & 0x8000000000000000l) != 0)    //sign
         {
             FPU_SET_C1(1);
         } else {
@@ -572,11 +571,11 @@ public class FPU {
     static private void FPU_FSTENV(/*PhysPt*/int addr) {
         FPU_SET_TOP(top);
         if (!CPU.cpu.code.big) {
-            Memory.mem_writew(addr, (cw));
+            Memory.mem_writew(addr + 0, (cw));
             Memory.mem_writew(addr + 2, (sw));
             Memory.mem_writew(addr + 4, (FPU_GetTag()));
         } else {
-            Memory.mem_writed(addr, (cw));
+            Memory.mem_writed(addr + 0, (cw));
             Memory.mem_writed(addr + 4, (sw));
             Memory.mem_writed(addr + 8, (FPU_GetTag()));
         }
@@ -590,13 +589,13 @@ public class FPU {
         /*Bitu*/
         int cw;
         if (!CPU.cpu.code.big) {
-            cw = Memory.mem_readw(addr);
+            cw = Memory.mem_readw(addr + 0);
             sw = Memory.mem_readw(addr + 2);
             tag = Memory.mem_readw(addr + 4);
         } else {
-            cw = Memory.mem_readd(addr);
+            cw = Memory.mem_readd(addr + 0);
             sw = Memory.mem_readd(addr + 4);
-            tagbig = Memory.mem_readd(addr + 8) & 0xFFFFFFFFL;
+            tagbig = Memory.mem_readd(addr + 8) & 0xFFFFFFFFl;
             tag = (int) (tagbig);
         }
         FPU_SetTag(tag);
@@ -632,7 +631,7 @@ public class FPU {
 
         long bits = Double.doubleToRawLongBits(regs[top]);
         /*Bit64s*/
-        long exp80 = bits & 0x7ff0000000000000L;
+        long exp80 = bits & 0x7ff0000000000000l;
         /*Bit64s*/
         long exp80final = (exp80 >> 52) - BIAS64;
         /*Real64*/
@@ -1275,35 +1274,35 @@ public class FPU {
         switch (group) {
             case 0x00:	/* FADD */
                 FADD_SINGLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FADD_SINGLE_REAL");
+                if (LOG) System.out.println("FADD_SINGLE_REAL");
                 break;
             case 0x01:	/* FMUL  */
                 FMUL_SINGLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FMUL_SINGLE_REAL");
+                if (LOG) System.out.println("FMUL_SINGLE_REAL");
                 break;
             case 0x02:	/* FCOM */
                 FCOM_SINGLE_REAL(addr, false);
-                if (LOG) Log.getLogger().info("FCOM_SINGLE_REAL");
+                if (LOG) System.out.println("FCOM_SINGLE_REAL");
                 break;
             case 0x03:	/* FCOMP */
                 FCOM_SINGLE_REAL(addr, true);
-                if (LOG) Log.getLogger().info("FCOMP_SINGLE_REAL");
+                if (LOG) System.out.println("FCOMP_SINGLE_REAL");
                 break;
             case 0x04:	/* FSUB */
                 FSUB_SINGLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FSUB_SINGLE_REAL");
+                if (LOG) System.out.println("FSUB_SINGLE_REAL");
                 break;
             case 0x05:	/* FSUBR */
                 FSUBR_SINGLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FSUBR_SINGLE_REAL");
+                if (LOG) System.out.println("FSUBR_SINGLE_REAL");
                 break;
             case 0x06:	/* FDIV */
                 FDIV_SINGLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FDIV_SINGLE_REAL");
+                if (LOG) System.out.println("FDIV_SINGLE_REAL");
                 break;
             case 0x07:	/* FDIVR */
                 FDIVR_SINGLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FDIVR_SINGLE_REAL");
+                if (LOG) System.out.println("FDIVR_SINGLE_REAL");
                 break;
             default:
                 break;
@@ -1320,35 +1319,35 @@ public class FPU {
         switch (group) {
             case 0x00:
                 FADD_ST0_STj(sub);
-                if (LOG) Log.getLogger().info("FADD_ST0_STj");
+                if (LOG) System.out.println("FADD_ST0_STj");
                 break;
             case 0x01:
                 FMUL_ST0_STj(sub);
-                if (LOG) Log.getLogger().info("FMUL_ST0_STj");
+                if (LOG) System.out.println("FMUL_ST0_STj");
                 break;
             case 0x02:
                 FCOM_STi(sub, false);
-                if (LOG) Log.getLogger().info("FCOM_STi");
+                if (LOG) System.out.println("FCOM_STi");
                 break;
             case 0x03:
                 FCOM_STi(sub, true);
-                if (LOG) Log.getLogger().info("FCOMP_STi");
+                if (LOG) System.out.println("FCOMP_STi");
                 break;
             case 0x04:
                 FSUB_ST0_STj(sub);
-                if (LOG) Log.getLogger().info("FSUB_ST0_STj");
+                if (LOG) System.out.println("FSUB_ST0_STj");
                 break;
             case 0x05:
                 FSUBR_ST0_STj(sub);
-                if (LOG) Log.getLogger().info("FSUBR_ST0_STj");
+                if (LOG) System.out.println("FSUBR_ST0_STj");
                 break;
             case 0x06:
                 FDIV_ST0_STj(sub);
-                if (LOG) Log.getLogger().info("FDIV_ST0_STj");
+                if (LOG) System.out.println("FDIV_ST0_STj");
                 break;
             case 0x07:
                 FDIVR_ST0_STj(sub);
-                if (LOG) Log.getLogger().info("FDIVR_ST0_STj");
+                if (LOG) System.out.println("FDIVR_ST0_STj");
                 break;
             default:
                 break;
@@ -1365,39 +1364,39 @@ public class FPU {
         switch (group) {
             case 0x00: /* FLD float*/
                 FLD_SINGLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FLD_SINGLE_REAL");
+                if (LOG) System.out.println("FLD_SINGLE_REAL");
                 break;
             case 0x01: /* UNKNOWN */
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC EA 1:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC EA 1:Unhandled group " + group + " subfunction " + sub);
                 break;
             case 0x02: /* FST float*/
                 FST_SINGLE_REAL(addr, false);
-                if (LOG) Log.getLogger().info("FST_SINGLE_REAL");
+                if (LOG) System.out.println("FST_SINGLE_REAL");
                 break;
             case 0x03: /* FSTP float*/
                 FST_SINGLE_REAL(addr, true);
-                if (LOG) Log.getLogger().info("FSTP_SINGLE_REAL");
+                if (LOG) System.out.println("FSTP_SINGLE_REAL");
                 break;
             case 0x04: /* FLDENV */
                 FLDENV(addr);
-                if (LOG) Log.getLogger().info("FLDENV");
+                if (LOG) System.out.println("FLDENV");
                 break;
             case 0x05: /* FLDCW */
                 FLDCW(addr);
-                if (LOG) Log.getLogger().info("FLDCW");
+                if (LOG) System.out.println("FLDCW");
                 break;
             case 0x06: /* FSTENV */
                 FNSTENV(addr);
-                if (LOG) Log.getLogger().info("FSTENV");
+                if (LOG) System.out.println("FSTENV");
                 break;
             case 0x07:  /* FNSTCW*/
                 FNSTCW(addr);
-                if (LOG) Log.getLogger().info("FNSTCW");
+                if (LOG) System.out.println("FNSTCW");
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC EA 1:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC EA 1:Unhandled group " + group + " subfunction " + sub);
                 break;
         }
     }
@@ -1412,47 +1411,47 @@ public class FPU {
         switch (group) {
             case 0x00: /* FLD STi */
                 FLD_STi(sub);
-                if (LOG) Log.getLogger().info("FLD_STi");
+                if (LOG) System.out.println("FLD_STi");
                 break;
             case 0x01: /* FXCH STi */
                 FXCH_STi(sub);
-                if (LOG) Log.getLogger().info("FXCH_STi");
+                if (LOG) System.out.println("FXCH_STi");
                 break;
             case 0x02: /* FNOP */
                 FNOP();
-                if (LOG) Log.getLogger().info("FNOP");
+                if (LOG) System.out.println("FNOP");
                 break;
             case 0x03: /* FSTP STi */
                 FST_STi(rm, true);
-                if (LOG) Log.getLogger().info("FSTP_STi");
+                if (LOG) System.out.println("FSTP_STi");
                 break;
             case 0x04:
                 switch (sub) {
                     case 0x00:       /* FCHS */
                         FCHS();
-                        if (LOG) Log.getLogger().info("FCHS");
+                        if (LOG) System.out.println("FCHS");
                         break;
                     case 0x01:       /* FABS */
                         FABS();
-                        if (LOG) Log.getLogger().info("FABS");
+                        if (LOG) System.out.println("FABS");
                         break;
                     case 0x02:       /* UNKNOWN */
                     case 0x03:       /* ILLEGAL */
-                        
-                            Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
+                        if (Log.level <= LogSeverities.LOG_WARN)
+                            Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
                         break;
                     case 0x04:       /* FTST */
                         FTST();
-                        if (LOG) Log.getLogger().info("FTST");
+                        if (LOG) System.out.println("FTST");
                         break;
                     case 0x05:       /* FXAM */
                         FXAM();
-                        if (LOG) Log.getLogger().info("FXAM");
+                        if (LOG) System.out.println("FXAM");
                         break;
                     case 0x06:       /* FTSTP (cyrix)*/
                     case 0x07:       /* UNKNOWN */
-                        
-                            Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
+                        if (Log.level <= LogSeverities.LOG_WARN)
+                            Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
                         break;
                 }
                 break;
@@ -1460,35 +1459,35 @@ public class FPU {
                 switch (sub) {
                     case 0x00:       /* FLD1 */
                         FLD1();
-                        if (LOG) Log.getLogger().info("FLD1");
+                        if (LOG) System.out.println("FLD1");
                         break;
                     case 0x01:       /* FLDL2T */
                         FLDL2T();
-                        if (LOG) Log.getLogger().info("FLDL2T");
+                        if (LOG) System.out.println("FLDL2T");
                         break;
                     case 0x02:       /* FLDL2E */
                         FLDL2E();
-                        if (LOG) Log.getLogger().info("FLDL2E");
+                        if (LOG) System.out.println("FLDL2E");
                         break;
                     case 0x03:       /* FLDPI */
                         FLDPI();
-                        if (LOG) Log.getLogger().info("FLDPI");
+                        if (LOG) System.out.println("FLDPI");
                         break;
                     case 0x04:       /* FLDLG2 */
                         FLDLG2();
-                        if (LOG) Log.getLogger().info("FLDLG2");
+                        if (LOG) System.out.println("FLDLG2");
                         break;
                     case 0x05:       /* FLDLN2 */
                         FLDLN2();
-                        if (LOG) Log.getLogger().info("FLDLN2");
+                        if (LOG) System.out.println("FLDLN2");
                         break;
                     case 0x06:       /* FLDZ*/
                         FLDZ();
-                        if (LOG) Log.getLogger().info("FLDZ");
+                        if (LOG) System.out.println("FLDZ");
                         break;
                     case 0x07:       /* ILLEGAL */
-                        
-                            Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
+                        if (Log.level <= LogSeverities.LOG_WARN)
+                            Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
                         break;
                 }
                 break;
@@ -1496,39 +1495,39 @@ public class FPU {
                 switch (sub) {
                     case 0x00:	/* F2XM1 */
                         F2XM1();
-                        if (LOG) Log.getLogger().info("F2XM1");
+                        if (LOG) System.out.println("F2XM1");
                         break;
                     case 0x01:	/* FYL2X */
                         FYL2X();
-                        if (LOG) Log.getLogger().info("FYL2X");
+                        if (LOG) System.out.println("FYL2X");
                         break;
                     case 0x02:	/* FPTAN  */
                         FPTAN();
-                        if (LOG) Log.getLogger().info("FPTAN");
+                        if (LOG) System.out.println("FPTAN");
                         break;
                     case 0x03:	/* FPATAN */
                         FPATAN();
-                        if (LOG) Log.getLogger().info("FPATAN");
+                        if (LOG) System.out.println("FPATAN");
                         break;
                     case 0x04:	/* FXTRACT */
                         FXTRACT();
-                        if (LOG) Log.getLogger().info("FXTRACT");
+                        if (LOG) System.out.println("FXTRACT");
                         break;
                     case 0x05:	/* FPREM1 */
                         FPREM(true);
-                        if (LOG) Log.getLogger().info("FPREM1 nearest");
+                        if (LOG) System.out.println("FPREM1 nearest");
                         break;
                     case 0x06:	/* FDECSTP */
                         FDECSTP();
-                        if (LOG) Log.getLogger().info("FDECSTP");
+                        if (LOG) System.out.println("FDECSTP");
                         break;
                     case 0x07:	/* FINCSTP */
                         FINCSTP();
-                        if (LOG) Log.getLogger().info("FINCSTP");
+                        if (LOG) System.out.println("FINCSTP");
                         break;
                     default:
-                        
-                            Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
+                        if (Log.level <= LogSeverities.LOG_WARN)
+                            Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
                         break;
                 }
                 break;
@@ -1536,45 +1535,45 @@ public class FPU {
                 switch (sub) {
                     case 0x00:		/* FPREM */
                         FPREM(false);
-                        if (LOG) Log.getLogger().info("FPREM");
+                        if (LOG) System.out.println("FPREM");
                         break;
                     case 0x01:		/* FYL2XP1 */
                         FYL2XP1();
-                        if (LOG) Log.getLogger().info("FYL2XP1");
+                        if (LOG) System.out.println("FYL2XP1");
                         break;
                     case 0x02:		/* FSQRT */
                         FSQRT();
-                        if (LOG) Log.getLogger().info("FSQRT");
+                        if (LOG) System.out.println("FSQRT");
                         break;
                     case 0x03:		/* FSINCOS */
                         FSINCOS();
-                        if (LOG) Log.getLogger().info("FSINCOS");
+                        if (LOG) System.out.println("FSINCOS");
                         break;
                     case 0x04:		/* FRNDINT */
                         FRNDINT();
-                        if (LOG) Log.getLogger().info("FRNDINT");
+                        if (LOG) System.out.println("FRNDINT");
                         break;
                     case 0x05:		/* FSCALE */
                         FSCALE();
-                        if (LOG) Log.getLogger().info("FSCALE");
+                        if (LOG) System.out.println("FSCALE");
                         break;
                     case 0x06:		/* FSIN */
                         FSIN();
-                        if (LOG) Log.getLogger().info("FSIN");
+                        if (LOG) System.out.println("FSIN");
                         break;
                     case 0x07:		/* FCOS */
                         FCOS();
-                        if (LOG) Log.getLogger().info("FCOS");
+                        if (LOG) System.out.println("FCOS");
                         break;
                     default:
-                        
-                            Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
+                        if (Log.level <= LogSeverities.LOG_WARN)
+                            Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
                         break;
                 }
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 1:Unhandled group " + group + " subfunction " + sub);
         }
     }
 
@@ -1588,35 +1587,35 @@ public class FPU {
         switch (group) {
             case 0x00:	/* FADD */
                 FIADD_DWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FIADD_DWORD_INTEGER");
+                if (LOG) System.out.println("FIADD_DWORD_INTEGER");
                 break;
             case 0x01:	/* FMUL  */
                 FIMUL_DWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FIMUL_DWORD_INTEGER");
+                if (LOG) System.out.println("FIMUL_DWORD_INTEGER");
                 break;
             case 0x02:	/* FCOM */
                 FICOM_DWORD_INTEGER(addr, false);
-                if (LOG) Log.getLogger().info("FICOM_DWORD_INTEGER");
+                if (LOG) System.out.println("FICOM_DWORD_INTEGER");
                 break;
             case 0x03:	/* FCOMP */
                 FICOM_DWORD_INTEGER(addr, true);
-                if (LOG) Log.getLogger().info("FICOMP_DWORD_INTEGER");
+                if (LOG) System.out.println("FICOMP_DWORD_INTEGER");
                 break;
             case 0x04:	/* FSUB */
                 FISUB_DWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FISUB_DWORD_INTEGER");
+                if (LOG) System.out.println("FISUB_DWORD_INTEGER");
                 break;
             case 0x05:	/* FSUBR */
                 FISUBR_DWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FISUBR_DWORD_INTEGER");
+                if (LOG) System.out.println("FISUBR_DWORD_INTEGER");
                 break;
             case 0x06:	/* FDIV */
                 FIDIV_DWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FIDIV_DWORD_INTEGER");
+                if (LOG) System.out.println("FIDIV_DWORD_INTEGER");
                 break;
             case 0x07:	/* FDIVR */
                 FIDIVR_DWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FIDIVR_DWORD_INTEGER");
+                if (LOG) System.out.println("FIDIVR_DWORD_INTEGER");
                 break;
             default:
                 break;
@@ -1633,32 +1632,35 @@ public class FPU {
         switch (group) {
             case 0x00:
                 FCMOV_ST0_STj(rm, Flags.get_CF());
-                if (LOG) Log.getLogger().info("FCMOV_ST0_STj CF");
+                if (LOG) System.out.println("FCMOV_ST0_STj CF");
                 break;
             case 0x01:
                 FCMOV_ST0_STj(rm, Flags.get_ZF());
-                if (LOG) Log.getLogger().info("FCMOV_ST0_STj ZF");
+                if (LOG) System.out.println("FCMOV_ST0_STj ZF");
                 break;
             case 0x02:
                 FCMOV_ST0_STj(rm, Flags.get_CF() || Flags.get_ZF());
-                if (LOG) Log.getLogger().info("FCMOV_ST0_STj CF or ZF");
+                if (LOG) System.out.println("FCMOV_ST0_STj CF or ZF");
                 break;
             case 0x03:
                 FCMOV_ST0_STj(rm, Flags.get_PF());
-                if (LOG) Log.getLogger().info("FCMOV_ST0_STj PF");
+                if (LOG) System.out.println("FCMOV_ST0_STj PF");
                 break;
             case 0x05:
-                if (sub == 0x01) {        /* FUCOMPP */
-                    FUCOMPP();
-                    if (LOG) Log.getLogger().info("FUCOMPP");
-                } else {
-                    
-                        Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 2:Unhandled group " + group + " subfunction " + sub);
+                switch (sub) {
+                    case 0x01:		/* FUCOMPP */
+                        FUCOMPP();
+                        if (LOG) System.out.println("FUCOMPP");
+                        break;
+                    default:
+                        if (Log.level <= LogSeverities.LOG_WARN)
+                            Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 2:Unhandled group " + group + " subfunction " + sub);
+                        break;
                 }
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 2:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 2:Unhandled group " + group + " subfunction " + sub);
                 break;
         }
     }
@@ -1674,31 +1676,31 @@ public class FPU {
         switch (group) {
             case 0x00:	/* FILD */
                 FILD_DWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FILD_DWORD_INTEGER");
+                if (LOG) System.out.println("FILD_DWORD_INTEGER");
                 break;
             case 0x01:	/* FISTTP */
                 FISTTP32(addr);
-                if (LOG) Log.getLogger().info("FISTTP32");
+                if (LOG) System.out.println("FISTTP32");
                 break;
             case 0x02:	/* FIST */
                 FIST_DWORD_INTEGER(addr, false);
-                if (LOG) Log.getLogger().info("FIST_DWORD_INTEGER");
+                if (LOG) System.out.println("FIST_DWORD_INTEGER");
                 break;
             case 0x03:	/* FISTP */
                 FIST_DWORD_INTEGER(addr, true);
-                if (LOG) Log.getLogger().info("FISTP_DWORD_INTEGER");
+                if (LOG) System.out.println("FISTP_DWORD_INTEGER");
                 break;
             case 0x05:	/* FLD 80 Bits Real */
                 FLD_EXTENDED_REAL(addr);
-                if (LOG) Log.getLogger().info("FLD_EXTENDED_REAL");
+                if (LOG) System.out.println("FLD_EXTENDED_REAL");
                 break;
             case 0x07:	/* FSTP 80 Bits Real */
                 FSTP_EXTENDED_REAL(addr);
-                if (LOG) Log.getLogger().info("FSTP_EXTENDED_REAL");
+                if (LOG) System.out.println("FSTP_EXTENDED_REAL");
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 3 EA:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 3 EA:Unhandled group " + group + " subfunction " + sub);
         }
     }
 
@@ -1712,51 +1714,51 @@ public class FPU {
         switch (group) {
             case 0x00:
                 FCMOV_ST0_STj(rm, !Flags.get_CF());
-                if (LOG) Log.getLogger().info("FCMOV_ST0_STj !CF");
+                if (LOG) System.out.println("FCMOV_ST0_STj !CF");
                 break;
             case 0x01:
                 FCMOV_ST0_STj(rm, !Flags.get_ZF());
-                if (LOG) Log.getLogger().info("FCMOV_ST0_STj !ZF");
+                if (LOG) System.out.println("FCMOV_ST0_STj !ZF");
                 break;
             case 0x02:
                 FCMOV_ST0_STj(rm, !Flags.get_CF() && !Flags.get_ZF());
-                if (LOG) Log.getLogger().info("FCMOV_ST0_STj !CF and !ZF");
+                if (LOG) System.out.println("FCMOV_ST0_STj !CF and !ZF");
                 break;
             case 0x03:
                 FCMOV_ST0_STj(rm, !Flags.get_PF());
-                if (LOG) Log.getLogger().info("FCMOV_ST0_STj !PF");
+                if (LOG) System.out.println("FCMOV_ST0_STj !PF");
                 break;
             case 0x04:
                 switch (sub) {
                     case 0x00:                //FNENI
                     case 0x01:                //FNDIS
-                        
-                             Log.specializedLog(LogType.LOG_FPU, Level.ERROR, "8087 only fpu code used esc 3: group 4: subfuntion :" + sub);
+                        if (Log.level <= LogSeverities.LOG_ERROR)
+                            Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_ERROR, "8087 only fpu code used esc 3: group 4: subfuntion :" + sub);
                         break;
                     case 0x02:                //FNCLEX FCLEX
                         FNCLEX();
-                        if (LOG) Log.getLogger().info("FNCLEX");
+                        if (LOG) System.out.println("FNCLEX");
                         break;
                     case 0x03:                //FNINIT FINIT
                         FNINIT();
-                        if (LOG) Log.getLogger().info("FNINIT");
+                        if (LOG) System.out.println("FNINIT");
                         break;
                     case 0x04:                //FNSETPM
                         break;
                     default:
-                        Log.exit("ESC 3:ILLEGAL OPCODE group " + group + " subfunction " + sub, Level.ERROR);
+                        Log.exit("ESC 3:ILLEGAL OPCODE group " + group + " subfunction " + sub);
                 }
                 break;
             case 0x05:
                 FUCOMI_ST0_STj(rm, false);
-                if (LOG) Log.getLogger().info("FUCOMI_ST0_STj");
+                if (LOG) System.out.println("FUCOMI_ST0_STj");
             case 0x06:
                 FCOMI_ST0_STj(rm, false);
-                if (LOG) Log.getLogger().info("FCOMI_ST0_STj");
+                if (LOG) System.out.println("FCOMI_ST0_STj");
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 3:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 3:Unhandled group " + group + " subfunction " + sub);
                 break;
         }
     }
@@ -1771,35 +1773,35 @@ public class FPU {
         switch (group) {
             case 0x00:	/* FADD */
                 FADD_DOUBLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FADD_DOUBLE_REAL");
+                if (LOG) System.out.println("FADD_DOUBLE_REAL");
                 break;
             case 0x01:	/* FMUL  */
                 FMUL_DOUBLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FMUL_DOUBLE_REAL");
+                if (LOG) System.out.println("FMUL_DOUBLE_REAL");
                 break;
             case 0x02:	/* FCOM */
                 FCOM_DOUBLE_REAL(addr, false);
-                if (LOG) Log.getLogger().info("FCOM_DOUBLE_REAL");
+                if (LOG) System.out.println("FCOM_DOUBLE_REAL");
                 break;
             case 0x03:	/* FCOMP */
                 FCOM_DOUBLE_REAL(addr, true);
-                if (LOG) Log.getLogger().info("FCOMP_DOUBLE_REAL");
+                if (LOG) System.out.println("FCOMP_DOUBLE_REAL");
                 break;
             case 0x04:	/* FSUB */
                 FSUB_DOUBLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FSUB_DOUBLE_REAL");
+                if (LOG) System.out.println("FSUB_DOUBLE_REAL");
                 break;
             case 0x05:	/* FSUBR */
                 FSUBR_DOUBLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FSUBR_DOUBLE_REAL");
+                if (LOG) System.out.println("FSUBR_DOUBLE_REAL");
                 break;
             case 0x06:	/* FDIV */
                 FDIV_DOUBLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FDIV_DOUBLE_REAL");
+                if (LOG) System.out.println("FDIV_DOUBLE_REAL");
                 break;
             case 0x07:	/* FDIVR */
                 FDIVR_DOUBLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FDIVR_DOUBLE_REAL");
+                if (LOG) System.out.println("FDIVR_DOUBLE_REAL");
                 break;
             default:
                 break;
@@ -1816,35 +1818,35 @@ public class FPU {
         switch (group) {
             case 0x00:	/* FADD STi,ST*/
                 FADD_STi_ST0(sub, false);
-                if (LOG) Log.getLogger().info("FADD_STi_ST0");
+                if (LOG) System.out.println("FADD_STi_ST0");
                 break;
             case 0x01:	/* FMUL STi,ST*/
                 FMUL_STi_ST0(sub, false);
-                if (LOG) Log.getLogger().info("FMUL_STi_ST0");
+                if (LOG) System.out.println("FMUL_STi_ST0");
                 break;
             case 0x02:  /* FCOM*/
                 FCOM_STi(sub, false);
-                if (LOG) Log.getLogger().info("FCOM_STi");
+                if (LOG) System.out.println("FCOM_STi");
                 break;
             case 0x03:  /* FCOMP*/
                 FCOM_STi(sub, true);
-                if (LOG) Log.getLogger().info("FCOMP_STi");
+                if (LOG) System.out.println("FCOMP_STi");
                 break;
             case 0x04:  /* FSUBR STi,ST*/
                 FSUBR_STi_ST0(sub, false);
-                if (LOG) Log.getLogger().info("FSUBR_STi_ST0");
+                if (LOG) System.out.println("FSUBR_STi_ST0");
                 break;
             case 0x05:  /* FSUB  STi,ST*/
                 FSUB_STi_ST0(sub, false);
-                if (LOG) Log.getLogger().info("FSUB_STi_ST0");
+                if (LOG) System.out.println("FSUB_STi_ST0");
                 break;
             case 0x06:  /* FDIVR STi,ST*/
                 FDIVR_STi_ST0(sub, false);
-                if (LOG) Log.getLogger().info("FDIVR_STi_ST0");
+                if (LOG) System.out.println("FDIVR_STi_ST0");
                 break;
             case 0x07:  /* FDIV STi,ST*/
                 FDIV_STi_ST0(sub, false);
-                if (LOG) Log.getLogger().info("FDIV_STi_ST0");
+                if (LOG) System.out.println("FDIV_STi_ST0");
                 break;
             default:
                 break;
@@ -1861,35 +1863,35 @@ public class FPU {
         switch (group) {
             case 0x00:  /* FLD double real*/
                 FLD_DOUBLE_REAL(addr);
-                if (LOG) Log.getLogger().info("FLD_DOUBLE_REAL");
+                if (LOG) System.out.println("FLD_DOUBLE_REAL");
                 break;
             case 0x01:  /* FISTTP longint*/
                 FISTTP64(addr);
-                if (LOG) Log.getLogger().info("FISTTP64");
+                if (LOG) System.out.println("FISTTP64");
                 break;
             case 0x02:   /* FST double real*/
                 FST_DOUBLE_REAL(addr, false);
-                if (LOG) Log.getLogger().info("FST_DOUBLE_REAL");
+                if (LOG) System.out.println("FST_DOUBLE_REAL");
                 break;
             case 0x03:	/* FSTP double real*/
                 FST_DOUBLE_REAL(addr, true);
-                if (LOG) Log.getLogger().info("FSTP_DOUBLE_REAL");
+                if (LOG) System.out.println("FSTP_DOUBLE_REAL");
                 break;
             case 0x04:	/* FRSTOR */
                 FRSTOR(addr);
-                if (LOG) Log.getLogger().info("FRSTOR");
+                if (LOG) System.out.println("FRSTOR");
                 break;
             case 0x06:	/* FSAVE */
                 FNSAVE(addr);
-                if (LOG) Log.getLogger().info("FSAVE");
+                if (LOG) System.out.println("FSAVE");
                 break;
             case 0x07:   /* FNSTSW */
                 FNSTSW(addr);
-                if (LOG) Log.getLogger().info("FNSTSW");
+                if (LOG) System.out.println("FNSTSW");
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 5 EA:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 5 EA:Unhandled group " + group + " subfunction " + sub);
         }
     }
 
@@ -1903,31 +1905,31 @@ public class FPU {
         switch (group) {
             case 0x00: /* FFREE STi */
                 FFREE_STi(sub);
-                if (LOG) Log.getLogger().info("FFREE_STi");
+                if (LOG) System.out.println("FFREE_STi");
                 break;
             case 0x01: /* FXCH STi*/
                 FXCH_STi(sub);
-                if (LOG) Log.getLogger().info("FXCH_STi");
+                if (LOG) System.out.println("FXCH_STi");
                 break;
             case 0x02: /* FST STi */
                 FST_STi(sub, false);
-                if (LOG) Log.getLogger().info("FST_STi");
+                if (LOG) System.out.println("FST_STi");
                 break;
             case 0x03:  /* FSTP STi*/
                 FST_STi(sub, true);
-                if (LOG) Log.getLogger().info("FSTP_STi");
+                if (LOG) System.out.println("FSTP_STi");
                 break;
             case 0x04:	/* FUCOM STi */
                 FUCOM_STi(sub, false);
-                if (LOG) Log.getLogger().info("FUCOM_STi");
+                if (LOG) System.out.println("FUCOM_STi");
                 break;
             case 0x05:	/*FUCOMP STi */
                 FUCOM_STi(sub, true);
-                if (LOG) Log.getLogger().info("FUCOMP_STi");
+                if (LOG) System.out.println("FUCOMP_STi");
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 5:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 5:Unhandled group " + group + " subfunction " + sub);
                 break;
         }
     }
@@ -1941,35 +1943,35 @@ public class FPU {
         switch (group) {
             case 0x00:	/* FADD */
                 FIADD_WORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FIADD_WORD_INTEGER");
+                if (LOG) System.out.println("FIADD_WORD_INTEGER");
                 break;
             case 0x01:	/* FMUL  */
                 FIMUL_WORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FIMUL_WORD_INTEGER");
+                if (LOG) System.out.println("FIMUL_WORD_INTEGER");
                 break;
             case 0x02:	/* FCOM */
                 FICOM_WORD_INTEGER(addr, false);
-                if (LOG) Log.getLogger().info("FICOM_WORD_INTEGER");
+                if (LOG) System.out.println("FICOM_WORD_INTEGER");
                 break;
             case 0x03:	/* FCOMP */
                 FICOM_WORD_INTEGER(addr, true);
-                if (LOG) Log.getLogger().info("FICOMP_WORD_INTEGER");
+                if (LOG) System.out.println("FICOMP_WORD_INTEGER");
                 break;
             case 0x04:	/* FSUB */
                 FISUB_WORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FISUB_WORD_INTEGER");
+                if (LOG) System.out.println("FISUB_WORD_INTEGER");
                 break;
             case 0x05:	/* FSUBR */
                 FISUBR_WORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FISUBR_WORD_INTEGER");
+                if (LOG) System.out.println("FISUBR_WORD_INTEGER");
                 break;
             case 0x06:	/* FDIV */
                 FIDIV_WORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FIDIV_WORD_INTEGER");
+                if (LOG) System.out.println("FIDIV_WORD_INTEGER");
                 break;
             case 0x07:	/* FDIVR */
                 FIDIVR_WORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FIDIVR_WORD_INTEGER");
+                if (LOG) System.out.println("FIDIVR_WORD_INTEGER");
                 break;
             default:
                 break;
@@ -1987,40 +1989,40 @@ public class FPU {
         switch (group) {
             case 0x00:	/*FADDP STi,ST*/
                 FADD_STi_ST0(rm, true);
-                if (LOG) Log.getLogger().info("FADDP_STi_ST0");
+                if (LOG) System.out.println("FADDP_STi_ST0");
                 break;
             case 0x01:	/* FMULP STi,ST*/
                 FMUL_STi_ST0(rm, true);
-                if (LOG) Log.getLogger().info("FMULP_STi_ST0");
+                if (LOG) System.out.println("FMULP_STi_ST0");
                 break;
             case 0x02:  /* FCOMP5*/
                 FCOM_STi(rm, true);
-                if (LOG) Log.getLogger().info("FCOMP_STi");
+                if (LOG) System.out.println("FCOMP_STi");
                 break;	/* TODO IS THIS ALLRIGHT ????????? */
             case 0x03:  /*FCOMPP*/
                 if (sub != 1) {
-                    
-                        Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 6:Unhandled group " + group + " subfunction " + sub);
+                    if (Log.level <= LogSeverities.LOG_WARN)
+                        Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 6:Unhandled group " + group + " subfunction " + sub);
                     return;
                 }
                 FCOMPP();
-                if (LOG) Log.getLogger().info("FCOMPP");
+                if (LOG) System.out.println("FCOMPP");
                 break;
             case 0x04:  /* FSUBRP STi,ST*/
                 FSUBR_STi_ST0(rm, true);
-                if (LOG) Log.getLogger().info("FSUBRP_STi_ST0");
+                if (LOG) System.out.println("FSUBRP_STi_ST0");
                 break;
             case 0x05:  /* FSUBP  STi,ST*/
                 FSUB_STi_ST0(rm, true);
-                if (LOG) Log.getLogger().info("FSUBP_STi_ST0");
+                if (LOG) System.out.println("FSUBP_STi_ST0");
                 break;
             case 0x06:	/* FDIVRP STi,ST*/
                 FDIVR_STi_ST0(rm, true);
-                if (LOG) Log.getLogger().info("FDIVRP_STi_ST0");
+                if (LOG) System.out.println("FDIVRP_STi_ST0");
                 break;
             case 0x07:  /* FDIVP STi,ST*/
                 FDIV_STi_ST0(rm, true);
-                if (LOG) Log.getLogger().info("FDIVP_STi_ST0");
+                if (LOG) System.out.println("FDIVP_STi_ST0");
                 break;
             default:
                 break;
@@ -2038,39 +2040,39 @@ public class FPU {
         switch (group) {
             case 0x00:  /* FILD Bit16s */
                 FILD_WORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FILD_WORD_INTEGER");
+                if (LOG) System.out.println("FILD_WORD_INTEGER");
                 break;
             case 0x01:
                 FISTTP16(addr);
-                if (LOG) Log.getLogger().info("FISTTP16");
+                if (LOG) System.out.println("FISTTP16");
                 break;
             case 0x02:   /* FIST Bit16s */
                 FIST_WORD_INTEGER(addr, false);
-                if (LOG) Log.getLogger().info("FIST_WORD_INTEGER");
+                if (LOG) System.out.println("FIST_WORD_INTEGER");
                 break;
             case 0x03:	/* FISTP Bit16s */
                 FIST_WORD_INTEGER(addr, true);
-                if (LOG) Log.getLogger().info("FISTP_WORD_INTEGER");
+                if (LOG) System.out.println("FISTP_WORD_INTEGER");
                 break;
             case 0x04:   /* FBLD packed BCD */
                 FBLD_PACKED_BCD(addr);
-                if (LOG) Log.getLogger().info("FBLD_PACKED_BCD");
+                if (LOG) System.out.println("FBLD_PACKED_BCD");
                 break;
             case 0x05:  /* FILD Bit64s */
                 FILD_QWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FILD_QWORD_INTEGER");
+                if (LOG) System.out.println("FILD_QWORD_INTEGER");
                 break;
             case 0x06:	/* FBSTP packed BCD */
                 FBSTP_PACKED_BCD(addr);
-                if (LOG) Log.getLogger().info("FBSTP_PACKED_BCD");
+                if (LOG) System.out.println("FBSTP_PACKED_BCD");
                 break;
             case 0x07:  /* FISTP Bit64s */
                 FISTP_QWORD_INTEGER(addr);
-                if (LOG) Log.getLogger().info("FISTP_QWORD_INTEGER");
+                if (LOG) System.out.println("FISTP_QWORD_INTEGER");
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 7 EA:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 7 EA:Unhandled group " + group + " subfunction " + sub);
                 break;
         }
     }
@@ -2086,47 +2088,52 @@ public class FPU {
         switch (group) {
             case 0x00: /* FFREEP STi*/
                 FFREEP_STi(sub);
-                if (LOG) Log.getLogger().info("FFREEP_STi");
+                if (LOG) System.out.println("FFREEP_STi");
                 break;
             case 0x01: /* FXCH STi*/
                 FXCH_STi(sub);
-                if (LOG) Log.getLogger().info("FXCH_STi");
+                if (LOG) System.out.println("FXCH_STi");
                 break;
             case 0x02:  /* FSTP STi*/
             case 0x03:  /* FSTP STi*/
                 FST_STi(sub, true);
-                if (LOG) Log.getLogger().info("FSTP_STi");
+                if (LOG) System.out.println("FSTP_STi");
                 break;
             case 0x04:
-                if (sub == 0x00) {     /* FNSTSW AX*/
-                    FNSTSW_AX();
-                    if (LOG) Log.getLogger().info("FNSTSW_AX");
-                } else {
-                    
-                        Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 7:Unhandled group " + group + " subfunction " + sub);
+                switch (sub) {
+                    case 0x00:     /* FNSTSW AX*/
+                        FNSTSW_AX();
+                        if (LOG) System.out.println("FNSTSW_AX");
+                        break;
+                    default:
+                        if (Log.level <= LogSeverities.LOG_WARN)
+                            Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 7:Unhandled group " + group + " subfunction " + sub);
+                        break;
                 }
                 break;
             case 0x05:
                 FUCOMI_ST0_STj(sub, true);
-                if (LOG) Log.getLogger().info("FUCOMIP_ST0_STj");
+                if (LOG) System.out.println("FUCOMIP_ST0_STj");
                 break;
             case 0x06:
                 FCOMI_ST0_STj(sub, true);
-                if (LOG) Log.getLogger().info("FCOMIP_ST0_STj");
+                if (LOG) System.out.println("FCOMIP_ST0_STj");
                 break;
             default:
-                
-                    Log.specializedLog(LogType.LOG_FPU, Level.WARN, "ESC 7:Unhandled group " + group + " subfunction " + sub);
+                if (Log.level <= LogSeverities.LOG_WARN)
+                    Log.log(LogTypes.LOG_FPU, LogSeverities.LOG_WARN, "ESC 7:Unhandled group " + group + " subfunction " + sub);
                 break;
         }
     }
 
     public static boolean softFPU = false;
 
-    public static final Section.SectionFunction FPU_Init = configuration -> {
-        FPU_FINIT();
-        SoftFPU.FPU_FINIT();
-        Section_prop section = (Section_prop) configuration;
-        softFPU = section.Get_bool("softfpu");
+    public static Section.SectionFunction FPU_Init = new Section.SectionFunction() {
+        public void call(Section configuration) {
+            FPU_FINIT();
+            SoftFPU.FPU_FINIT();
+            Section_prop section = (Section_prop) configuration;
+            softFPU = section.Get_bool("softfpu");
+        }
     };
 }

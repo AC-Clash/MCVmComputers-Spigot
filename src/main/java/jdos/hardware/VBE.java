@@ -4,7 +4,6 @@ import jdos.cpu.CPU_Regs;
 import jdos.cpu.Paging;
 import jdos.gui.Render;
 import jdos.ints.Int10_vesa;
-import jdos.util.Log;
 
 public class VBE {
     static public boolean initialized = false;
@@ -74,7 +73,7 @@ public class VBE {
                             val = VBE_DISPI_MAX_BPP;
                             break;
                         default:
-                            Log.getLogger().info("Ouch");
+                            System.out.println("Ouch");
                     }
                 } else {
                     switch (vbeIndex) {
@@ -98,7 +97,7 @@ public class VBE {
             } else if (vbeIndex == VBE_DISPI_INDEX_VIDEO_MEMORY_64K) {
                 val = VGA.vga.vmemsize >>> 16;
             }
-            Log.getLogger().info("VBE Read "+vbeIndex+" = "+val+" eip=0x"+Integer.toHexString(CPU_Regs.reg_eip));
+            System.out.println("VBE Read "+vbeIndex+" = "+val+" eip=0x"+Integer.toHexString(CPU_Regs.reg_eip));
             return val;
         }
     };
@@ -111,7 +110,7 @@ public class VBE {
 
     static final private IoHandler.IO_WriteHandler vbe_write_data  = new IoHandler.IO_WriteHandler() {
         public void call(/*Bitu*/int port, /*Bitu*/int data, /*Bitu*/int iolen) {
-            Log.getLogger().info("VBE Write "+vbeIndex+"="+data+" eip=0x"+Integer.toHexString(CPU_Regs.reg_eip));
+            System.out.println("VBE Write "+vbeIndex+"="+data+" eip=0x"+Integer.toHexString(CPU_Regs.reg_eip));
             if (vbeIndex <= VBE_DISPI_INDEX_NB) {
                 switch(vbeIndex) {
                     case VBE_DISPI_INDEX_ID:
@@ -230,6 +229,7 @@ public class VBE {
                     {
                         if (data < vbeRegs[VBE_DISPI_INDEX_XRES])
                             return;
+                        int w = data;
                         int lineOffset;
                         if (vbeRegs[VBE_DISPI_INDEX_BPP] == 4) {
                             lineOffset = data >>> 1;
@@ -240,7 +240,7 @@ public class VBE {
                         /* XXX: support wierd bochs semantics ? */
                         if (h < vbeRegs[VBE_DISPI_INDEX_YRES])
                             return;
-                        vbeRegs[VBE_DISPI_INDEX_VIRT_WIDTH] = data;
+                        vbeRegs[VBE_DISPI_INDEX_VIRT_WIDTH] = w;
                         vbeRegs[VBE_DISPI_INDEX_VIRT_HEIGHT] = h;
                         vbeLineOffset = lineOffset;
                     }

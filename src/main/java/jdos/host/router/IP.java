@@ -1,5 +1,4 @@
 package jdos.host.router;
-import jdos.util.Log;
 
 public class IP extends EtherUtil {
     static public final int LEN = 20;
@@ -58,13 +57,13 @@ public class IP extends EtherUtil {
         parse(buffer, offset);
         if (version == 4 && headerLen<=len && csum(buffer, offset, headerLen)==0) {
             if (pcol ==  6) { // TCP
-                Log.getLogger().info("Received TCP Packet");
+                System.out.println("Received TCP Packet");
             } else if (pcol == 17) { // UDP
                 udp.handle(buffer, offset + this.headerLen, len - this.headerLen);
             } else if (pcol == 1) { // ICMP
                 icmp.handle(buffer, offset + this.headerLen, len - this.headerLen);
             } else {
-                Log.getLogger().info("IP packet "+pcol);
+                System.out.println("IP packet "+pcol);
             }
         }
     }

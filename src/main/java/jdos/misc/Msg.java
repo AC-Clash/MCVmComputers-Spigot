@@ -3,23 +3,21 @@ package jdos.misc;
 import jdos.Dosbox;
 import jdos.misc.setup.Prop_path;
 import jdos.misc.setup.Section_prop;
-import org.apache.logging.log4j.Level;
 
 import java.io.*;
 import java.util.Vector;
-import jdos.util.Log;
 
 public class Msg {
     static class MessageBlock {
-        final String name;
-        final String val;
+        String name;
+        String val;
         public MessageBlock(String _name, String _val) {
             name = _name;
             val = _val;
         }
     }
 
-    static final Vector Lang = new Vector();
+    static Vector Lang = new Vector();
 
     static public void add(String name, String value) {
         for (int i=0;i<Lang.size();i++) {
@@ -40,12 +38,12 @@ public class Msg {
     }
 
     static public void LoadMessageFile(String fname) {
-        if (fname == null || fname.isEmpty()) return; //empty string=no languagefile
+        if (fname == null || fname.length()==0) return; //empty string=no languagefile
         FileReader fr=null;
         try {
             fr = new FileReader(fname);
         } catch (FileNotFoundException e) {
-            Log.exit("MSG: Can't load messages: "+fname, Level.ERROR);
+            Log.exit("MSG:Can't load messages: "+fname);
         }
         BufferedReader br = new BufferedReader(fr);
         String linein;
@@ -69,12 +67,10 @@ public class Msg {
                 }
             }
         } catch (IOException e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+
         }
         if (fr != null) {
-            try {fr.close();} catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-            }
+            try {fr.close();} catch (Exception e){}
         }
     }
 
@@ -97,13 +93,10 @@ public class Msg {
                 fos.write(line.getBytes());
             }
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Could not write to location: ", e);
+            e.printStackTrace();
         } finally {
             if (fos != null) {
-                try {fos.close();
-                } catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                }
+                try {fos.close();} catch (Exception e){};
             }
         }
     }

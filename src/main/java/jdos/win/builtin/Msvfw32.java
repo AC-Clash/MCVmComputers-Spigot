@@ -3,7 +3,6 @@ package jdos.win.builtin;
 import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
-import jdos.util.Log;
 import jdos.win.loader.BuiltinModule;
 import jdos.win.loader.Loader;
 
@@ -15,7 +14,7 @@ public class Msvfw32 extends BuiltinModule {
     }
 
     // BOOL ICInfo(DWORD fccType, DWORD fccHandler, ICINFO  *lpicinfo)
-    private final Callback.Handler ICInfo = new HandlerBase() {
+    private Callback.Handler ICInfo = new HandlerBase() {
         public java.lang.String getName() {
             return "Msvfw32.ICInfo";
         }
@@ -23,7 +22,7 @@ public class Msvfw32 extends BuiltinModule {
             int fccType = CPU.CPU_Pop32();
             int fccHandler = CPU.CPU_Pop32();
             int lpicinfo = CPU.CPU_Pop32();
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = WinAPI.FALSE;
         }
     };

@@ -4,7 +4,6 @@ import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
 import jdos.win.builtin.HandlerBase;
 import jdos.win.builtin.user32.WinWindow;
@@ -56,7 +55,7 @@ public class WinMM extends BuiltinModule {
 
     // :TODO: This code can use a lot of work
     // MCIERROR mciSendCommand(MCIDEVICEID IDDevice, UINT uMsg, DWORD_PTR fdwCommand, DWORD_PTR dwParam)
-    private final Callback.Handler mciSendCommandA = new HandlerBase() {
+    private Callback.Handler mciSendCommandA = new HandlerBase() {
         static final private int MCI_OPEN_SHAREABLE =            0x00000100;
         static final private int MCI_OPEN_ELEMENT =              0x00000200;
         static final private int MCI_OPEN_ALIAS =                0x00000400;
@@ -202,13 +201,13 @@ public class WinMM extends BuiltinModule {
     };
 
     // UINT mixerGetNumDevs(void)
-    private final Callback.Handler mixerGetNumDevs = new HandlerBase() {
+    private Callback.Handler mixerGetNumDevs = new HandlerBase() {
         public java.lang.String getName() {
             return "WinMM.mixerGetNumDevs";
         }
         public void onCall() {
             // :TODO:
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = 0;
         }
     };

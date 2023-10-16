@@ -10,15 +10,15 @@ import jdos.dos.drives.Drive_local;
 import jdos.dos.drives.Drive_zip;
 import jdos.gui.Main;
 import jdos.hardware.Memory;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Config;
-import jdos.types.LogType;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 import jdos.types.MachineType;
 import jdos.util.IntRef;
 import jdos.util.LongRef;
 import jdos.util.Ptr;
 import jdos.util.StringRef;
-import org.apache.logging.log4j.Level;
 
 import java.lang.reflect.Method;
 
@@ -79,19 +79,19 @@ public class Dos_execute {
 
     static private void SaveRegisters() {
         CPU_Regs.reg_esp.word(CPU_Regs.reg_esp.word()-18);
-        Memory.mem_writew(CPU_Regs.reg_ssPhys.dword + CPU_Regs.reg_esp.word(), CPU_Regs.reg_eax.word());
+        Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+0, CPU_Regs.reg_eax.word());
         Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+ 2,CPU_Regs.reg_ecx.word());
         Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+ 4,CPU_Regs.reg_edx.word());
         Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+ 6,CPU_Regs.reg_ebx.word());
         Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+ 8,CPU_Regs.reg_esi.word());
         Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+10,CPU_Regs.reg_edi.word());
         Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+12,CPU_Regs.reg_ebp.word());
-        Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+14, CPU_Regs.reg_dsVal.dword);
-        Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+16, CPU_Regs.reg_esVal.dword);
+        Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+14,(int)CPU_Regs.reg_dsVal.dword);
+        Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+16,(int)CPU_Regs.reg_esVal.dword);
     }
 
     static private void RestoreRegisters() {
-        CPU_Regs.reg_eax.word(Memory.mem_readw(CPU_Regs.reg_ssPhys.dword + CPU_Regs.reg_esp.word()));
+        CPU_Regs.reg_eax.word(Memory.mem_readw(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+ 0));
         CPU_Regs.reg_ecx.word(Memory.mem_readw(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+ 2));
         CPU_Regs.reg_edx.word(Memory.mem_readw(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+ 4));
         CPU_Regs.reg_ebx.word(Memory.mem_readw(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+ 6));
@@ -107,8 +107,8 @@ public class Dos_execute {
         Dos_MCB mcb=new Dos_MCB(Dos.dos.psp()-1);
         StringRef name = new StringRef();
         mcb.GetFileName(name);
-        if (name.value.isEmpty()) name.value="DOSBOX";
-        StringBuilder result = new StringBuilder();
+        if (name.value.length()==0) name.value="DOSBOX";
+        StringBuffer result = new StringBuffer();
         for (int i=0;i<8 && i<name.value.length();i++) {
             char c = name.value.charAt(i);
             if (c==0)
@@ -146,7 +146,7 @@ public class Dos_execute {
         /* Restore the old CS:IP from int 22h */
         RestoreRegisters();
         /* Set the CS:IP stored in int 0x22 back on the stack */
-        Memory.mem_writew(CPU_Regs.reg_ssPhys.dword + CPU_Regs.reg_esp.word(),Memory.RealOff(old22));
+        Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+0,Memory.RealOff(old22));
         Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+2,Memory.RealSeg(old22));
         /* set IOPL=3 (Strike Commander), nested task set,
            interrupts enabled, test flags cleared */
@@ -178,10 +178,8 @@ public class Dos_execute {
 
     static private /*Bit16u*/int long2para(/*Bit32u*/int size) {
         if (size>0xFFFF0) return 0xffff;
-        /*Bit16u*/
-        /*Bit16u*/
-        if ((size & 0xf)!=0) return (size>>4)+1;
-        else return size>>4;
+        if ((size & 0xf)!=0) return (/*Bit16u*/int)((size>>4)+1);
+        else return (/*Bit16u*/int)(size>>4);
     }
 
     static private boolean MakeEnv(String name, IntRef segment) {
@@ -228,7 +226,7 @@ public class Dos_execute {
         } else return false;
     }
 
-    static public void DOS_NewPSP(/*Bit16u*/int segment, /*Bit16u*/int size) {
+    static public boolean DOS_NewPSP(/*Bit16u*/int segment, /*Bit16u*/int size) {
         Dos_PSP psp=new Dos_PSP(segment);
         psp.MakeNew(size);
         /*Bit16u*/int parent_psp_seg=psp.GetParent();
@@ -236,9 +234,10 @@ public class Dos_execute {
         psp.CopyFileTable(psp_parent,false);
         // copy command line as well (Kings Quest AGI -cga switch)
         psp.SetCommandTail(Memory.RealMake(parent_psp_seg,0x80));
+        return true;
     }
 
-    static public void DOS_ChildPSP(/*Bit16u*/int segment, /*Bit16u*/int size) {
+    static public boolean DOS_ChildPSP(/*Bit16u*/int segment, /*Bit16u*/int size) {
         Dos_PSP psp=new Dos_PSP(segment);
         psp.MakeNew(size);
         /*Bit16u*/int parent_psp_seg = psp.GetParent();
@@ -249,15 +248,14 @@ public class Dos_execute {
         psp.SetFCB2(Memory.RealMake(parent_psp_seg,0x6c));
         psp.SetEnvironment(psp_parent.GetEnvironment());
         psp.SetSize(size);
+        return true;
     }
 
     static private void SetupPSP(/*Bit16u*/int pspseg,/*Bit16u*/int memsize,/*Bit16u*/int envseg) {
         /* Fix the PSP for psp and environment MCB's */
-        /*Bit16u*/
-        Dos_MCB mcb=new Dos_MCB(pspseg-1);
+        Dos_MCB mcb=new Dos_MCB((/*Bit16u*/int)(pspseg-1));
         mcb.SetPSPSeg(pspseg);
-        /*Bit16u*/
-        mcb.SetPt(envseg-1);
+        mcb.SetPt((/*Bit16u*/int)(envseg-1));
         mcb.SetPSPSeg(pspseg);
 
         Dos_PSP psp=new Dos_PSP(pspseg);
@@ -282,20 +280,20 @@ public class Dos_execute {
         if (!loadedWinMethod) {
             try {
                 Class c = Class.forName("jdos.win.Win");
-                winMethod = c.getDeclaredMethod("run", String.class);
-                Log.getLogger().info("Win32 support available");
+                winMethod = c.getDeclaredMethod("run", new Class[] {String.class});
+                System.out.println("Win32 support available");
             } catch (Exception e) {
-                Log.getLogger().warn("Win32 support not available");
+                System.out.println("Win32 support not available");
             } finally {
                 loadedWinMethod = true;
             }
         }
         if (winMethod != null) {
             try {
-                Object result = winMethod.invoke(null, path);
-                return (Boolean) result;
+                Object result = winMethod.invoke(null, new Object[]{path});
+                return ((Boolean)result).booleanValue();
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Could not invoke win method: ", e);
+                e.printStackTrace();
                 loadedWinMethod = true;
                 winMethod = null;
             }
@@ -306,20 +304,20 @@ public class Dos_execute {
         if (!loadedWinMethod) {
             try {
                 Class c = Class.forName("jdos.win.Win");
-                winMethod = c.getDeclaredMethod("run", Drive_fat.class, Drive_fat.fatFile.class, String.class);
-                Log.getLogger().info("Win32 support available");
+                winMethod = c.getDeclaredMethod("run", new Class[] {Drive_fat.class, Drive_fat.fatFile.class, String.class});
+                System.out.println("Win32 support available");
             } catch (Exception e) {
-                Log.getLogger().warn("Win32 support not available");
+                System.out.println("Win32 support not available");
             } finally {
                 loadedWinMethod = true;
             }
         }
         if (winMethod != null) {
             try {
-                Object result = winMethod.invoke(null, drive, file, path);
-                return (Boolean) result;
+                Object result = winMethod.invoke(null, new Object[]{drive, file, path});
+                return ((Boolean)result).booleanValue();
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Could not invoke win method: ", e);
+                e.printStackTrace();
                 loadedWinMethod = true;
                 winMethod = null;
             }
@@ -337,7 +335,7 @@ public class Dos_execute {
 
         block.LoadData();
         //Remove the loadhigh flag for the moment!
-        if((flags&0x80)!=0) Log.specializedLog(LogType.LOG_EXEC, Level.ERROR,"using loadhigh flag!!!!!. dropping it");
+        if((flags&0x80)!=0) Log.log(LogTypes.LOG_EXEC, LogSeverities.LOG_ERROR,"using loadhigh flag!!!!!. dropping it");
         flags &= 0x7f;
         if (flags!=LOADNGO && flags!=OVERLAY && flags!=LOAD) {
             Dos.DOS_SetError(Dos.DOSERR_FORMAT_INVALID);
@@ -356,7 +354,7 @@ public class Dos_execute {
                 return true;
             }
         } else if (Dos_files.Files[Dos.RealHandle(fhandle.value)] instanceof Drive_zip.Zip_File) {
-        	String path = "" + (char)('A' + Dos_files.Files[Dos.RealHandle(fhandle.value)].GetDrive());
+        	String path = "" + (char)('A' + ((Drive_zip.Zip_File)Dos_files.Files[Dos.RealHandle(fhandle.value)]).GetDrive());
         	if (winRun(path)) {
         		return true;
         	}
@@ -387,7 +385,7 @@ public class Dos_execute {
             if ((head.signature!=MAGIC1) && (head.signature!=MAGIC2)) iscom=true;
             else {
                 if((head.pages & ~0x07ff)!=0) /* 1 MB dos maximum address limit. Fixes TC3 IDE (kippesoep) */
-                    Log.specializedLog(LogType.LOG_EXEC,Level.INFO,"Weird header: head.pages > 1 MB");
+                    Log.log(LogTypes.LOG_EXEC,LogSeverities.LOG_NORMAL,"Weird header: head.pages > 1 MB");
                 head.pages&=0x07ff;
                 headersize = head.headersize*16;
                 imagesize = head.pages*512-headersize;
@@ -436,8 +434,9 @@ public class Dos_execute {
                     return false;
                 }
             }
-            memsize.value = Math.min(maxfree.value, maxsize.value);
-            if (!Dos_memory.DOS_AllocateMemory(pspseg,memsize)) Log.exit("DOS:Exec error in memory", Level.ERROR);
+            if (maxfree.value<maxsize.value) memsize.value=maxfree.value;
+            else memsize.value=maxsize.value;
+            if (!Dos_memory.DOS_AllocateMemory(pspseg,memsize)) Log.exit("DOS:Exec error in memory");
             if (iscom && (Dosbox.machine==MachineType.MCH_PCJR) && (pspseg.value<0x2000)) {
                 maxsize.value=0xffff;
                 /* resize to full extent of memory block */
@@ -454,9 +453,8 @@ public class Dos_execute {
             loadseg=pspseg.value+16;
             if (!iscom) {
                 /* Check if requested to load program into upper part of allocated memory */
-                /*Bit16u*/
                 if ((head.minmemory == 0) && (head.maxmemory == 0))
-                    loadseg = ((pspseg.value+memsize.value)*0x10-imagesize)/0x10;
+                    loadseg = (/*Bit16u*/int)(((pspseg.value+memsize.value)*0x10-imagesize)/0x10);
             }
         } else loadseg=block.overlay.loadseg;
         /* Load the executable */
@@ -472,13 +470,13 @@ public class Dos_execute {
             while (imagesize>0x7FFF) {
                 IntRef readsize=new IntRef(0x8000);Dos_files.DOS_ReadFile(fhandle.value,loadbuf,readsize);
                 Memory.MEM_BlockWrite(loadaddress,loadbuf,readsize.value);
-//			if (readsize!=0x8000) Log.specializedLog(Logtypes.LOG_EXEC,Level.INFO,"Illegal header");
+//			if (readsize!=0x8000) Log.log(Logtypes.LOG_EXEC,LogSeverities.LOG_NORMAL,"Illegal header");
                 loadaddress+=0x8000;imagesize-=0x8000;
             }
             if (imagesize>0) {
                 IntRef readsize=new IntRef(imagesize);Dos_files.DOS_ReadFile(fhandle.value,loadbuf,readsize);
                 Memory.MEM_BlockWrite(loadaddress,loadbuf,readsize.value);
-//			if (readsize!=imagesize) Log.specializedLog(Logtypes.LOG_EXEC,Level.INFO,"Illegal header");
+//			if (readsize!=imagesize) Log.log(Logtypes.LOG_EXEC,LogSeverities.LOG_NORMAL,"Illegal header");
             }
             /* Relocate the exe image */
             /*Bit16u*/int relocate;
@@ -511,7 +509,7 @@ public class Dos_execute {
         } else {
             csip=Memory.RealMake(loadseg+head.initCS,head.initIP);
             sssp=Memory.RealMake(loadseg+head.initSS,head.initSP);
-            if (head.initSP<4) Log.specializedLog(LogType.LOG_EXEC,Level.ERROR,"stack underflow/wrap at EXEC");
+            if (head.initSP<4) Log.log(LogTypes.LOG_EXEC,LogSeverities.LOG_ERROR,"stack underflow/wrap at EXEC");
         }
 
         if (flags==LOAD) {
@@ -523,7 +521,7 @@ public class Dos_execute {
             /* Switch the psp's */
             Dos.dos.psp(pspseg.value);
             Dos_PSP newpsp=new Dos_PSP(Dos.dos.psp());
-            Dos.dos.dta(Memory.RealMake(newpsp.GetSegment(),0x80));
+            Dos.dos.dta((int)Memory.RealMake(newpsp.GetSegment(),0x80));
             /* First word on the stack is the value ax should contain on startup */
             Memory.real_writew(Memory.RealSeg(sssp-2),Memory.RealOff(sssp-2),0xffff);
             block.exec.initsssp = sssp-2;
@@ -533,7 +531,7 @@ public class Dos_execute {
         }
 
         if (flags==LOADNGO) {
-            if ((CPU_Regs.reg_esp.word()>0xfffe) || (CPU_Regs.reg_esp.word()<18)) Log.specializedLog(LogType.LOG_EXEC,Level.ERROR,"stack underflow/wrap at EXEC");
+            if ((CPU_Regs.reg_esp.word()>0xfffe) || (CPU_Regs.reg_esp.word()<18)) Log.log(LogTypes.LOG_EXEC,LogSeverities.LOG_ERROR,"stack underflow/wrap at EXEC");
             /* Get Caller's program CS:IP of the stack and set termination address to that */
             Memory.RealSetVec(0x22,Memory.RealMake(Memory.mem_readw(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+2),Memory.mem_readw(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word())));
             SaveRegisters();
@@ -543,7 +541,7 @@ public class Dos_execute {
             /* Switch the psp's and set new DTA */
             Dos.dos.psp(pspseg.value);
             Dos_PSP newpsp=new Dos_PSP(Dos.dos.psp());
-            Dos.dos.dta(Memory.RealMake(newpsp.GetSegment(),0x80));
+            Dos.dos.dta((int)Memory.RealMake(newpsp.GetSegment(),0x80));
             /* save vectors */
             newpsp.SaveVectors();
             /* copy fcbs */
@@ -573,23 +571,21 @@ public class Dos_execute {
             }
 
             /* Add the filename to PSP and environment MCB's */
-            StringBuilder stripname= new StringBuilder();
-            while (!name.isEmpty()) {
+            String stripname="";
+            while (name.length()>0) {
                 char chr = name.charAt(0);
                 name = name.substring(1);
                 switch (chr) {
-                case ':':case '\\':case '/':
-                        stripname = new StringBuilder();break;
-                default:
-                    stripname.append(String.valueOf(chr).toUpperCase());
+                case ':':case '\\':case '/':stripname="";break;
+                default:stripname+=String.valueOf(chr).toUpperCase();
                 }
             }
-            int p = stripname.toString().indexOf('.');
+            int p = stripname.indexOf('.');
             if (p>=0) {
-                stripname = new StringBuilder(stripname.substring(0, p));
+                stripname = stripname.substring(0, p);
             }
             Dos_MCB pspmcb=new Dos_MCB(Dos.dos.psp()-1);
-            pspmcb.SetFileName(stripname.toString());
+            pspmcb.SetFileName(stripname);
             DOS_UpdatePSPName();
             return true;
         }

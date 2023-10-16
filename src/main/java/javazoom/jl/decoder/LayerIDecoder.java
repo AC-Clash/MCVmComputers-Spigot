@@ -40,7 +40,7 @@ class LayerIDecoder implements FrameDecoder
 	
 	protected int					num_subbands;
 	protected Subband[]				subbands;
-	protected Crc16					crc;	// new Crc16[1] to enable CRC checking.
+	protected Crc16					crc	= null;	// new Crc16[1] to enable CRC checking.
 	
 	public LayerIDecoder()
 	{
@@ -154,7 +154,7 @@ class LayerIDecoder implements FrameDecoder
 	  *      is illegal (to prevent segmentation faults)
 	  */
 	  // Scalefactors for layer I and II, Annex 3-B.1 in ISO/IEC DIS 11172:
-	  public static final float[] scalefactors =
+	  public static final float scalefactors[] =
 	  {
 	  2.00000000000000f, 1.58740105196820f, 1.25992104989487f, 1.00000000000000f,
 	  0.79370052598410f, 0.62996052494744f, 0.50000000000000f, 0.39685026299205f,
@@ -189,7 +189,7 @@ class LayerIDecoder implements FrameDecoder
 	{
 
 	  // Factors and offsets for sample requantization
-	  public static final float[] table_factor = {
+	  public static final float table_factor[] = {
 	   0.0f, (1.0f/2.0f) * (4.0f/3.0f), (1.0f/4.0f) * (8.0f/7.0f), (1.0f/8.0f) * (16.0f/15.0f),
 	  (1.0f/16.0f) * (32.0f/31.0f), (1.0f/32.0f) * (64.0f/63.0f), (1.0f/64.0f) * (128.0f/127.0f),
 	  (1.0f/128.0f) * (256.0f/255.0f), (1.0f/256.0f) * (512.0f/511.0f),
@@ -198,7 +198,7 @@ class LayerIDecoder implements FrameDecoder
 	  (1.0f/8192.0f) * (16384.0f/16383.0f), (1.0f/16384.0f) * (32768.0f/32767.0f)
 	  };
 
-	  public static final float[] table_offset = {
+	  public static final float table_offset[] = {
 	   0.0f, ((1.0f/2.0f)-1.0f) * (4.0f/3.0f), ((1.0f/4.0f)-1.0f) * (8.0f/7.0f), ((1.0f/8.0f)-1.0f) * (16.0f/15.0f),
 	  ((1.0f/16.0f)-1.0f) * (32.0f/31.0f), ((1.0f/32.0f)-1.0f) * (64.0f/63.0f), ((1.0f/64.0f)-1.0f) * (128.0f/127.0f),
 	  ((1.0f/128.0f)-1.0f) * (256.0f/255.0f), ((1.0f/256.0f)-1.0f) * (512.0f/511.0f),
@@ -207,7 +207,7 @@ class LayerIDecoder implements FrameDecoder
 	  ((1.0f/8192.0f)-1.0f) * (16384.0f/16383.0f), ((1.0f/16384.0f)-1.0f) * (32768.0f/32767.0f)
 	  };
 
-	  protected final int			 subbandnumber;
+	  protected int			 subbandnumber;
 	  protected int			 samplenumber;
 	  protected int			 allocation;
 	  protected float		 scalefactor;
@@ -381,7 +381,8 @@ class LayerIDecoder implements FrameDecoder
 	  /**
 	   *
 	   */
-	  public void read_allocation (Bitstream stream, Header header, Crc16 crc) {
+	  public void read_allocation (Bitstream stream, Header header, Crc16 crc) throws DecoderException
+	  {
 	 	 allocation = stream.get_bits(4);
 	     channel2_allocation = stream.get_bits(4);
 	     if (crc != null)

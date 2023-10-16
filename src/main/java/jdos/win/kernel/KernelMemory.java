@@ -1,14 +1,11 @@
 package jdos.win.kernel;
 
-import com.acclash.vmcomputers.VMComputers;
 import jdos.cpu.CPU;
 import jdos.cpu.Callback;
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.util.IntRef;
 import jdos.win.Win;
 import jdos.win.builtin.kernel32.WinProcess;
-import org.bukkit.Bukkit;
 
 // Based heavily on James Molloy's work at http://www.jamesmolloy.co.uk/tutorial_html/6.-Paging.html
 
@@ -17,8 +14,8 @@ public class KernelMemory {
     int placement_address = PLACEMENT_START;
     KernelHeap heap = null;
     static private final int KHEAP_INITIAL_SIZE = 0x10000;
-    private final long KHEAP_START = WinProcess.ADDRESS_KHEAP_START;
-    private final long KHEAP_END = WinProcess.ADDRESS_KHEAP_END;
+    private long KHEAP_START = WinProcess.ADDRESS_KHEAP_START;
+    private long KHEAP_END = WinProcess.ADDRESS_KHEAP_END;
 
     public int kmalloc(int sz) {
         return kmalloc(sz, false, null);
@@ -210,7 +207,7 @@ public class KernelMemory {
     void alloc_frame(int pagePtr, boolean is_kernel, boolean is_writeable) {
         int page = Memory.mem_readd(pagePtr);
         if (Page.getFrame(page) != 0) {
-            // Frame was already allocated, return straight away.  This will only happen during initialization of paging
+            return; // Frame was already allocated, return straight away.  This will only happen during initialization of paging
         } else {
             int idx = first_frame(); // idx is now the index of the first free frame.
             if (idx == -1) {
@@ -281,10 +278,8 @@ public class KernelMemory {
             alloc_frame(get_page((int)i, true, kernel_directory), false, false);
         }
         if (placement_address>oldPlacement+0x1000) {
-            Log.getLogger().error("Kernel Heap padding was not large enough");
-           //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+            System.out.println("Kernel Heap padding was not large enough");
+            System.exit(0);
         }
         // Now, enable paging!
         switch_page_directory(kernel_directory);
@@ -324,12 +319,10 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
         interrupts.registerHandler(Interrupts.IRQ14, pageFaultHandler);
     }
 
-    final Callback.Handler pageFaultHandler = new Callback.Handler() {
+    Callback.Handler pageFaultHandler = new Callback.Handler() {
         public int call() {
-            Log.getLogger().error("Page Fault");
-           //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+            System.out.println("Page Fault");
+            System.exit(0);
             return 0;
         }
 

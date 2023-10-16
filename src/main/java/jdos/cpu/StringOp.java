@@ -3,9 +3,9 @@ package jdos.cpu;
 import jdos.cpu.core_normal.Prefix_helpers;
 import jdos.hardware.IO;
 import jdos.hardware.Memory;
-import jdos.util.Log;
-import jdos.types.LogType;
-import org.apache.logging.log4j.Level;
+import jdos.misc.Log;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 
 public class StringOp extends Prefix_helpers {
     static public final int R_OUTSB=1;
@@ -216,7 +216,7 @@ public class StringOp extends Prefix_helpers {
         case R_SCASB:
             {
                 /*Bit8u*/int val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val2=Memory.mem_readb(di_base+reg_edi.word());
                     reg_edi.word(reg_edi.word()+add_index);
@@ -229,7 +229,7 @@ public class StringOp extends Prefix_helpers {
         case R_SCASW:
             {
                 add_index<<=1;/*Bit16u*/int val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val2=Memory.mem_readw(di_base+reg_edi.word());
                     reg_edi.word(reg_edi.word()+add_index);
@@ -242,7 +242,7 @@ public class StringOp extends Prefix_helpers {
         case R_SCASD:
             {
                 add_index<<=2;/*Bit32u*/int val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val2=Memory.mem_readd(di_base + reg_edi.word());
                     reg_edi.word(reg_edi.word()+add_index);
@@ -255,7 +255,7 @@ public class StringOp extends Prefix_helpers {
         case R_CMPSB:
             {
                 /*Bit8u*/int val1=0,val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val1=Memory.mem_readb(si_base+reg_esi.word());
                     val2=Memory.mem_readb(di_base+reg_edi.word());
@@ -270,7 +270,7 @@ public class StringOp extends Prefix_helpers {
         case R_CMPSW:
             {
                 add_index<<=1;/*Bit16u*/int val1=0,val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val1=Memory.mem_readw(si_base+reg_esi.word());
                     val2=Memory.mem_readw(di_base+reg_edi.word());
@@ -285,7 +285,7 @@ public class StringOp extends Prefix_helpers {
         case R_CMPSD:
             {
                 add_index<<=2;/*Bit32u*/int val1=0,val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val1=Memory.mem_readd(si_base + reg_esi.word());
                     val2=Memory.mem_readd(di_base + reg_edi.word());
@@ -298,7 +298,8 @@ public class StringOp extends Prefix_helpers {
             }
             break;
         default:
-            Log.exit(LogType.LOG_CPU.getName() + "Unhandled string op "+type, Level.ERROR);
+            if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_CPU, LogSeverities.LOG_ERROR,"Unhandled string op "+type);
+            Log.exit("Unhandled string op "+type);
         }
     }
 
@@ -310,7 +311,7 @@ public class StringOp extends Prefix_helpers {
 
         si_base=base_ds;
         di_base=CPU_Regs.reg_esPhys.dword;
-        count=reg_ecx.dword & 0xFFFFFFFFL;
+        count=reg_ecx.dword & 0xFFFFFFFFl;
         if ((prefixes & PREFIX_REP)==0) {
             count=1;
         } else {
@@ -468,7 +469,7 @@ public class StringOp extends Prefix_helpers {
         case R_SCASB:
             {
                 /*Bit8u*/int val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val2=Memory.mem_readb(di_base+reg_edi.dword);
                     reg_edi.dword+=add_index;
@@ -481,7 +482,7 @@ public class StringOp extends Prefix_helpers {
         case R_SCASW:
             {
                 add_index<<=1;/*Bit16u*/int val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val2=Memory.mem_readw(di_base+reg_edi.dword);
                     reg_edi.dword+=add_index;
@@ -494,7 +495,7 @@ public class StringOp extends Prefix_helpers {
         case R_SCASD:
             {
                 add_index<<=2;/*Bit32u*/int val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val2=Memory.mem_readd(di_base + reg_edi.dword);
                     reg_edi.dword+=add_index;
@@ -507,7 +508,7 @@ public class StringOp extends Prefix_helpers {
         case R_CMPSB:
             {
                 /*Bit8u*/int val1=0,val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val1=Memory.mem_readb(si_base+reg_esi.dword);
                     val2=Memory.mem_readb(di_base+reg_edi.dword);
@@ -522,7 +523,7 @@ public class StringOp extends Prefix_helpers {
         case R_CMPSW:
             {
                 add_index<<=1;/*Bit16u*/int val1=0,val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val1=Memory.mem_readw(si_base+reg_esi.dword);
                     val2=Memory.mem_readw(di_base+reg_edi.dword);
@@ -537,7 +538,7 @@ public class StringOp extends Prefix_helpers {
         case R_CMPSD:
             {
                 add_index<<=2;/*Bit32u*/int val1=0,val2=0;
-                while (count>0) {
+                for (;count>0;) {
                     count--;CPU.CPU_Cycles--;
                     val1=Memory.mem_readd(si_base + reg_esi.dword);
                     val2=Memory.mem_readd(di_base + reg_edi.dword);
@@ -550,7 +551,8 @@ public class StringOp extends Prefix_helpers {
             }
             break;
         default:
-            Log.exit(LogType.LOG_CPU.getName() + "Unhandled string op "+type, Level.ERROR);
+            if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_CPU, LogSeverities.LOG_ERROR,"Unhandled string op "+type);
+            Log.exit("Unhandled string op "+type);
         }
     }
     

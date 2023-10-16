@@ -1,6 +1,5 @@
 package jdos.win.loader.winpe;
 
-import jdos.util.Log;
 import jdos.win.builtin.WinAPI;
 import jdos.win.system.WinFile;
 
@@ -8,9 +7,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 public class HeaderPE {
-    public final HeaderDOS dos = new HeaderDOS();
-    public final HeaderImageFile imageFile = new HeaderImageFile();
-    public final HeaderImageOptional imageOptional = new HeaderImageOptional();
+    public HeaderDOS dos = new HeaderDOS();
+    public HeaderImageFile imageFile = new HeaderImageFile();
+    public HeaderImageOptional imageOptional = new HeaderImageOptional();
     public HeaderImageSection[] imageSections = null;
 
     static public boolean fastCheckWinPE(WinFile file) {
@@ -20,7 +19,10 @@ public class HeaderPE {
         int offset = (buffer[0] & 0xFF) | (buffer[1] & 0xFF) << 8 | (buffer[2] & 0xFF) << 16 | (buffer[3] & 0xFF) << 24;
         file.seek(offset, WinAPI.SEEK_SET);
         file.read(buffer);
-        return buffer[0] != 0x50 || buffer[1] != 0x45 || buffer[2] != 0 || buffer[3] != 0;
+        if (buffer[0]!=0x50 || buffer[1]!=0x45 || buffer[2]!=0 || buffer[3]!=0) {
+            return false;
+        }
+        return true;
     }
 
     public boolean load(OutputStream os, WinFile fis) throws IOException {
@@ -31,13 +33,13 @@ public class HeaderPE {
         buffer = new byte[4];
         fis.read(buffer);
         if (buffer[0]!=0x50 || buffer[1]!=0x45 || buffer[2]!=0 || buffer[3]!=0) {
-            Log.getLogger().warn("Not Windows EXE format");
+            System.out.println("Not Windows EXE format");
             return false;
         }
         os.write(buffer);
         imageFile.load(os, fis);
         if (imageFile.Machine != 0x14C) { // Intel 80386
-            Log.getLogger().warn("Not Windows 80386 EXE");
+            System.out.println("Not Windows 80386 EXE");
             return false;
         }
         imageOptional.load(os, fis);

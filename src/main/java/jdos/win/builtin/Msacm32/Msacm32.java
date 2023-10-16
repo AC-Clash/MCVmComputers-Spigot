@@ -13,11 +13,13 @@ public class Msacm32 extends BuiltinModule {
 
     // MMRESULT acmMetrics(HACMOBJ hao, UINT uMetric, LPVOID pMetric)
     public static int acmMetrics(int hao, int uMetric, int pMetric) {
-        if (uMetric == ACM_METRIC_MAX_SIZE_FORMAT) {
-            if (pMetric != 0) {
-                writed(pMetric, WAVEFORMATEX.SIZE);
-                return MMSYSERR_NOERROR;
-            }
+        switch (uMetric) {
+            case ACM_METRIC_MAX_SIZE_FORMAT:
+                if (pMetric != 0) {
+                    writed(pMetric, WAVEFORMATEX.SIZE);
+                    return MMSYSERR_NOERROR;
+                }
+
         }
         return MMSYSERR_ERROR;
     }

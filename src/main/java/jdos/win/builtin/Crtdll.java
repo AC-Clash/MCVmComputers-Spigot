@@ -3,7 +3,6 @@ package jdos.win.builtin;
 import jdos.cpu.CPU_Regs;
 import jdos.fpu.FPU;
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.loader.BuiltinModule;
 import jdos.win.loader.Loader;
 import jdos.win.system.WinSystem;
@@ -12,7 +11,7 @@ import jdos.win.utils.StringUtil;
 import java.util.Random;
 
 public class Crtdll extends BuiltinModule {
-    final int _acmdln_dll;
+    int _acmdln_dll;
 
     public Crtdll(Loader loader, int handle) {
         super(loader, "Crtdll.dll", handle);
@@ -64,13 +63,13 @@ public class Crtdll extends BuiltinModule {
         while (start<end) {
             int next = Memory.mem_readd(start);
             if (next != 0) {
-                Log.getLogger().warn("Crtdll._initterm faked");
+                System.out.println("Crtdll._initterm faked");
             }
             start+=4;
         }
     }
 
-    private static final Random random = new Random();
+    private static Random random = new Random();
 
     public static int rand() {
         return random.nextInt() & 0x7FFF;
@@ -83,6 +82,6 @@ public class Crtdll extends BuiltinModule {
     }
 
     public static int toupper(int c) {
-        return Character.toUpperCase((char)c);
+        return (int)Character.toUpperCase((char)c);
     }
 }

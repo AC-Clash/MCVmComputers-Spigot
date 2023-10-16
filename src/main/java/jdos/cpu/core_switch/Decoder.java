@@ -2,10 +2,9 @@ package jdos.cpu.core_switch;
 
 import jdos.cpu.*;
 import jdos.cpu.core_dynamic.*;
+import jdos.misc.Log;
 import jdos.types.LogSeverities;
-import jdos.util.Log;
-import jdos.types.LogType;
-import org.apache.logging.log4j.Level;
+import jdos.types.LogTypes;
 
 public class Decoder extends Helper {
     static protected boolean rep_zero=false;
@@ -1013,7 +1012,7 @@ public class Decoder extends Helper {
                             case 0x05:					/* MOV Ew,GS */
                                 block.r2 = CPU_Regs.reg_gsVal; break;
                             default:
-                                done = true; break;
+                                block.instruction = Inst.ILLEGAL; done = true; break;
                         }
                         if (rm >= 0xc0) {
                             block.instruction = Inst.MOV_R16_R16;
@@ -1658,7 +1657,7 @@ public class Decoder extends Helper {
                                 done=true;
                                 break;
                             default:
-                                Log.exit("Illegal GRP4 Call " + ((rm >> 3) & 7), Level.ERROR);
+                                Log.exit("Illegal GRP4 Call " + ((rm >> 3) & 7));
                                 break;
                         }
                         break;
@@ -1735,7 +1734,7 @@ public class Decoder extends Helper {
                                 }
                                 break;
                             default:
-                                if (Log.level<= LogSeverities.LOG_ERROR.getValue()) Log.specializedLog(LogType.LOG_CPU, Level.ERROR,"CPU:GRP5:Illegal Call "+Integer.toString((rm>>3)&7,16));
+                                if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_CPU, LogSeverities.LOG_ERROR,"CPU:GRP5:Illegal Call "+Integer.toString((rm>>3)&7,16));
                                 block.instruction = Inst.ILLEGAL;
                                 done = true;
                                 break;
@@ -2057,8 +2056,7 @@ public class Decoder extends Helper {
                             case 0x03: block.r2 = CPU_Regs.reg_dsVal; break;
                             case 0x04: block.r2 = CPU_Regs.reg_fsVal; break;
                             case 0x05: block.r2 = CPU_Regs.reg_gsVal; break;
-                            default:
-                                done = true; break;
+                            default: block.instruction = Inst.ILLEGAL; done = true; break;
                         }
                         if (rm >= 0xc0) {
                             block.instruction = Inst.MOV_R32_R32;
@@ -2426,7 +2424,7 @@ public class Decoder extends Helper {
                                 }
                                 break;
                             default:
-                                if (Log.level<=LogSeverities.LOG_ERROR.getValue()) Log.specializedLog(LogType.LOG_CPU, Level.ERROR,"CPU:GRP5:Illegal Call "+Integer.toString((rm>>3)&7,16));
+                                if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_CPU, LogSeverities.LOG_ERROR,"CPU:GRP5:Illegal Call "+Integer.toString((rm>>3)&7,16));
                                 block.instruction = Inst.ILLEGAL;
                                 done = true;
                                 break;
@@ -2434,7 +2432,7 @@ public class Decoder extends Helper {
                         break;
                     }
                     default:
-                        Log.exit("Unknown instruction: 0x"+Integer.toHexString(opcode), Level.ERROR);
+                        Log.exit("Unknown instruction: 0x"+Integer.toHexString(opcode));
                 }
                 currentInst++;
                 block.eipCount+=(decode.code - decode.op_start);

@@ -2,8 +2,8 @@ package jdos.cpu;
 
 public class Table_ea extends Core {
     //typedef PhysPt (*EA_LookupHandler)(void);
-    public interface GetEAHandler {
-        /*PhysPt*/int call();
+    static public interface GetEAHandler {
+        public /*PhysPt*/int call();
     }
     static public boolean EA16 = true;
 
@@ -106,12 +106,11 @@ public class Table_ea extends Core {
             base=base_ss+reg_esp.dword;break;
         case 5:	/* #1 Base */
             if (mode==0) {
-                base=base_ds+ Fetchd();
+                base=base_ds+ Fetchd();break;
             } else {
-                base=base_ss+reg_ebp.dword;
+                base=base_ss+reg_ebp.dword;break;
             }
-            break;
-            case 6:	/* ESI Base */
+        case 6:	/* ESI Base */
             base=base_ds+reg_esi.dword;break;
         case 7:	/* EDI Base */
             base=base_ds+reg_edi.dword;break;
@@ -131,7 +130,7 @@ public class Table_ea extends Core {
                 base+=reg_ebx.dword << (sib >> 6);
                 break;
             case 4:
-                base+= (int) (SIBZero << (sib >> 6));
+                base+=SIBZero << (sib >> 6);
                 break;
             case 5:
                 base+=reg_ebp.dword << (sib >> 6);

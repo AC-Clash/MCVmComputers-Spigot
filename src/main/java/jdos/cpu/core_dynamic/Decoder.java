@@ -5,27 +5,30 @@ import jdos.cpu.*;
 import jdos.cpu.core_share.Constants;
 import jdos.cpu.core_share.ModifiedDecode;
 import jdos.hardware.RAM;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Config;
-import org.apache.logging.log4j.Level;
-
-import java.util.Arrays;
 
 public class Decoder extends Inst1 {
     public static final Decode[] ops = new Decode[1024];
 
     static {
-        Decode not_handled = prev -> {
-            prev.next = new Op() {
-                public int call() {
-                    CPU.CPU_Exception(6,0);
-                    return Constants.BR_Jump;
-                }
-                public boolean throwsException() {return true;}
-            };
-            return RESULT_JUMP;
+        Decode not_handled = new Decode() {
+            public int call(Op prev) {
+                prev.next = new Op() {
+                    public int call() {
+                        CPU.CPU_Exception(6,0);
+                        return Constants.BR_Jump;
+                    }
+                    public boolean throwsException() {return true;}
+                    public boolean accessesMemory() {return false;}
+                    public boolean usesEip() {return false;}
+                    public boolean setsEip() {return false;}
+                };
+                return RESULT_JUMP;
+            }
         };
-        Arrays.fill(ops, not_handled);
+        for (int i=0;i<ops.length;i++)
+            ops[i] = not_handled;
     }
 
     abstract public static class SegOp extends Op {
@@ -54,30 +57,42 @@ public class Decoder extends Inst1 {
             Core.base_val_ds=ds;
             return next.call();
         }
+        public boolean throwsException() {return false;}
+        public boolean accessesMemory() {return false;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
     private static class StartDecode extends Op {
         public int call() {
             return Constants.BR_Normal;
         }
+        public boolean throwsException() {return false;}
+        public boolean accessesMemory() {return false;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
-    public static final boolean logit = false;
+    public static boolean logit = false;
     private static class LogOp extends Op {
         public LogOp(Op op) {
             this.op = op;
             this.cycle = op.cycle;
         }
-        final Op op;
+        Op op;
         public int call() {
             if (logit) {
                 traceCount++;
                 if ((traceCount % 1000)==0) {
                     int ii=0;
                 }
-                Log.getLogger().info(traceCount+" "+Integer.toHexString(CPU_Regs.reg_csPhys.dword) + ":" + Integer.toHexString(CPU_Regs.reg_eip) + " " + Integer.toHexString(op.c) + " " + op.description()+" (eax=0x"+Integer.toHexString(CPU_Regs.reg_eax.dword)+" ecx=0x"+Integer.toHexString(CPU_Regs.reg_ecx.dword)+" edx=0x"+Integer.toHexString(CPU_Regs.reg_edx.dword)+" ebx=0x"+Integer.toHexString(CPU_Regs.reg_ebx.dword)+" esp=0x"+Integer.toHexString(CPU_Regs.reg_esp.dword)+" ebp=0x"+Integer.toHexString(CPU_Regs.reg_ebp.dword)+" esi=0x"+Integer.toHexString(CPU_Regs.reg_esi.dword)+" edi=0x"+Integer.toHexString(CPU_Regs.reg_edi.dword)+")");
+                System.out.println(traceCount+" "+Integer.toHexString(CPU_Regs.reg_csPhys.dword) + ":" + Integer.toHexString(CPU_Regs.reg_eip) + " " + Integer.toHexString(op.c) + " " + op.description()+" (eax=0x"+Integer.toHexString(CPU_Regs.reg_eax.dword)+" ecx=0x"+Integer.toHexString(CPU_Regs.reg_ecx.dword)+" edx=0x"+Integer.toHexString(CPU_Regs.reg_edx.dword)+" ebx=0x"+Integer.toHexString(CPU_Regs.reg_ebx.dword)+" esp=0x"+Integer.toHexString(CPU_Regs.reg_esp.dword)+" ebp=0x"+Integer.toHexString(CPU_Regs.reg_ebp.dword)+" esi=0x"+Integer.toHexString(CPU_Regs.reg_esi.dword)+" edi=0x"+Integer.toHexString(CPU_Regs.reg_edi.dword)+")");
             }
             return op.call();
         }
+        public boolean throwsException() {return false;}
+        public boolean accessesMemory() {return false;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     static public class JumpOp extends Op {
@@ -92,14 +107,14 @@ public class Decoder extends Inst1 {
                 if (jump.addip>0) {
                     offset = jump.addip;
                 } else {
-                    Log.exit("Unexpected value", Level.ERROR);
+                    Log.exit("Unexpected value");
                 }
             } else if (op.c==0xeb) {
                 Inst1.JmpJb jump = (Inst1.JmpJb)op;
                 if (jump.addip>0) {
                     offset = jump.addip;
                 } else  {
-                    Log.exit("Unexpected value", Level.ERROR);
+                    Log.exit("Unexpected value");
                 }
             }
         }
@@ -111,6 +126,8 @@ public class Decoder extends Inst1 {
             return next.call();
         }
 
+        public boolean throwsException() {return false;}
+        public boolean accessesMemory() {return false;}
         public boolean usesEip() {return true;}
         public boolean setsEip() {return true;}
     }
@@ -119,6 +136,10 @@ public class Decoder extends Inst1 {
         public int call() {
             return Constants.BR_Jump;
         }
+        public boolean throwsException() {return false;}
+        public boolean accessesMemory() {return false;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     static {
@@ -164,7 +185,7 @@ public class Decoder extends Inst1 {
         Op begin_op = start_op;
         int op_start = decode.code;
         boolean seg_changed = false;
-        int opcode;
+        int opcode = 0;
         int count = 0;
         int cycles = 0;
         int previousSeg = -1;
@@ -244,9 +265,8 @@ public class Decoder extends Inst1 {
                     result = RESULT_HANDLED;
                     max_opcodes++;
                     seg_changed = true;
-                    //if (log)
-                    // It's unknown what was supposed to go here
-                    // 
+                    if (log)
+                        System.out.println();
                     continue;
                 }
                 if (removeRedundantSegs)
@@ -281,9 +301,8 @@ public class Decoder extends Inst1 {
                     begin_op = op;
                 }
                 count = 0;
-                //if (log)
-                    // It's unknown what was supposed to go here
-                    // 
+                if (log)
+                    System.out.println();
             }
         } catch (PageFaultException e) {
             if (decode.code -decode.op_start + count == 0) {
@@ -294,8 +313,7 @@ public class Decoder extends Inst1 {
         }
         if (log) {
             print(start_op.next);
-            // It's unknown what was supposed to go here
-            // 
+            System.out.println();
         }
 
         Cache.cache_closeblock();
@@ -303,15 +321,17 @@ public class Decoder extends Inst1 {
             case RESULT_HANDLED:
                 op.next = new HandledDecode();
                 op.cycle = cycles;
+                op = op.next;
                 break;
             case RESULT_CALLBACK:
             case RESULT_JUMP:
                 break;
             case RESULT_ILLEGAL_INSTRUCTION:
-                decode_putback(decode.code -decode.op_start + count);
+                decode_putback((int)(decode.code -decode.op_start + count));
                 op = begin_op;
                 op.next = new ModifiedDecodeOp();
                 op.cycle = ++cycles;
+                op = op.next;
                 break;
         }
         decode.active_block.page.end=--decode.page.index;
@@ -334,7 +354,7 @@ public class Decoder extends Inst1 {
 
     private static void print(Op op) {
         while (op != null) {
-            Log.getLogger().info(Integer.toHexString(op.c)+" "+op.description());
+            System.out.println(Integer.toHexString(op.c)+" "+op.description());
             op = op.next;
         }
     }

@@ -1,7 +1,6 @@
 package jdos.misc.setup;
 
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
+import jdos.misc.Log;
 
 public class Prop_string extends Property {
     public Prop_string(String _propname, int when, String _value) {
@@ -27,11 +26,10 @@ public class Prop_string extends Property {
                     if (Integer.parseInt(in.toString())>=0)
                         return true;
                 } catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
                 }
             }
         }
-        if (warn) Log.getLogger().warn("\""+in.toString()+"\" is not a valid value for variable: "+propname+".\nIt might now be reset it to default value: "+ default_value);
+        if (warn) System.out.println("\""+in.toString()+"\" is not a valid value for variable: "+propname+".\nIt might now be reset it to default value: "+default_value.toString());
         return false;
     }
 }

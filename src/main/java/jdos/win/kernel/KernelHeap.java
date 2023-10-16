@@ -1,10 +1,7 @@
 package jdos.win.kernel;
 
-import com.acclash.vmcomputers.VMComputers;
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
-import org.bukkit.Bukkit;
 
 import java.util.ArrayList;
 import java.util.Hashtable;
@@ -14,16 +11,16 @@ import java.util.Hashtable;
 public class KernelHeap {
     static private final int SMALLEST_SIZE_FOR_SPLIT = 4;
 
-    private final boolean kernel;
-    private final boolean readonly;
-    private final long start;
+    private boolean kernel;
+    private boolean readonly;
+    private long start;
     private long end;
-    private final long max;
-    private final int directory;
-    private final ArrayList itemsBySize = new ArrayList();
-    private final ArrayList itemsByAddress = new ArrayList();
-    private final KernelMemory memory;
-    private final Hashtable usedMemory = new Hashtable();
+    private long max;
+    private int directory;
+    private ArrayList itemsBySize = new ArrayList();
+    private ArrayList itemsByAddress = new ArrayList();
+    private KernelMemory memory;
+    private Hashtable usedMemory = new Hashtable();
 
     private static class HeapItem implements Comparable {
         public int compareTo(Object o) {
@@ -47,10 +44,8 @@ public class KernelHeap {
         this.end = start;
         this.max = max;
         if ((start & 0xFFF)!=0 || (end & 0xFFF)!=0) {
-            Log.getLogger().error("Heap requires addresses to be 4k aligned");
-           //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+            System.out.println("Heap requires addresses to be 4k aligned");
+            System.exit(0);
         }
         expand((int)(end - start), true);
     }
@@ -111,13 +106,13 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
     }
 
     private HeapItem getLastItem() {
-        if (itemsByAddress.isEmpty())
+        if (itemsByAddress.size()==0)
             return null;
         return (HeapItem)itemsByAddress.get(itemsByAddress.size()-1);
     }
 
     private HeapItem getLargestItem() {
-        if (itemsBySize.isEmpty())
+        if (itemsBySize.size() == 0)
             return null;
         return (HeapItem)itemsBySize.get(itemsBySize.size()-1);
     }
@@ -138,7 +133,7 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
             return false;
         }
         long old_end = end;
-        long address = end & 0xFFFFFFFFL;
+        long address = end & 0xFFFFFFFFl;
         long new_end = address+size;
         int new_size = 0;
         while (address<new_end) {
@@ -153,15 +148,15 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
             last.size+=new_size;
             insertItem(last);
         } else {
-            insertItem(new HeapItem(old_end & 0xFFFFFFFFL, new_size));
+            insertItem(new HeapItem(old_end & 0xFFFFFFFFl, new_size));
         }
         return true;
     }
 
     private void dump() {
-        for (Object o : itemsBySize) {
-            HeapItem item = (HeapItem) o;
-            Log.getLogger().info(item.size + "@" + Long.toString(item.address, 16));
+        for (int i=0;i<itemsBySize.size();i++) {
+            HeapItem item = (HeapItem)itemsBySize.get(i);
+            System.out.println(item.size+"@"+Long.toString(item.address, 16));
         }
     }
     private boolean inExpand = false;
@@ -170,7 +165,7 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
         int result = 0;
         if (inExpand) { // prevent recursion
             dump();
-            Win.panic("PANIC: Error in Kernel Heap class");
+            Win.panic("Error in Kernel Heap class");
         }
         inExpand = true;
         if (expand(size, pageAlign)) {
@@ -223,20 +218,18 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
             insertItem(newItem);
             item.size-=newSize;
         }
-        usedMemory.put(item.address, item);
+        usedMemory.put(new Long(item.address), item);
         return (int)item.address;
     }
 
     public void free(int p1) {
-        long p = p1 & 0xFFFFFFFFL;
+        long p = p1 & 0xFFFFFFFFl;
         if (p == 0)
             return;
-        HeapItem item = (HeapItem)usedMemory.remove(p);
+        HeapItem item = (HeapItem)usedMemory.remove(new Long(p));
         if (item == null) {
-            Log.getLogger().error("Heap is corrupt, tried to free 0x"+Long.toString(p, 16));
-           //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+            System.out.println("Heap is corrupt, tried to free 0x"+Long.toString(p, 16));
+            System.exit(0);
         }
         int index = findIndexByAddress(p);
         if (index>=0) {
@@ -273,7 +266,7 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
     }
 
     public int size(int address) {
-        HeapItem item = (HeapItem)usedMemory.get((long) address);
+        HeapItem item = (HeapItem)usedMemory.get(new Long(address));
         if (item != null)
             return item.size;
         return 0;

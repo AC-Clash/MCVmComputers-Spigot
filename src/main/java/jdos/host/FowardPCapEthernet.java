@@ -1,11 +1,8 @@
 package jdos.host;
 
-import com.acclash.vmcomputers.VMComputers;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Section_prop;
 import jdos.util.Ptr;
-import org.apache.logging.log4j.Level;
-import org.bukkit.Bukkit;
 import org.jnetpcap.Pcap;
 import org.jnetpcap.PcapHeader;
 import org.jnetpcap.nio.JBuffer;
@@ -26,7 +23,6 @@ public class FowardPCapEthernet implements Ethernet {
             dos.writeInt(len);
             dos.write(buffer, offset, len);
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
         }
     }
     static byte[] buffer = new byte[4096];
@@ -46,7 +42,6 @@ public class FowardPCapEthernet implements Ethernet {
                 }
             } while (len>0);
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
         }
     }
 
@@ -55,11 +50,11 @@ public class FowardPCapEthernet implements Ethernet {
             socket = new Socket(section.Get_string("pcaphost"), section.Get_int("pcapport"));
             dos = new DataOutputStream(socket.getOutputStream());
             dis = new DataInputStream(socket.getInputStream());
-            return false;
+            return true;
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Could not open socket: ", e);
+            e.printStackTrace();
         }
-        return true;
+        return false;
     }
 
     public void close() {
@@ -68,7 +63,6 @@ public class FowardPCapEthernet implements Ethernet {
             dis.close();
             socket.close();
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
         }
         socket = null;
         dis = null;
@@ -84,80 +78,78 @@ public class FowardPCapEthernet implements Ethernet {
         pcaptmp.close();
         try {
             ServerSocket serverSocket = new ServerSocket(port);
-            Log.getLogger().info("Listening on port "+port+" for pcap forwarding.  Hit q [ENTER] to quit");
+            System.out.println("Listening on port "+port+" for pcap forwarding.  Hit q [ENTER] to quit");
             while (true) {
-                Thread exitThread = new Thread(() -> {
-                    while (true) {
-                        try {
-                            char c = (char)System.in.read();
-                            if (c == 'q') {
-                               //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+                Thread exitThread = new Thread(new Runnable() {
+                    public void run() {
+                        while (true) {
+                            try {
+                                char c = (char)System.in.read();
+                                if (c == 'q') {
+                                    System.exit(0);
+                                }
+                            } catch (Exception e) {
                             }
-                        } catch (Exception e) {
-                            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
                         }
                     }
                 });
                 exitThread.start();
                 final Socket socket = serverSocket.accept();
                 final String address = socket.getInetAddress().toString();
-                Log.getLogger().info("  Accepted connection from "+address);
+                System.out.println("  Accepted connection from "+address);
                 final Pcap pcap = PCapEthernet.open(nic, true);
-                Thread serviceIn = new Thread(() -> {
-                    try {
-                        DataInputStream dis = new DataInputStream(socket.getInputStream());
-                        byte[] buffer = new byte[4096];
-                        while (true) {
-                            int len = dis.readInt();
-                            if (len<0) {
-                                return;
+                Thread serviceIn = new Thread(new Runnable() {
+                    public void run() {
+                        try {
+                            DataInputStream dis = new DataInputStream(socket.getInputStream());
+                            byte[] buffer = new byte[4096];
+                            while (true) {
+                                int len = dis.readInt();
+                                if (len<0) {
+                                    return;
+                                }
+                                if (len>buffer.length) {
+                                    buffer = new byte[len];
+                                }
+                                dis.readFully(buffer, 0, len);
+                                synchronized (pcap) {
+                                    pcap.sendPacket(buffer, 0, len);
+                                }
                             }
-                            if (len>buffer.length) {
-                                buffer = new byte[len];
-                            }
-                            dis.readFully(buffer, 0, len);
-                            synchronized (pcap) {
-                                pcap.sendPacket(buffer, 0, len);
-                            }
-                        }
-                    } catch (Exception e) {
-                        Log.getLogger().info("  Dropped connection from "+address);
-                    } finally {
-                        try {pcap.close();} catch (Exception e1) {
-                            Log.getLogger().log(Level.ERROR, "Runtime error: ", e1);
+                        } catch (Exception e) {
+                            System.out.println("  Dropped connection from "+address);
+                        } finally {
+                            try {pcap.close();} catch (Exception e1){}
                         }
                     }
                 });
                 serviceIn.start();
-                Thread serviceOut = new Thread(() -> {
-                    try {
-                        DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-                        while (true) {
-                            PcapHeader header = new PcapHeader(JMemory.POINTER);
-                            JBuffer buffer = new JBuffer(JMemory.POINTER);
-                            synchronized (pcap) {
-                                while (pcap.nextEx(header, buffer) == Pcap.NEXT_EX_OK) {
-                                    byte[] data = buffer.getByteArray(0, header.hdr_len());
-                                    dos.writeInt(data.length);
-                                    dos.write(data);
+                Thread serviceOut = new Thread(new Runnable() {
+                    public void run() {
+                        try {
+                            DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+                            while (true) {
+                                PcapHeader header = new PcapHeader(JMemory.POINTER);
+                                JBuffer buffer = new JBuffer(JMemory.POINTER);
+                                synchronized (pcap) {
+                                    while (pcap.nextEx(header, buffer) == Pcap.NEXT_EX_OK) {
+                                        byte[] data = buffer.getByteArray(0, header.hdr_len());
+                                        dos.writeInt(data.length);
+                                        dos.write(data);
+                                    }
                                 }
+                                Thread.sleep(10);
                             }
-                            Thread.sleep(10);
-                        }
-                    } catch (Exception e) {
-                        Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                    } finally {
-                        try {pcap.close();} catch (Exception e1) {
-                            Log.getLogger().log(Level.ERROR, "Runtime error: ", e1);
+                        } catch (Exception e) {
+                        } finally {
+                            try {pcap.close();} catch (Exception e1){}
                         }
                     }
                 });
                 serviceOut.start();
             }
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Could not start server: ", e);
+            e.printStackTrace();
         }
     }
 }

@@ -1,12 +1,8 @@
 package jdos.win.system;
 
-import jdos.util.Log;
 import jdos.win.utils.FilePath;
-import org.apache.logging.log4j.Level;
 
-import javax.sound.midi.MidiSystem;
-import javax.sound.midi.Sequence;
-import javax.sound.midi.Sequencer;
+import javax.sound.midi.*;
 
 public class WinMidi extends WinMCI {
     static public WinMidi create() {
@@ -49,15 +45,17 @@ public class WinMidi extends WinMCI {
             sequencer = MidiSystem.getSequencer();
             sequencer.open();
             sequencer.setSequence(sequence);
-            sequencer.addMetaEventListener(meta -> {
-                if ( meta.getType() == 47 ) {
-                    if (hWnd != 0)
-                        sendNotification(MCI_NOTIFY_SUCCESSFUL);
+            sequencer.addMetaEventListener(new MetaEventListener() {
+                public void meta(MetaMessage meta) {
+                    if ( meta.getType() == 47 ) {
+                        if (hWnd != 0)
+                            sendNotification(MCI_NOTIFY_SUCCESSFUL);
+                    }
                 }
             });
             return true;
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Could not set file: ", e);
+            e.printStackTrace();
             return false;
         }
     }

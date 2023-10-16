@@ -4,15 +4,13 @@ import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
 import jdos.hardware.Memory;
-import jdos.util.Log;
-import jdos.win.Win;
 import jdos.win.loader.BuiltinModule;
 import jdos.win.loader.Loader;
 import jdos.win.system.StaticData;
 import jdos.win.system.WinSystem;
 
 public class Advapi32 extends BuiltinModule {
-    public static class Sid {
+    public class Sid {
         public static final int SIZE = 8;
         int psid;
         int Attributes;
@@ -35,7 +33,7 @@ public class Advapi32 extends BuiltinModule {
     }
 
     // BOOL WINAPI AddAccessAllowedAce(PACL pAcl, DWORD dwAceRevision, DWORD AccessMask, PSID pSid)
-    private final Callback.Handler AddAccessAllowedAce = new HandlerBase() {
+    private Callback.Handler AddAccessAllowedAce = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.AddAccessAllowedAce";
         }
@@ -44,13 +42,13 @@ public class Advapi32 extends BuiltinModule {
             int dwAceRevision = CPU.CPU_Pop32();
             int AccessMask = CPU.CPU_Pop32();
             int pSid = CPU.CPU_Pop32();
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
 
     // BOOL WINAPI AddAccessDeniedAce(PACL pAcl, DWORD dwAceRevision, DWORD AccessMask, PSID pSid)
-    private final Callback.Handler AddAccessDeniedAce = new HandlerBase() {
+    private Callback.Handler AddAccessDeniedAce = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.AddAccessDeniedAce";
         }
@@ -59,25 +57,25 @@ public class Advapi32 extends BuiltinModule {
             int dwAceRevision = CPU.CPU_Pop32();
             int AccessMask = CPU.CPU_Pop32();
             int pSid = CPU.CPU_Pop32();
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
 
     // PVOID WINAPI FreeSid(PSID pSid)
-    private final Callback.Handler FreeSid = new HandlerBase() {
+    private Callback.Handler FreeSid = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.FreeSid";
         }
         public void onCall() {
             int pSid = CPU.CPU_Pop32();
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
 
     // BOOL WINAPI AllocateAndInitializeSid(PSID_IDENTIFIER_AUTHORITY pIdentifierAuthority, BYTE nSubAuthorityCount, DWORD dwSubAuthority0, DWORD dwSubAuthority1, DWORD dwSubAuthority2, DWORD dwSubAuthority3, DWORD dwSubAuthority4, DWORD dwSubAuthority5, DWORD dwSubAuthority6, DWORD dwSubAuthority7, PSID *pSid)
-    private final Callback.Handler AllocateAndInitializeSid = new HandlerBase() {
+    private Callback.Handler AllocateAndInitializeSid = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.AllocateAndInitializeSid";
         }
@@ -94,13 +92,13 @@ public class Advapi32 extends BuiltinModule {
             int dwSubAuthority7 = CPU.CPU_Pop32();
             int pSid = CPU.CPU_Pop32();
             Memory.mem_writed(pSid, 1);
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
 
     // BOOL WINAPI GetTokenInformation(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength)
-    private final Callback.Handler GetTokenInformation = new HandlerBase() {
+    private Callback.Handler GetTokenInformation = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.GetTokenInformation";
         }
@@ -119,15 +117,15 @@ public class Advapi32 extends BuiltinModule {
                     Memory.mem_writed(ReturnLength, Sid.SIZE);
                 }
             } else {
-                Log.getLogger().warn(getName()+" TokenInformationClass "+TokenInformationClass+" not implemented yet");
-                Win.exit();
+                System.out.println(getName()+" TokenInformationClass "+TokenInformationClass+" not implemented yet");
+                notImplemented();
             }
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
 
     // BOOL WINAPI InitializeAcl(PACL pAcl, DWORD nAclLength, DWORD dwAclRevision)
-    private final Callback.Handler InitializeAcl = new HandlerBase() {
+    private Callback.Handler InitializeAcl = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.InitializeAcl";
         }
@@ -136,13 +134,13 @@ public class Advapi32 extends BuiltinModule {
             int nAclLength = CPU.CPU_Pop32();
             int dwAclRevision = CPU.CPU_Pop32();
             Memory.mem_zero(pAcl, nAclLength);
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
 
     // BOOL WINAPI OpenProcessToken(HANDLE ProcessHandle, DWORD DesiredAccess, PHANDLE TokenHandle)
-    private final Callback.Handler OpenProcessToken = new HandlerBase() {
+    private Callback.Handler OpenProcessToken = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.OpenProcessToken";
         }
@@ -151,7 +149,7 @@ public class Advapi32 extends BuiltinModule {
             int DesiredAccess = CPU.CPU_Pop32();
             int TokenHandle = CPU.CPU_Pop32();
             Memory.mem_writed(TokenHandle, 1);
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
@@ -162,7 +160,7 @@ public class Advapi32 extends BuiltinModule {
     }
 
     // LONG WINAPI RegCreateKeyEx(HKEY hKey, LPCTSTR lpSubKey, DWORD Reserved, LPTSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, PHKEY phkResult, LPDWORD lpdwDisposition)
-    private final Callback.Handler RegCreateKeyExA = new HandlerBase() {
+    private Callback.Handler RegCreateKeyExA = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.RegCreateKeyExA";
         }
@@ -181,7 +179,7 @@ public class Advapi32 extends BuiltinModule {
     };
 
     // LONG WINAPI RegOpenKeyEx(HKEY hKey, LPCTSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult)
-    private final Callback.Handler RegOpenKeyExA = new HandlerBase() {
+    private Callback.Handler RegOpenKeyExA = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.RegOpenKeyExA";
         }
@@ -196,7 +194,7 @@ public class Advapi32 extends BuiltinModule {
     };
 
     // LONG WINAPI RegQueryValueEx(HKEY hKey, LPCTSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData)
-    private final Callback.Handler RegQueryValueExA = new HandlerBase() {
+    private Callback.Handler RegQueryValueExA = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.RegQueryValueExA";
         }
@@ -212,7 +210,7 @@ public class Advapi32 extends BuiltinModule {
     };
 
     // LONG WINAPI RegSetValueEx(HKEY hKey, LPCTSTR lpValueName, DWORD Reserved, DWORD dwType, const BYTE *lpData, DWORD cbData)
-    private final Callback.Handler RegSetValueExA = new HandlerBase() {
+    private Callback.Handler RegSetValueExA = new HandlerBase() {
         public java.lang.String getName() {
             return "Advapi32.RegSetValueExA";
         }

@@ -12,7 +12,6 @@ import jdos.hardware.Keyboard;
 import jdos.hardware.Memory;
 import jdos.hardware.Mixer;
 import jdos.hardware.Pic;
-import jdos.util.Log;
 import jdos.misc.setup.Section;
 import jdos.util.StringRef;
 import jdos.win.builtin.WinAPI;
@@ -26,7 +25,6 @@ import jdos.win.system.WinMouse;
 import jdos.win.system.WinSystem;
 import jdos.win.utils.FilePath;
 import jdos.win.utils.Path;
-import org.apache.logging.log4j.Level;
 
 import java.util.Vector;
 
@@ -39,21 +37,17 @@ public class Win extends WinAPI {
         dos_sec.HandleInputline("ems=false");
         dos_sec.ExecuteInit(false);
      }
-     
-     public static void panic(String msg) {
-        Log.getLogger().error("PANIC: " + msg);
+
+    public static void panic(String msg) {
+        log("PANIC: " + msg);
         Win.exit();
-     }
+    }
 
     public static void exit() {
-        Log.getLogger().info("The Windows program has finished.  Rebooting in .. ");
+        System.out.println("The Windows program has finished.  Rebooting in .. ");
         for (int i=5;i>0;i--) {
-            Log.getLogger().info(i);
-            try {
-                Thread.sleep(1000);
-            } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-            }
+            System.out.println(i);
+            try {Thread.sleep(1000);} catch (Exception e) {}
         }
         throw new Dos_programs.RebootException();
     }
@@ -63,7 +57,7 @@ public class Win extends WinAPI {
         FilePath.disks.put("C", drive);
         WinFile file = WinFile.createNoHandle(new FilePath(path), false, 0, 0);
 
-        if (HeaderPE.fastCheckWinPE(file))
+        if (!HeaderPE.fastCheckWinPE(file))
             return false;
         String name;
         String winPath = path.substring(0, path.lastIndexOf("\\")+1);
@@ -84,8 +78,8 @@ public class Win extends WinAPI {
         /*Bit8u*/char drive=(char)(Dos_files.DOS_GetDefaultDrive()+'A');
         StringRef dir = new StringRef();
         Dos_files.DOS_GetCurrentDir((short)0,dir);
-        String p = drive +":\\";
-        if (!dir.value.isEmpty()) {
+        String p = String.valueOf(drive)+":\\";
+        if (dir.value.length()>0) {
             p+=dir.value+"\\";
         }
         String winPath = p;
@@ -96,7 +90,7 @@ public class Win extends WinAPI {
         WinFile file = null;
         try {
             file = WinFile.createNoHandle(new FilePath(path), false, 0, 0);
-            if (HeaderPE.fastCheckWinPE(file))
+            if (!HeaderPE.fastCheckWinPE(file))
                 return false;
         } catch (Exception e) {
             return false;
@@ -138,8 +132,7 @@ public class Win extends WinAPI {
         int videoMemory = Memory.MEM_ExtraPages();
         VideoMemory.SIZE = videoMemory*4096/1024/1024/2*2;
         if (VideoMemory.SIZE<2) {
-            Log.getLogger().error("Video memory needs to be at least 2MB");
-            exit();
+            panic("Video memory needs to be at least 2MB");
         }
         Paging.PageHandler handler = new Paging.PageHandler() {
             public /*HostPt*/int GetHostReadPt(/*Bitu*/int phys_page) {
@@ -174,7 +167,9 @@ public class Win extends WinAPI {
 
         Main.GFX_SetCursor(WinCursor.loadSystemCursor(32650)); // IDC_APPSTARTING
         WinSystem.start();
-        WinProcess.create(name, "\"" + winPath + name + "\"", paths, winPath);
+        if (WinProcess.create(name, "\"" + winPath + name + "\"", paths, winPath) != null) {
+            return true;
+        }
         return true;
     }
 

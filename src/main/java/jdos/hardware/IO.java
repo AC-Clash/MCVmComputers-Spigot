@@ -2,10 +2,9 @@ package jdos.hardware;
 
 import jdos.Dosbox;
 import jdos.cpu.*;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Module_base;
 import jdos.misc.setup.Section;
-import org.apache.logging.log4j.Level;
 
 public class IO extends Module_base {
     static private class IOF_Entry {
@@ -19,20 +18,20 @@ public class IO extends Module_base {
                 entries[i] = new IOF_Entry();
         }
         /*Bitu*/int used;
-        final IOF_Entry[] entries = new IOF_Entry[IOF_QUEUESIZE];
+        IOF_Entry[] entries = new IOF_Entry[IOF_QUEUESIZE];
     }
     private static IOF_Queue iof_queue;
 
-    private static final CPU.CPU_Decoder IOFaultCore = new CPU.CPU_Decoder() {
+    private static CPU.CPU_Decoder IOFaultCore = new CPU.CPU_Decoder() {
         public /*Bits*/int call() {
             CPU.CPU_CycleLeft+=CPU.CPU_Cycles;
             CPU.CPU_Cycles=1;
             /*Bits*/int ret= Core_full.CPU_Core_Full_Run.call();
             CPU.CPU_CycleLeft+=CPU.CPU_Cycles;
-            if (ret<0) Log.exit("Got a dosbox close machine in IO-fault core?", Level.ERROR);
+            if (ret<0) Log.exit("Got a dosbox close machine in IO-fault core?");
             if (ret!=0)
                 return ret;
-            if (iof_queue.used==0) Log.exit("IO-faul Core without IO-faul", Level.ERROR);
+            if (iof_queue.used==0) Log.exit("IO-faul Core without IO-faul");
             IOF_Entry entry=iof_queue.entries[iof_queue.used-1];
             if (entry.cs == CPU_Regs.reg_csVal.dword && entry.eip==CPU_Regs.reg_eip)
                 return -1;
@@ -68,7 +67,7 @@ public class IO extends Module_base {
     }
 
 
-    static private final int IODELAY_READ_MICROSk = 1024;
+    static private final int IODELAY_READ_MICROSk = (int)(1024/1.0);
     static private final int IODELAY_WRITE_MICROSk = (int)(1024/0.75);
 
     static private void IO_USEC_read_delay() {
@@ -137,7 +136,7 @@ public class IO extends Module_base {
             // case 0x3d4: // VGA crtc index
             // case 0x3d5: // VGA crtc
             case 0x3da: // display status - a real spammer
-                // don't specializedLog for the above cases
+                // don't log for the above cases
                 break;
             default:
                 LOG_MSG("ior%s % 4x % 4x,\t\tcs:ip %04x:%04x", len_type[width],
@@ -152,9 +151,9 @@ public class IO extends Module_base {
 //        if (port == 0x3c9 || port == 0x3d4 || port == 0x3d5)
 //            return;
 //        if (write) {
-//            Log.getLogger().info("write 0x"+Integer.toHexString(port)+" "+IoHandler.io_writehandlers[width][port]+" val="+val);
+//            System.out.println("write 0x"+Integer.toHexString(port)+" "+IoHandler.io_writehandlers[width][port]+" val="+val);
 //        } else {
-//            Log.getLogger().info("read 0x"+Integer.toHexString(port)+" "+IoHandler.io_readhandlers[width][port]+" val="+val);
+//            System.out.println("read 0x"+Integer.toHexString(port)+" "+IoHandler.io_readhandlers[width][port]+" val="+val);
 //        }
     }
 
@@ -166,7 +165,7 @@ public class IO extends Module_base {
             old_cpudecoder=CPU.cpudecoder;
             CPU.cpudecoder=IOFaultCore;
             IOF_Entry entry=iof_queue.entries[iof_queue.used++];
-            entry.cs= CPU_Regs.reg_csVal.dword;
+            entry.cs=(int)CPU_Regs.reg_csVal.dword;
             entry.eip=CPU_Regs.reg_eip;
             CPU.CPU_Push16(CPU_Regs.reg_csVal.dword);
             CPU.CPU_Push16(CPU_Regs.reg_ip());
@@ -276,7 +275,7 @@ public class IO extends Module_base {
             CPU_Regs.reg_edx.word(port);
             /*RealPt*/int icb = Callback.CALLBACK_RealPointer(Callback.call_priv_io);
             CPU_Regs.SegSet16CS(Memory.RealSeg(icb));
-            CPU_Regs.reg_eip= Memory.RealOff(icb);
+            CPU_Regs.reg_eip=Memory.RealOff(icb)+0x00;
             CPU.CPU_Exception(CPU.cpu.exception.which,CPU.cpu.exception.error);
 
             Dosbox.DOSBOX_RunMachine();
@@ -371,13 +370,13 @@ public class IO extends Module_base {
 	    IoHandler.IO_FreeWriteHandler(0,IoHandler.IO_MA,IoHandler.IO_MAX);
     }
     static IO test;
-    public static final Section.SectionFunction IO_Destroy = new Section.SectionFunction() {
+    public static Section.SectionFunction IO_Destroy = new Section.SectionFunction() {
         public void call(Section section) {
             test = null;
             iof_queue = null;
         }
     };
-    public static final Section.SectionFunction IO_Init = new Section.SectionFunction() {
+    public static Section.SectionFunction IO_Init = new Section.SectionFunction() {
         public void call(Section sec) {
             iof_queue = new IOF_Queue();
             test = new IO(sec);

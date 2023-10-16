@@ -15,7 +15,9 @@
 package jdos.util;
 
 import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.Map;
+import java.util.ArrayList;
 
 /**
 * An LRU cache, based on <code>LinkedHashMap</code>.
@@ -31,13 +33,12 @@ import java.util.Map;
 * Author: Christian d'Heureuse, Inventec Informatik AG, Zurich, Switzerland<br>
 * Multi-licensed: EPL / LGPL / GPL / AL / BSD.
 */
-
 public class LRUCache {
 
 private static final float   hashTableLoadFactor = 0.75f;
 
-private final LinkedHashMap   map;
-private final int                  cacheSize;
+private LinkedHashMap   map;
+private int                  cacheSize;
 
 /**
 * Creates a new LRU cache.

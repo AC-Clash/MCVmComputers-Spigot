@@ -1,13 +1,14 @@
 package jdos.dos;
 
+import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.hardware.Memory;
-import jdos.util.Log;
-import jdos.types.LogType;
+import jdos.misc.Log;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 import jdos.util.IntRef;
 import jdos.util.LongRef;
 import jdos.util.StringHelper;
-import org.apache.logging.log4j.Level;
 
 public class Dos_ioctl {
     static public boolean DOS_IOCTL() {
@@ -32,7 +33,7 @@ public class Dos_ioctl {
                 }
             }
         } else {
-             Log.specializedLog(LogType.LOG_DOSMISC, Level.ERROR,"DOS:IOCTL Call "+Integer.toString(CPU_Regs.reg_eax.low(), 16)+" unhandled");
+            if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_DOSMISC, LogSeverities.LOG_ERROR,"DOS:IOCTL Call "+Integer.toString(CPU_Regs.reg_eax.low(), 16)+" unhandled");
             Dos.DOS_SetError(Dos.DOSERR_FUNCTION_NUMBER_INVALID);
             return false;
         }
@@ -43,7 +44,7 @@ public class Dos_ioctl {
             } else {
                 /*Bit8u*/short hdrive=Dos_files.Files[handle].GetDrive();
                 if (hdrive==0xff) {
-                    Log.specializedLog(LogType.LOG_IOCTL, Level.INFO,"00:No drive set");
+                    Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,"00:No drive set");
                     hdrive=2;	// defaulting to C:
                 }
                 /* return drive number in lower 5 bits for block devices */
@@ -67,7 +68,7 @@ public class Dos_ioctl {
         case 0x02:		/* Read from Device Control Channel */
             if ((Dos_files.Files[handle].GetInformation() & 0xc000)!=0) {
                 /* is character device with IOCTL support */
-                /*PhysPt*/int bufptr= Memory.PhysMake(CPU_Regs.reg_dsVal.dword,CPU_Regs.reg_edx.word());
+                /*PhysPt*/int bufptr= Memory.PhysMake((int)CPU_Regs.reg_dsVal.dword,CPU_Regs.reg_edx.word());
                 /*Bit16u*/IntRef retcode=new IntRef(0);
                 if (((DOS_Device)(Dos_files.Files[handle])).ReadFromControlChannel(bufptr,CPU_Regs.reg_ecx.word(),retcode)) {
                     CPU_Regs.reg_eax.word(retcode.value);
@@ -79,7 +80,7 @@ public class Dos_ioctl {
         case 0x03:		/* Write to Device Control Channel */
             if ((Dos_files.Files[handle].GetInformation() & 0xc000)!=0) {
                 /* is character device with IOCTL support */
-                /*PhysPt*/int bufptr=Memory.PhysMake(CPU_Regs.reg_dsVal.dword,CPU_Regs.reg_edx.word());
+                /*PhysPt*/int bufptr=Memory.PhysMake((int)CPU_Regs.reg_dsVal.dword,CPU_Regs.reg_edx.word());
                 /*Bit16u*/IntRef retcode=new IntRef(0);
                 if (((DOS_Device)(Dos_files.Files[handle])).WriteToControlChannel(bufptr,CPU_Regs.reg_ecx.word(),retcode)) {
                     CPU_Regs.reg_eax.word(retcode.value);
@@ -102,11 +103,11 @@ public class Dos_ioctl {
                     CPU_Regs.reg_eax.low(0x0); //EOF or beyond
                 }
                 Dos_files.Files[handle].Seek(oldlocation, Dos_files.DOS_SEEK_SET); //restore filelocation
-                Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,"06:Used Get Input Status on regular file with handle "+handle);
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,"06:Used Get Input Status on regular file with handle "+handle);
             }
             return true;
         case 0x07:		/* Get Output Status */
-            Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,"07:Fakes output status is ready for handle "+handle);
+            if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,"07:Fakes output status is ready for handle "+handle);
             CPU_Regs.reg_eax.low(0xff);
             return true;
         case 0x08:		/* Check if block device removable */
@@ -179,14 +180,14 @@ public class Dos_ioctl {
                         byte[] buf2={ 'F','A','T','1','6',' ',' ',' '};
                         if(drive<2) buf2[4] = '2'; //FAT12 for floppies
 
-                        Memory.mem_writew(ptr,0);			// 0
+                        Memory.mem_writew(ptr+0,0);			// 0
                         Memory.mem_writed(ptr+2,0x1234);		//Serial number
                         Memory.MEM_BlockWrite(ptr+6,new String(buffer),11);//volumename
                         if(CPU_Regs.reg_ecx.low() == 0x66) Memory.MEM_BlockWrite(ptr+0x11, new String(buf2),8);//filesystem
                     }
                     break;
                 default	:
-                    Log.specializedLog(LogType.LOG_IOCTL,Level.ERROR,"DOS:IOCTL Call 0D:"+Integer.toString(CPU_Regs.reg_ecx.low(), 16)+" Drive "+Integer.toString(drive, 16)+" unhandled");
+                    if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_ERROR,"DOS:IOCTL Call 0D:"+Integer.toString(CPU_Regs.reg_ecx.low(), 16)+" Drive "+Integer.toString(drive, 16)+" unhandled");
                     Dos.DOS_SetError(Dos.DOSERR_FUNCTION_NUMBER_INVALID);
                     return false;
                 }
@@ -203,7 +204,7 @@ public class Dos_ioctl {
             CPU_Regs.reg_eax.high(0x07);
             return true;
         default:
-             Log.specializedLog(LogType.LOG_DOSMISC,Level.ERROR,"DOS:IOCTL Call "+Integer.toString(CPU_Regs.reg_eax.low(), 16)+" unhandled");
+            if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_DOSMISC,LogSeverities.LOG_ERROR,"DOS:IOCTL Call "+Integer.toString(CPU_Regs.reg_eax.low(), 16)+" unhandled");
             Dos.DOS_SetError(Dos.DOSERR_FUNCTION_NUMBER_INVALID);
             break;
         }
@@ -214,6 +215,7 @@ public class Dos_ioctl {
     static public boolean DOS_GetSTDINStatus() {
         /*Bit32u*/int handle=Dos.RealHandle(Dos_files.STDIN);
         if (handle==0xFF) return false;
-        return Dos_files.Files[handle] == null || (Dos_files.Files[handle].GetInformation() & 64) == 0;
+        if (Dos_files.Files[handle]!=null && (Dos_files.Files[handle].GetInformation() & 64)!=0) return false;
+        return true;
     }
 }

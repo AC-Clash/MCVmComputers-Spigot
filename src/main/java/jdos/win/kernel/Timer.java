@@ -5,23 +5,22 @@ import jdos.hardware.IO;
 import jdos.win.builtin.HandlerBase;
 import jdos.win.system.Scheduler;
 import jdos.win.system.WinSystem;
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
+
 public class Timer {
     public Timer(int frequency) {
         //init_timer(frequency);
-        Thread thread = new Thread(() -> {
-            while (true) {
-                HandlerBase.tick = true;
-                try {Thread.sleep(15);} catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+        Thread thread = new Thread() {
+            public void run() {
+                while (true) {
+                    HandlerBase.tick = true;
+                    try {Thread.sleep(15);} catch (Exception e) {}
                 }
             }
-        });
+        };
         thread.start();
     }
 
-    final Callback.Handler handler = new Callback.Handler() {
+    Callback.Handler handler = new Callback.Handler() {
         int tickCount;
         public int call() {
             Scheduler.tick();

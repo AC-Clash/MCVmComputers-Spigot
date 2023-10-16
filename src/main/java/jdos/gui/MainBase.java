@@ -1,6 +1,5 @@
 package jdos.gui;
 
-import com.acclash.vmcomputers.VMComputers;
 import jdos.Dosbox;
 import jdos.cpu.CPU;
 import jdos.cpu.core_dynamic.Compiler;
@@ -10,20 +9,16 @@ import jdos.dos.Dos_programs;
 import jdos.hardware.Keyboard;
 import jdos.hardware.mame.RasterizerCompiler;
 import jdos.misc.Cross;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.*;
 import jdos.sdl.GUI;
 import jdos.sdl.JavaMapper;
-import org.apache.logging.log4j.Level;
-import org.bukkit.Bukkit;
 
 import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Vector;
 
 public class MainBase {
-    public static GUI gui = null;
+    static protected GUI gui = null;
 
     static public void showProgress(String msg, int percent) {
         gui.showProgress(msg, percent);
@@ -35,30 +30,28 @@ public class MainBase {
         static final public int GFX_CallBackRedraw=2;
     }
 
-    public interface GFX_CallBack_t {
-        void call(int function);
+    public static interface GFX_CallBack_t {
+        public void call(int function);
     }
 
-    static private final long startTime = System.currentTimeMillis();
+    static private long startTime = System.currentTimeMillis();
     // emulate SDL_GetTicks -- Gets the number of milliseconds since SDL library initialization.
     static public long GetTicks() {
         return (System.currentTimeMillis()-startTime);
     }
     // emulate SDL_GetTicks -- SDL_Delay -- Waits a specified number of milliseconds before returning.
     static public void Delay(long ms) {
-        try {Thread.sleep(ms);} catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-        }
+        try {Thread.sleep(ms);} catch (Exception e){}
     }
 
     static public /*Bitu*/int GFX_GetRGB(/*Bit8u*/int red,/*Bit8u*/int green,/*Bit8u*/int blue) {
-		return ((blue) | (green << 8) | (red << 16)) | (255 << 24);
+		return ((blue << 0) | (green << 8) | (red << 16)) | (255 << 24);	
     }
 
     static /*Bit32s*/int internal_cycles=0;
     static /*Bits*/int internal_frameskip=0;
     static public void GFX_SetTitle(/*Bit32s*/int cycles,/*Bits*/int frameskip,boolean paused){
-        StringBuilder title = new StringBuilder();
+        StringBuffer title = new StringBuffer();
         if(cycles != -1) internal_cycles = cycles;
         if(frameskip != -1) internal_frameskip = frameskip;
         if(CPU.CPU_CycleAutoAdjust) {
@@ -92,7 +85,7 @@ public class MainBase {
         public FocusChangeEvent(boolean hasfocus) {
             this.hasfocus = hasfocus;
         }
-        public final boolean hasfocus;
+        public boolean hasfocus;
     }
     static public class ShutdownException extends RuntimeException{}
     static public class KillException extends RuntimeException{}
@@ -136,9 +129,7 @@ public class MainBase {
                 GFX_SetTitle(-1,-1,true);
 			    Keyboard.KEYBOARD_ClrBuffer();
                 synchronized (pauseMutex) {
-                    try {pauseMutex.wait();} catch (Exception e) {
-                        Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                    }
+                    try {pauseMutex.wait();} catch (Exception e){}
                 }
                 GFX_SetTitle(-1,-1,false);
             } else {
@@ -179,47 +170,55 @@ public class MainBase {
             break;
         }
     }
-    private static final Section.SectionFunction GUI_ShutDown = section -> {
-        //GFX_Stop();
-        //if (sdl.draw.callback) (sdl.draw.callback)( GFX_CallBackStop );
-        if (mouse_locked) GFX_CaptureMouse();
-        //if (sdl.desktop.fullscreen) GFX_SwitchFullScreen();
-    };
-
-    private static final Mapper.MAPPER_Handler KillSwitch = pressed -> {
-        if (pressed) {
-            throw new KillException();
+    private static Section.SectionFunction GUI_ShutDown = new Section.SectionFunction() {
+        public void call(Section section) {
+            //GFX_Stop();
+	        //if (sdl.draw.callback) (sdl.draw.callback)( GFX_CallBackStop );
+	        if (mouse_locked) GFX_CaptureMouse();
+	        //if (sdl.desktop.fullscreen) GFX_SwitchFullScreen();
         }
     };
 
-    private static final Mapper.MAPPER_Handler CaptureMouse = pressed -> {
-        if (pressed) {
-            GFX_CaptureMouse();
+    private static Mapper.MAPPER_Handler KillSwitch = new  Mapper.MAPPER_Handler() {
+        public void call(boolean pressed) {
+            if (pressed) {
+                throw new KillException();
+            }
         }
     };
 
-    private static final Mapper.MAPPER_Handler SwitchFullScreen = pressed -> {
-        if (pressed)
-            gui.fullScreenToggle();
+    private static Mapper.MAPPER_Handler CaptureMouse = new  Mapper.MAPPER_Handler() {
+        public void call(boolean pressed) {
+            if (pressed) {
+                GFX_CaptureMouse();
+            }
+        }
+    };
+
+    private static Mapper.MAPPER_Handler SwitchFullScreen = new  Mapper.MAPPER_Handler() {
+        public void call(boolean pressed) {
+            if (pressed)
+                gui.fullScreenToggle();
+        }
     };
 
     protected static boolean paused = false;
     public static boolean keyboardPaused = false;
-    private static final Mapper.MAPPER_Handler PauseDOSBox = pressed -> {
-        if (!pressed) {
-            return;
-        }
-        GFX_SetTitle(-1,-1,true);
-        synchronized (pauseMutex) {
-            paused = true;
-            keyboardPaused = true;
-            try {pauseMutex.wait();} catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+    private static Mapper.MAPPER_Handler PauseDOSBox = new  Mapper.MAPPER_Handler() {
+        public void call(boolean pressed) {
+            if (!pressed) {
+                return;
             }
-            paused = false;
-            keyboardPaused = true;
+            GFX_SetTitle(-1,-1,true);
+            synchronized (pauseMutex) {
+                paused = true;
+                keyboardPaused = true;
+                try {pauseMutex.wait();} catch (Exception e){}
+                paused = false;
+                keyboardPaused = true;
+            }
+            GFX_SetTitle(-1,-1,false);
         }
-        GFX_SetTitle(-1,-1,false);
     };
 
     static final class PRIORITY_LEVELS {
@@ -234,7 +233,7 @@ public class MainBase {
     private static int priority_focus;
     private static int priority_nofocus;
     
-    private static final Section.SectionFunction GUI_StartUp = new Section.SectionFunction() {
+    private static Section.SectionFunction GUI_StartUp = new Section.SectionFunction() {
         public void call(Section sec) {
             sec.AddDestroyFunction(GUI_ShutDown);
             Section_prop section = (Section_prop)sec;
@@ -243,53 +242,29 @@ public class MainBase {
             String focus = p.GetSection().Get_string("active");
             String notfocus = p.GetSection().Get_string("inactive");
 
-            switch (focus) {
-                case "lowest":
-                    priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_LOWEST;
-                    break;
-                case "lower":
-                    priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_LOWER;
-                    break;
-                case "normal":
-                    priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_NORMAL;
-                    break;
-                case "higher":
-                    priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_HIGHER;
-                    break;
-                case "highest":
-                    priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_HIGHEST;
-                    break;
-            }
+            if      (focus.equals("lowest"))  { priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_LOWEST;  }
+            else if (focus.equals("lower"))   { priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_LOWER;   }
+            else if (focus.equals("normal"))  { priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_NORMAL;  }
+            else if (focus.equals("higher"))  { priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_HIGHER;  }
+            else if (focus.equals("highest")) { priority_focus = PRIORITY_LEVELS.PRIORITY_LEVEL_HIGHEST; }
 
-            switch (notfocus) {
-                case "lowest":
-                    priority_nofocus = PRIORITY_LEVELS.PRIORITY_LEVEL_LOWEST;
-                    break;
-                case "lower":
-                    priority_nofocus = PRIORITY_LEVELS.PRIORITY_LEVEL_LOWER;
-                    break;
-                case "normal":
-                    priority_nofocus = PRIORITY_LEVELS.PRIORITY_LEVEL_NORMAL;
-                    break;
-                case "higher":
-                    priority_nofocus = PRIORITY_LEVELS.PRIORITY_LEVEL_HIGHER;
-                    break;
-                case "highest":
-                    priority_nofocus = PRIORITY_LEVELS.PRIORITY_LEVEL_HIGHEST;
-                    break;
-                case "pause":
-                    /* we only check for pause here, because it makes no sense
-                     * for DOSBox to be paused while it has focus
-                     */
-                    priority_nofocus = PRIORITY_LEVELS.PRIORITY_LEVEL_PAUSE;
-                    // :TODO: test this, it will probably crash
-                    break;
+            if      (notfocus.equals("lowest"))  { priority_nofocus=PRIORITY_LEVELS.PRIORITY_LEVEL_LOWEST;  }
+            else if (notfocus.equals("lower"))   { priority_nofocus=PRIORITY_LEVELS.PRIORITY_LEVEL_LOWER;   }
+            else if (notfocus.equals("normal"))  { priority_nofocus=PRIORITY_LEVELS.PRIORITY_LEVEL_NORMAL;  }
+            else if (notfocus.equals("higher"))  { priority_nofocus=PRIORITY_LEVELS.PRIORITY_LEVEL_HIGHER;  }
+            else if (notfocus.equals("highest")) { priority_nofocus=PRIORITY_LEVELS.PRIORITY_LEVEL_HIGHEST; }
+            else if (notfocus.equals("pause"))   {
+                /* we only check for pause here, because it makes no sense
+                 * for DOSBox to be paused while it has focus
+                 */
+                priority_nofocus=PRIORITY_LEVELS.PRIORITY_LEVEL_PAUSE;
+                // :TODO: test this, it will probably crash
             }
             SetPriority(priority_focus); //Assume focus on startup
 
             Integer autolock = Dosbox.control.cmdline.FindInt("-autolock", true);
             if (autolock != null) {
-                mouse_autoenable = autolock ==1;
+                mouse_autoenable = autolock.intValue()==1;
             } else {
                 mouse_autoenable = section.Get_bool("autolock");
             }
@@ -354,7 +329,7 @@ public class MainBase {
         Pstring = Pmulti.GetSection().Add_string("active",Property.Changeable.Always,"higher");
         Pstring.Set_values(actt);
 
-        String[] inactt = { "lowest", "lower", "normal", "higher", "highest", "pause"};
+        String inactt[] = { "lowest", "lower", "normal", "higher", "highest", "pause"};
         Pstring = Pmulti.GetSection().Add_string("inactive",Property.Changeable.Always,"normal");
         Pstring.Set_values(inactt);
 
@@ -368,7 +343,7 @@ public class MainBase {
     static void launcheditor() {
         String path = Cross.CreatePlatformConfigDir() + Cross.GetPlatformConfigName();
         if (!Dosbox.control.PrintConfig(path)) {
-            Log.exit("tried creating "+path+". but failed.\n", Level.ERROR);
+            Log.exit("tried creating "+path+". but failed.\n");
         }
 
         String edit;
@@ -376,15 +351,13 @@ public class MainBase {
             try {
                 Process p = Runtime.getRuntime().exec(new String[] {edit,path});
                 if (p != null)
-                   //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+                    System.exit(0);
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+
             }
         }
         //if you get here the launching failed!
-        Log.exit("can't find editor(s) specified at the command line.\n", Level.ERROR);
+        Log.exit("can't find editor(s) specified at the command line.\n");
     }
 
     static void launchcaptures(String edit) {
@@ -392,13 +365,13 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
         Section t = Dosbox.control.GetSection("dosbox");
         if(t != null) file = t.GetPropValue("captures");
         if(t == null || file.equals(Section.NO_SUCH_PROPERTY)) {
-            Log.exit("Config system messed up.\n", Level.ERROR);
+            Log.exit("Config system messed up.\n");
         }
         String path = Cross.CreatePlatformConfigDir();
         path += file;
         Cross.CreateDir(path);
         if(new File(path).isDirectory()) {
-            Log.exit(path+" doesn't exists or isn't a directory.\n", Level.ERROR);
+            Log.exit(path+" doesn't exists or isn't a directory.\n");
         }
     /*	if(edit.empty()) {
             printf("no editor specified.\n");
@@ -408,14 +381,12 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
         try {
             Process p = Runtime.getRuntime().exec(new String[] {edit,path});
             if (p != null)
-               //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+                System.exit(0);
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+
         }
         //if you get here the launching failed!
-        Log.exit("can't find filemanager "+edit+"\n", Level.ERROR);
+        Log.exit("can't find filemanager "+edit+"\n");
     }
 
     static void eraseconfigfile() {
@@ -424,9 +395,7 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
         }
         String path = Cross.CreatePlatformConfigDir() + Cross.GetPlatformConfigName();
         new File(path).delete();
-       //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+        System.exit(0);
     }
 
     static void erasemapperfile() {
@@ -436,31 +405,27 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
         }
         String path = Cross.CreatePlatformConfigDir() + JavaMapper.mapperfile;
         new File(path).delete();
-       //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+        System.exit(0);
     }
 
     static void show_warning(String message) {
         // :TODO:
-        Log.getLogger().info(message);
+        System.out.println(message);
     }
 
     static void printconfiglocation() {
         String path = Cross.CreatePlatformConfigDir() + Cross.GetPlatformConfigName();
         if (!Dosbox.control.PrintConfig(path)) {
-            Log.exit("tried creating "+path+". but failed.\n", Level.ERROR);
+            Log.exit("tried creating "+path+". but failed.\n");
         }
-        Log.getLogger().info(path+"\n");
-       //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+        System.out.println(path+"\n");
+        System.exit(0);
     }
 
-    protected static final Vector events = new Vector();
+    protected static Vector events = new Vector();
     protected static long startupTime;
 
-    public static void main(GUI g, String[] args) {
+    static void main(GUI g, String[] args) {
         gui = g;
         while (true) {
             CPU.initialize();
@@ -489,17 +454,17 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
             if (Dosbox.control.cmdline.FindExist("-resetmapper")) erasemapperfile();
             // For now just use the java console, in the future we could open a separate swing windows and redirect to there if necessary
             if (Dosbox.control.cmdline.FindExist("-version") || Dosbox.control.cmdline.FindExist("--version")) {
-                Log.getLogger().info("\nDOSBox version "+Config.VERSION+", copyright 2002-2010 DOSBox Team.\n\n");
-                Log.getLogger().info("DOSBox is written by the DOSBox Team (See AUTHORS file))\n");
-                Log.getLogger().info("DOSBox comes with ABSOLUTELY NO WARRANTY.  This is free software,\n");
-                Log.getLogger().info("and you are welcome to redistribute it under certain conditions;\n");
-                Log.getLogger().info("please read the COPYING file thoroughly before doing so.\n\n");
+                System.out.println("\nDOSBox version "+Config.VERSION+", copyright 2002-2010 DOSBox Team.\n\n");
+                System.out.println("DOSBox is written by the DOSBox Team (See AUTHORS file))\n");
+                System.out.println("DOSBox comes with ABSOLUTELY NO WARRANTY.  This is free software,\n");
+                System.out.println("and you are welcome to redistribute it under certain conditions;\n");
+                System.out.println("please read the COPYING file thoroughly before doing so.\n\n");
                 return;
             }
             if (Dosbox.control.cmdline.FindExist("-printconf")) printconfiglocation();
-            Log.getLogger().info("DOSBox version "+Config.VERSION);
-            Log.getLogger().info("Copyright 2002-2019 DOSBox Team, published under GNU GPL.");
-            Log.getLogger().info("---");
+            System.out.println("DOSBox version "+Config.VERSION);
+            System.out.println("Copyright 2002-2010 DOSBox Team, published under GNU GPL.");
+            System.out.println("---");
 
 
             /* Parse configuration files */
@@ -511,7 +476,7 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
                 if (!parsed_anyconfigfile) {
                     //Try to create the userlevel configfile.
                     if (Dosbox.control.PrintConfig(path)) {
-                        Log.getLogger().info("CONFIG: Generating default configuration.\nWriting it to "+path);
+                        System.out.println("CONFIG: Generating default configuration.\nWriting it to "+path);
                         //Load them as well. Makes relative paths much easier
                         if (Dosbox.control.ParseConfigFile(path)) parsed_anyconfigfile = true;
                     }
@@ -525,7 +490,7 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
             if (!Dosbox.applet) {
                 //if none found => parse localdir conf
                 if (!parsed_anyconfigfile)
-                    if (Dosbox.control.ParseConfigFile(".dosbox" + File.separator + "dosbox-0.74.conf")) parsed_anyconfigfile = true;
+                    if (Dosbox.control.ParseConfigFile("dosbox.conf")) parsed_anyconfigfile = true;
                 //if none found => parse userlevel conf
                 if (!parsed_anyconfigfile) {
                     path = Cross.CreatePlatformConfigDir() + Cross.GetPlatformConfigName();
@@ -534,11 +499,11 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
                 if (!parsed_anyconfigfile) {
                     path = Cross.CreatePlatformConfigDir() + Cross.GetPlatformConfigName();
                     if (Dosbox.control.PrintConfig(path)) {
-                        Log.getLogger().info("CONFIG: Generating default configuration.\nWriting it to "+path);
+                        System.out.println("CONFIG: Generating default configuration.\nWriting it to "+path);
                         //Load them as well. Makes relative paths much easier
                         Dosbox.control.ParseConfigFile(path);
                     } else {
-                        Log.getLogger().info("CONFIG: Using default settings. Create a configfile to change them");
+                        System.out.println("CONFIG: Using default settings. Create a configfile to change them");
                     }
                 }
             }
@@ -570,25 +535,21 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
                 startupTime = System.currentTimeMillis();
                 Dosbox.control.StartUp();
             } catch (Dos_programs.RebootException e) {
-                Log.getLogger().info("Rebooting");
-                try {myconf.Destroy();} catch (Exception e1) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e1);
-                }
+                System.out.println("Rebooting");
+                try {myconf.Destroy();} catch (Exception e1){}
                 continue;
             } catch (ShutdownException e) {
                 if (saveName!=null) {
                     Loader.save(saveName, false);
                 }
-                Log.getLogger().info("Normal Shutdown");
-                try {myconf.Destroy();} catch (Exception e1) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e1);
-                }
+                System.out.println("Normal Shutdown");
+                try {myconf.Destroy();} catch (Exception e1){}
             } catch (KillException e) {
-                Log.getLogger().info("Normal Shutdown");
+                System.out.println("Normal Shutdown");
                 if (!Dosbox.applet)
                     System.exit(1);
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Wasn't supposed to shutdown ", e);
+                e.printStackTrace();
                 if (!Dosbox.applet)
                     System.exit(1);
             } finally {

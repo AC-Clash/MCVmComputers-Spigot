@@ -5,7 +5,6 @@ import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
 import jdos.cpu.Paging;
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.util.IntRef;
 import jdos.win.Win;
 import jdos.win.builtin.HandlerBase;
@@ -19,7 +18,6 @@ import jdos.win.loader.winpe.LittleEndianFile;
 import jdos.win.system.*;
 import jdos.win.utils.Error;
 import jdos.win.utils.*;
-import org.apache.logging.log4j.Level;
 
 import java.util.Random;
 import java.util.TimeZone;
@@ -218,7 +216,7 @@ public class Kernel32 extends BuiltinModule {
     }
 
     // int CompareString(LCID Locale, DWORD dwCmpFlags, LPCTSTR lpString1, int cchCount1, LPCTSTR lpString2, int cchCount2)
-    private final Callback.Handler CompareStringA = new HandlerBase() {
+    private Callback.Handler CompareStringA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.CompareStringA";
         }
@@ -260,7 +258,7 @@ public class Kernel32 extends BuiltinModule {
     };
 
     // HANDLE WINAPI CreateEvent(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCTSTR lpName)
-    private final Callback.Handler CreateEventA = new HandlerBase() {
+    private Callback.Handler CreateEventA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.CreateEventA";
         }
@@ -292,20 +290,20 @@ public class Kernel32 extends BuiltinModule {
     };
 
     // HANDLE WINAPI CreateFile(LPCTSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
-    private final Callback.Handler CreateFileA = new HandlerBase() {
+    private Callback.Handler CreateFileA = new HandlerBase() {
         private boolean create(FilePath file) {
             try {
                 if (!file.createNewFile()) {
                     CPU_Regs.reg_eax.dword = WinAPI.INVALID_HANDLE_VALUE;
                     Scheduler.getCurrentThread().setLastError(Error.ERROR_ACCESS_DENIED);
-                    return true;
+                    return false;
                 }
             } catch (Exception e) {
                 CPU_Regs.reg_eax.dword = WinAPI.INVALID_HANDLE_VALUE;
                 Scheduler.getCurrentThread().setLastError(Error.ERROR_ACCESS_DENIED);
-                return true;
+                return false;
             }
-            return false;
+            return true;
         }
 
         public java.lang.String getName() {
@@ -344,7 +342,7 @@ public class Kernel32 extends BuiltinModule {
                         thread.setLastError(Error.ERROR_FILE_EXISTS);
                         return;
                     }
-                    if (create(file)) {
+                    if (!create(file)) {
                         return;
                     }
                     break;
@@ -353,7 +351,7 @@ public class Kernel32 extends BuiltinModule {
                         thread.setLastError(Error.ERROR_ALREADY_EXISTS);
                         file.delete();
                     }
-                    if (create(file)) {
+                    if (!create(file)) {
                         return;
                     }
                     break;
@@ -367,7 +365,7 @@ public class Kernel32 extends BuiltinModule {
                 case 4: // OPEN_ALWAYS
                     if (file.exists())
                         thread.setLastError(Error.ERROR_ALREADY_EXISTS);
-                    else if (create(file)) {
+                    else if (!create(file)) {
                         return;
                     }
                     break;
@@ -377,7 +375,7 @@ public class Kernel32 extends BuiltinModule {
                         CPU_Regs.reg_eax.dword = WinAPI.INVALID_HANDLE_VALUE;
                     }
                     file.delete();
-                    if (create(file)) {
+                    if (!create(file)) {
                         return;
                     }
                     break;
@@ -393,7 +391,7 @@ public class Kernel32 extends BuiltinModule {
     };
 
     // HANDLE WINAPI CreateFileMapping(HANDLE hFile, LPSECURITY_ATTRIBUTES lpAttributes, DWORD flProtect, DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCTSTR lpName)
-    private final Callback.Handler CreateFileMappingA = new HandlerBase() {
+    private Callback.Handler CreateFileMappingA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.CreateFileMappingA";
         }
@@ -425,7 +423,7 @@ public class Kernel32 extends BuiltinModule {
             CPU_Regs.reg_eax.dword = mapping.handle;
         }
     };
-    private final Callback.Handler CreateFileMappingW = new HandlerBase() {
+    private Callback.Handler CreateFileMappingW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.CreateFileMappingW";
         }
@@ -436,13 +434,12 @@ public class Kernel32 extends BuiltinModule {
             int sizeHigh = CPU.CPU_Pop32();
             int sizeLow = CPU.CPU_Pop32();
             int name = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HANDLE WINAPI CreateMutex(LPSECURITY_ATTRIBUTES lpMutexAttributes, BOOL bInitialOwner, LPCTSTR lpName)
-    private final Callback.Handler CreateMutexA = new HandlerBase() {
+    private Callback.Handler CreateMutexA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.CreateMutexA";
         }
@@ -474,7 +471,7 @@ Win.exit();
         }
     };
 
-    private final Callback.Handler CreateThreadCleanup = new HandlerBase() {
+    private Callback.Handler CreateThreadCleanup = new HandlerBase() {
         public String getName() {
             return "Kernel32.CreateThread - Cleanup";
         }
@@ -488,7 +485,7 @@ Win.exit();
     private long threadCleanup = 0;
 
     // HANDLE WINAPI CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId)
-    private final Callback.Handler CreateThread = new HandlerBase() {
+    private Callback.Handler CreateThread = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.CreateThread";
         }
@@ -505,11 +502,11 @@ Win.exit();
                 stackSizeCommit = 0;
             }
             if ((flags & 0x00000004)!=0) {
-                Log.getLogger().info("CreateThread with suspend flags not supported yet");
+                System.out.println("CreateThread with suspend flags not supported yet");
                 Win.exit();
             }
             if (attributes != 0) {
-                Log.getLogger().info("***WARNING*** attributes are not supported for CreateThread");
+                System.out.println("***WARNING*** attributes are not supported for CreateThread");
             }
             WinThread thread = WinSystem.getCurrentProcess().createThread(start, stackSizeCommit, stackSizeReserved);
             if (threadCleanup==0) {
@@ -529,18 +526,18 @@ Win.exit();
     };
 
     // void WINAPI DebugBreak(void)
-    private final Callback.Handler DebugBreak = new HandlerBase() {
+    private Callback.Handler DebugBreak = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.DebugBreak";
         }
         public void onCall() {
-            Log.getLogger().warn("DebugBreak was called\n");
+            System.out.println("DebugBreak was called\n");
             Win.exit();
         }
     };
 
     // PVOID DecodePointer(PVOID Ptr)
-    static private final Callback.Handler DecodePointer = new HandlerBase() {
+    static private Callback.Handler DecodePointer = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.DecodePointer";
         }
@@ -550,7 +547,7 @@ Win.exit();
     };
 
     // void WINAPI DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-    static private final Callback.Handler DeleteCriticalSection = new HandlerBase() {
+    static private Callback.Handler DeleteCriticalSection = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.DeleteCriticalSection";
         }
@@ -560,7 +557,7 @@ Win.exit();
     };
 
     // BOOL WINAPI DeleteFile(LPCTSTR lpFileName)
-    static private final Callback.Handler DeleteFileA = new HandlerBase() {
+    static private Callback.Handler DeleteFileA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.DeleteFileA";
         }
@@ -589,7 +586,7 @@ Win.exit();
     };
 
     // BOOL WINAPI DisableThreadLibraryCalls(HMODULE hModule)
-    static private final Callback.Handler DisableThreadLibraryCalls = new HandlerBase() {
+    static private Callback.Handler DisableThreadLibraryCalls = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.DisableThreadLibraryCalls";
         }
@@ -605,10 +602,10 @@ Win.exit();
             }
         }
     };
-    static final int pointerObfuscator = new Random().nextInt();
+    static int pointerObfuscator = new Random().nextInt();
 
     // PVOID EncodePointer(PVOID Ptr)
-    static private final Callback.Handler EncodePointer = new HandlerBase() {
+    static private Callback.Handler EncodePointer = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.EncodePointer";
         }
@@ -618,7 +615,7 @@ Win.exit();
     };
 
     // void WINAPI EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-    private final Callback.Handler EnterCriticalSection = new HandlerBase() {
+    private Callback.Handler EnterCriticalSection = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.EnterCriticalSection";
         }
@@ -628,43 +625,41 @@ Win.exit();
     };
 
     // BOOL EnumSystemLocales(LOCALE_ENUMPROC lpLocaleEnumProc, DWORD dwFlags)
-    static private final Callback.Handler EnumSystemLocalesA = new HandlerBase() {
+    static private Callback.Handler EnumSystemLocalesA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.EnumSystemLocalesA";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
-    static private final Callback.Handler EnumSystemLocalesW = new HandlerBase() {
+    static private Callback.Handler EnumSystemLocalesW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.EnumSystemLocalesW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // VOID WINAPI ExitProcess(UINT uExitCode)
-    private final Callback.Handler ExitProcess = new HandlerBase() {
+    private Callback.Handler ExitProcess = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.ExitProcess";
         }
         public void onCall() {
             int exitCode = CPU.CPU_Pop32();
-            Log.getLogger().info("Win32 Process has exited (PID "+WinSystem.getCurrentProcess().getHandle()+"): code = " + exitCode);
+            System.out.println("Win32 Process has exited (PID "+WinSystem.getCurrentProcess().getHandle()+"): code = " + exitCode);
             WinSystem.memory.printInfo();
             WinSystem.getCurrentProcess().exit();
             System.out.print(" -> ");
             WinSystem.memory.printInfo();
-            
+            System.out.println();
         }
     };
 
     // VOID WINAPI ExitThread(DWORD dwExitCode)
-    private final Callback.Handler ExitThread = new HandlerBase() {
+    private Callback.Handler ExitThread = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.ExitThread";
         }
@@ -675,27 +670,25 @@ Win.exit();
     };
 
     // void WINAPI FatalAppExit(UINT uAction, LPCTSTR lpMessageText)
-    static private final Callback.Handler FatalAppExitA = new HandlerBase() {
+    static private Callback.Handler FatalAppExitA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FatalAppExitA";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
-    static private final Callback.Handler FatalAppExitW = new HandlerBase() {
+    static private Callback.Handler FatalAppExitW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FatalAppExitW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI FileTimeToLocalFileTime(const FILETIME *lpFileTime, LPFILETIME lpLocalFileTime)
-    private final Callback.Handler FileTimeToLocalFileTime = new HandlerBase() {
+    private Callback.Handler FileTimeToLocalFileTime = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FileTimeToLocalFileTime";
         }
@@ -703,13 +696,13 @@ Win.exit();
             int lpFileTime = CPU.CPU_Pop32();
             int lpLocalFileTime = CPU.CPU_Pop32();
             long time = WinFile.readFileTime(lpFileTime);
-            time = time + TimeZone.getDefault().getRawOffset()* 10L;
+            time = time + TimeZone.getDefault().getRawOffset()*10;
             WinFile.writeFileTime(lpLocalFileTime, time);
         }
     };
 
     // BOOL WINAPI FileTimeToSystemTime(const FILETIME *lpFileTime, LPSYSTEMTIME lpSystemTime)
-    static private final Callback.Handler FileTimeToSystemTime = new HandlerBase() {
+    static private Callback.Handler FileTimeToSystemTime = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FileTimeToSystemTime";
         }
@@ -727,7 +720,7 @@ Win.exit();
     };
 
     // BOOL WINAPI FindClose(HANDLE hFindFile)
-    static private final Callback.Handler FindClose = new HandlerBase() {
+    static private Callback.Handler FindClose = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FindClose";
         }
@@ -748,7 +741,7 @@ Win.exit();
     };
 
     // HANDLE WINAPI FindFirstFile(LPCTSTR lpFileName, LPWIN32_FIND_DATA lpFindFileData)
-    private final Callback.Handler FindFirstFileA = new HandlerBase() {
+    private Callback.Handler FindFirstFileA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FindFirstFileA";
         }
@@ -803,7 +796,7 @@ Win.exit();
     };
 
     // BOOL WINAPI FindNextFile(HANDLE hFindFile, LPWIN32_FIND_DATA lpFindFileData)
-    static private final Callback.Handler FindNextFileA = new HandlerBase() {
+    static private Callback.Handler FindNextFileA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FindNextFileA";
         }
@@ -824,7 +817,7 @@ Win.exit();
     };
 
     // DWORD WINAPI FormatMessage(DWORD dwFlags, LPCVOID lpSource, DWORD dwMessageId, DWORD dwLanguageId, LPTSTR lpBuffer, DWORD nSize, va_list *Arguments)
-    static private final Callback.Handler FormatMessageA = new HandlerBase() {
+    static private Callback.Handler FormatMessageA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FormatMessageA";
         }
@@ -846,15 +839,14 @@ Win.exit();
                     CPU_Regs.reg_eax.dword = msg.length();
                 }
             } else {
-                Log.getLogger().warn("FormatMessage currently only supports the FORMAT_MESSAGE_FROM_SYSTEM flags");
-                Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                System.out.println("FormatMessage currently only supports the FORMAT_MESSAGE_FROM_SYSTEM flags");
+                notImplemented();
             }
         }
     };
 
     // BOOL WINAPI FreeEnvironmentStrings(LPTCH lpszEnvironmentBlock)
-    static private final Callback.Handler FreeEnvironmentStringsA = new HandlerBase() {
+    static private Callback.Handler FreeEnvironmentStringsA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FreeEnvironmentStringsA";
         }
@@ -863,7 +855,7 @@ Win.exit();
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
-    static private final Callback.Handler FreeEnvironmentStringsW = new HandlerBase() {
+    static private Callback.Handler FreeEnvironmentStringsW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FreeEnvironmentStringsW";
         }
@@ -874,7 +866,7 @@ Win.exit();
     };
 
     // BOOL WINAPI FreeLibrary(HMODULE hModule)
-    static private final Callback.Handler FreeLibrary = new HandlerBase() {
+    static private Callback.Handler FreeLibrary = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.FreeLibrary";
         }
@@ -885,14 +877,14 @@ Win.exit();
                 CPU_Regs.reg_eax.dword = WinAPI.FALSE;
                 Scheduler.getCurrentThread().setLastError(Error.ERROR_INVALID_HANDLE);
             } else {
-                Log.getLogger().warn(getName()+" faked: "+module.name);
+                System.out.println(getName()+" faked: "+module.name);
                 CPU_Regs.reg_eax.dword = WinAPI.TRUE;
             }
         }
     };
 
     // UINT GetACP(void)
-    static private final Callback.Handler GetACP = new HandlerBase() {
+    static private Callback.Handler GetACP = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetACP";
         }
@@ -902,7 +894,7 @@ Win.exit();
     };
 
     // LPTSTR WINAPI GetCommandLine(void)
-    private final Callback.Handler GetCommandLineA = new HandlerBase() {
+    private Callback.Handler GetCommandLineA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetCommandLineA";
         }
@@ -910,7 +902,7 @@ Win.exit();
             CPU_Regs.reg_eax.dword = WinSystem.getCurrentProcess().getCommandLine();
         }
     };
-    private final Callback.Handler GetCommandLineW = new HandlerBase() {
+    private Callback.Handler GetCommandLineW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetCommandLineW";
         }
@@ -920,35 +912,32 @@ Win.exit();
     };
 
     // UINT WINAPI GetConsoleCP(void)
-    private final Callback.Handler GetConsoleCP = new HandlerBase() {
+    private Callback.Handler GetConsoleCP = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetConsoleCP";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI GetConsoleMode(HANDLE hConsoleHandle, LPDWORD lpMode)
-    private final Callback.Handler GetConsoleMode = new HandlerBase() {
+    private Callback.Handler GetConsoleMode = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetConsoleMode";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // UINT WINAPI GetConsoleOutputCP(void)
-    private final Callback.Handler GetConsoleOutputCP = new HandlerBase() {
+    private Callback.Handler GetConsoleOutputCP = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetConsoleOutputCP";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
@@ -961,7 +950,7 @@ Win.exit();
     */
 
     // BOOL GetCPInfo(UINT CodePage, LPCPINFO lpCPInfo)
-    private final Callback.Handler GetCPInfo = new HandlerBase() {
+    private Callback.Handler GetCPInfo = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetCPInfo";
         }
@@ -982,7 +971,7 @@ Win.exit();
     };
 
     // DWORD WINAPI GetCurrentDirectory(DWORD nBufferLength, LPTSTR lpBuffer)
-    static private final Callback.Handler GetCurrentDirectoryA = new HandlerBase() {
+    static private Callback.Handler GetCurrentDirectoryA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetCurrentDirectoryA";
         }
@@ -1002,7 +991,7 @@ Win.exit();
     };
 
     // HANDLE WINAPI GetCurrentProcess(void)
-    static private final Callback.Handler GetCurrentProcess = new HandlerBase() {
+    static private Callback.Handler GetCurrentProcess = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetCurrentProcess";
         }
@@ -1012,7 +1001,7 @@ Win.exit();
     };
 
     // DWORD WINAPI GetCurrentProcessId(void)
-    private final Callback.Handler GetCurrentProcessId = new HandlerBase() {
+    private Callback.Handler GetCurrentProcessId = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetCurrentProcessId";
         }
@@ -1022,27 +1011,25 @@ Win.exit();
     };
 
     // int GetDateFormat(LCID Locale, DWORD dwFlags, const SYSTEMTIME *lpDate, LPCTSTR lpFormat, LPTSTR lpDateStr, int cchDate)
-    static private final Callback.Handler GetDateFormatA = new HandlerBase() {
+    static private Callback.Handler GetDateFormatA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetDateFormatA";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
-    static private final Callback.Handler GetDateFormatW = new HandlerBase() {
+    static private Callback.Handler GetDateFormatW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetDateFormatW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI GetDiskFreeSpace(LPCTSTR lpRootPathName, LPDWORD lpSectorsPerCluster, LPDWORD lpBytesPerSector, LPDWORD lpNumberOfFreeClusters, LPDWORD lpTotalNumberOfClusters)
-    static private final Callback.Handler GetDiskFreeSpaceA = new HandlerBase() {
+    static private Callback.Handler GetDiskFreeSpaceA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetDiskFreeSpaceA";
         }
@@ -1062,7 +1049,7 @@ Win.exit();
     };
 
     // UINT WINAPI GetDriveType(LPCTSTR lpRootPathName)
-    private final Callback.Handler GetDriveTypeA = new HandlerBase() {
+    private Callback.Handler GetDriveTypeA = new HandlerBase() {
             public java.lang.String getName() {
                 return "Kernel32.GetDriveTypeA";
             }
@@ -1084,7 +1071,7 @@ Win.exit();
     };
 
     // LPTCH WINAPI GetEnvironmentStrings(void)
-    private final Callback.Handler GetEnvironmentStrings = new HandlerBase() {
+    private Callback.Handler GetEnvironmentStrings = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetEnvironmentStrings";
         }
@@ -1092,7 +1079,7 @@ Win.exit();
             CPU_Regs.reg_eax.dword = WinSystem.getCurrentProcess().getEnvironment();
         }
     };
-    private final Callback.Handler GetEnvironmentStringsA = new HandlerBase() {
+    private Callback.Handler GetEnvironmentStringsA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetEnvironmentStringsA";
         }
@@ -1100,7 +1087,7 @@ Win.exit();
             CPU_Regs.reg_eax.dword = WinSystem.getCurrentProcess().getEnvironment();
         }
     };
-    private final Callback.Handler GetEnvironmentStringsW = new HandlerBase() {
+    private Callback.Handler GetEnvironmentStringsW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetEnvironmentStringsW";
         }
@@ -1110,7 +1097,7 @@ Win.exit();
     };
 
     // DWORD WINAPI GetFileAttributes(LPCTSTR lpFileName)
-    private final Callback.Handler GetFileAttributesA = new HandlerBase() {
+    private Callback.Handler GetFileAttributesA = new HandlerBase() {
             public java.lang.String getName() {
                 return "Kernel32.GetFileAttributesA";
             }
@@ -1136,7 +1123,7 @@ Win.exit();
     };
 
     // DWORD WINAPI GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh)
-    private final Callback.Handler GetFileSize = new HandlerBase() {
+    private Callback.Handler GetFileSize = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetFileSize";
         }
@@ -1158,7 +1145,7 @@ Win.exit();
     };
 
     // DWORD WINAPI GetFileType(HANDLE hFile)
-    private final Callback.Handler GetFileType = new HandlerBase() {
+    private Callback.Handler GetFileType = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetFileType";
         }
@@ -1175,27 +1162,25 @@ Win.exit();
     };
 
     // int GetLocaleInfo(LCID Locale, LCTYPE LCType, LPTSTR lpLCData, int cchData)
-    static private final Callback.Handler GetLocaleInfoA = new HandlerBase() {
+    static private Callback.Handler GetLocaleInfoA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetLocaleInfoA";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
-    static private final Callback.Handler GetLocaleInfoW = new HandlerBase() {
+    static private Callback.Handler GetLocaleInfoW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetLocaleInfoW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // void WINAPI GetLocalTime(LPSYSTEMTIME lpSystemTime)
-     private final Callback.Handler GetLocalTime = new HandlerBase() {
+     private Callback.Handler GetLocalTime = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetLocalTime";
         }
@@ -1206,7 +1191,7 @@ Win.exit();
     };
 
     //DWORD WINAPI GetModuleFileName(HMODULE hModule, LPTSTR lpFilename, DWORD nSize)
-    private final Callback.Handler GetModuleFileNameA = new HandlerBase() {
+    private Callback.Handler GetModuleFileNameA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetModuleFileNameA";
         }
@@ -1230,7 +1215,7 @@ Win.exit();
             }
         }
     };
-    private final Callback.Handler GetModuleFileNameW = new HandlerBase() {
+    private Callback.Handler GetModuleFileNameW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetModuleFileNameW";
         }
@@ -1256,7 +1241,7 @@ Win.exit();
     };
 
     // HMODULE WINAPI GetModuleHandle(LPCTSTR lpModuleName)
-    private final Callback.Handler GetModuleHandleA = new HandlerBase() {
+    private Callback.Handler GetModuleHandleA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetModuleHandleA";
         }
@@ -1272,18 +1257,17 @@ Win.exit();
             }
         }
     };
-    static private final Callback.Handler GetModuleHandleW = new HandlerBase() {
+    static private Callback.Handler GetModuleHandleW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetModuleHandleW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // FARPROC WINAPI GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
-     private final Callback.Handler GetProcAddress = new HandlerBase() {
+     private Callback.Handler GetProcAddress = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetProcAddress";
         }
@@ -1291,13 +1275,13 @@ Win.exit();
             int handle = CPU.CPU_Pop32();
             int procName = CPU.CPU_Pop32();
             String name = new LittleEndianFile(procName).readCString();
-            Log.getLogger().info("GetProcAddress "+name);
+            System.out.println("GetProcAddress "+name);
             CPU_Regs.reg_eax.dword = WinSystem.getCurrentProcess().getProcAddress(handle, name);
         }
     };
     
     // HANDLE WINAPI GetProcessHeap(void)
-    private final Callback.Handler GetProcessHeap = new HandlerBase() {
+    private Callback.Handler GetProcessHeap = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetProcessHeap";
         }
@@ -1329,7 +1313,7 @@ Win.exit();
     }
      */
     // VOID WINAPI GetStartupInfo(LPSTARTUPINFO lpStartupInfo)
-    private final Callback.Handler GetStartupInfoA = new HandlerBase() {
+    private Callback.Handler GetStartupInfoA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetStartupInfoA";
         }
@@ -1358,21 +1342,20 @@ Win.exit();
             Memory.mem_writed(add, 0); add+=4; // lpReserved2
             Memory.mem_writed(add, WinFile.STD_IN); add+=4; // hStdInput
             Memory.mem_writed(add, WinFile.STD_OUT); add+=4; // hStdOutput
-            Memory.mem_writed(add, WinFile.STD_ERROR);
+            Memory.mem_writed(add, WinFile.STD_ERROR); add+=4; // hStdError
         }
     };
-    static private final Callback.Handler GetStartupInfoW = new HandlerBase() {
+    static private Callback.Handler GetStartupInfoW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetStartupInfoW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HANDLE WINAPI GetStdHandle(DWORD nStdHandle)
-    static private final Callback.Handler GetStdHandle = new HandlerBase() {
+    static private Callback.Handler GetStdHandle = new HandlerBase() {
         final int STD_INPUT_HANDLE = -10;
         final int STD_OUTPUT_HANDLE = -11;
         final int STD_ERROR_HANDLE = -12;
@@ -1400,18 +1383,17 @@ Win.exit();
     };
 
     // BOOL GetStringTypeA(LCID Locale, DWORD dwInfoType, LPCSTR lpSrcStr, int cchSrc, LPWORD lpCharType)
-    static private final Callback.Handler GetStringTypeA = new HandlerBase() {
+    static private Callback.Handler GetStringTypeA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetStringTypeA";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL GetStringTypeW(DWORD dwInfoType, LPCWSTR lpSrcStr, int cchSrc, LPWORD lpCharType)
-    private final Callback.Handler GetStringTypeW = new HandlerBase() {
+    private Callback.Handler GetStringTypeW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetStringTypeW";
         }
@@ -1442,9 +1424,8 @@ Win.exit();
                 }
                 break;
             case WinAPI.CT_CTYPE3:
-                Log.getLogger().warn(getName()+" flag CT_CTYPE3 not implemented yet");
-                Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                System.out.println(getName()+" flag CT_CTYPE3 not implemented yet");
+                notImplemented();
                 break;
             default:
                 CPU_Regs.reg_eax.dword = WinAPI.FALSE;
@@ -1470,7 +1451,7 @@ Win.exit();
     */
 
     // void WINAPI GetSystemInfo(LPSYSTEM_INFO lpSystemInfo)
-    static private final Callback.Handler GetSystemInfo = new HandlerBase() {
+    static private Callback.Handler GetSystemInfo = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetSystemInfo";
         }
@@ -1491,7 +1472,7 @@ Win.exit();
     };
 
     // void WINAPI GetSystemTime(LPSYSTEMTIME lpSystemTime)
-    private final Callback.Handler GetSystemTime = new HandlerBase() {
+    private Callback.Handler GetSystemTime = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetSystemTime";
         }
@@ -1508,7 +1489,7 @@ Win.exit();
         }
      */
     // void WINAPI GetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
-    static private final Callback.Handler GetSystemTimeAsFileTime = new HandlerBase() {
+    static private Callback.Handler GetSystemTimeAsFileTime = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetSystemTimeAsFileTime";
         }
@@ -1520,7 +1501,7 @@ Win.exit();
     };
 
     // UINT WINAPI GetTempFileName(LPCTSTR lpPathName, LPCTSTR lpPrefixString, UINT uUnique, LPTSTR lpTempFileName)
-    private final Callback.Handler GetTempFileNameA = new ReturnHandlerBase() {
+    private Callback.Handler GetTempFileNameA = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetTempFileNameA";
         }
@@ -1549,7 +1530,7 @@ Win.exit();
                     try {
                         file.createNewFile();
                     } catch (Exception e) {
-                        Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+
                     }
                     StringUtil.strcpy(lpTempFileName, name);
                     return uUnique;
@@ -1559,7 +1540,7 @@ Win.exit();
     };
 
     // DWORD WINAPI GetTempPath(DWORD nBufferLength, LPTSTR lpBuffer)
-    private final Callback.Handler GetTempPathA = new ReturnHandlerBase() {
+    private Callback.Handler GetTempPathA = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetTempPathA";
         }
@@ -1572,7 +1553,7 @@ Win.exit();
     };
 
     // DWORD WINAPI GetTickCount(void)
-    private final Callback.Handler GetTickCount = new HandlerBase() {
+    private Callback.Handler GetTickCount = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetTickCount";
         }
@@ -1582,27 +1563,25 @@ Win.exit();
     };
 
     // int GetTimeFormat(LCID Locale, DWORD dwFlags, const SYSTEMTIME *lpTime, LPCTSTR lpFormat, LPTSTR lpTimeStr, int cchTime)
-    static private final Callback.Handler GetTimeFormatA = new HandlerBase() {
+    static private Callback.Handler GetTimeFormatA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetTimeFormatA";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
-    static private final Callback.Handler GetTimeFormatW = new HandlerBase() {
+    static private Callback.Handler GetTimeFormatW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetTimeFormatW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // DWORD WINAPI GetTimeZoneInformation(LPTIME_ZONE_INFORMATION lpTimeZoneInformation);
-    static private final Callback.Handler GetTimeZoneInformation = new HandlerBase() {
+    static private Callback.Handler GetTimeZoneInformation = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetTimeZoneInformation";
         }
@@ -1621,18 +1600,17 @@ Win.exit();
     };
 
     // LCID GetUserDefaultLCID(void)
-    static private final Callback.Handler GetUserDefaultLCID = new HandlerBase() {
+    static private Callback.Handler GetUserDefaultLCID = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetUserDefaultLCID";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // DWORD WINAPI GetVersion(void)
-    static private final Callback.Handler GetVersion = new HandlerBase() {
+    static private Callback.Handler GetVersion = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetVersion";
         }
@@ -1667,7 +1645,7 @@ Win.exit();
     */
 
     // BOOL WINAPI GetVersionEx(LPOSVERSIONINFO lpVersionInfo)
-    static private final Callback.Handler GetVersionExA = new HandlerBase() {
+    static private Callback.Handler GetVersionExA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetVersionExA";
         }
@@ -1688,26 +1666,25 @@ Win.exit();
                     Memory.mem_writew(add, 0);add+=2; // wServicePackMinor
                     Memory.mem_writew(add, 0);add+=2; // wSuiteMask
                     Memory.mem_writeb(add, 1);add+=1; // wProductType - VER_NT_WORKSTATION
-                    Memory.mem_writeb(add, 0);
+                    Memory.mem_writeb(add, 0);add+=1; // wReserved
                 }
             } else {
-                Log.getLogger().warn(getName()+" was passed an unexpected size of "+size);
+                System.out.println(getName()+" was passed an unexpected size of "+size);
                 Win.exit();
             }
         }
     };
-    static private final Callback.Handler GetVersionExW = new HandlerBase() {
+    static private Callback.Handler GetVersionExW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetVersionExW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI GetVolumeInformation(LPCTSTR lpRootPathName, LPTSTR lpVolumeNameBuffer, DWORD nVolumeNameSize, LPDWORD lpVolumeSerialNumber, LPDWORD lpMaximumComponentLength, LPDWORD lpFileSystemFlags, LPTSTR lpFileSystemNameBuffer, DWORD nFileSystemNameSize)
-    static private final Callback.Handler GetVolumeInformationA = new HandlerBase() {
+    static private Callback.Handler GetVolumeInformationA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetVolumeInformationA";
         }
@@ -1750,7 +1727,7 @@ Win.exit();
     };
 
     // UINT WINAPI GetWindowsDirectory(LPTSTR lpBuffer, UINT uSize)
-    static private final Callback.Handler GetWindowsDirectoryA = new HandlerBase() {
+    static private Callback.Handler GetWindowsDirectoryA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetWindowsDirectoryA";
         }
@@ -1761,7 +1738,7 @@ Win.exit();
             CPU_Regs.reg_eax.dword = WinAPI.WIN32_PATH.length()+1;
         }
     };
-    static private final Callback.Handler GetWindowsDirectoryW = new HandlerBase() {
+    static private Callback.Handler GetWindowsDirectoryW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GetWindowsDirectoryW";
         }
@@ -1775,7 +1752,7 @@ Win.exit();
     };
 
     // HGLOBAL WINAPI GlobalAlloc(UINT uFlags, SIZE_T dwBytes)
-    static private final Callback.Handler GlobalAlloc = new ReturnHandlerBase() {
+    static private Callback.Handler GlobalAlloc = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GlobalAlloc";
         }
@@ -1790,7 +1767,7 @@ Win.exit();
     };
 
     // HGLOBAL WINAPI GlobalFree(HGLOBAL hMem)
-    static private final Callback.Handler GlobalFree = new ReturnHandlerBase() {
+    static private Callback.Handler GlobalFree = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GlobalFree";
         }
@@ -1802,27 +1779,29 @@ Win.exit();
     };
 
     // HGLOBAL WINAPI GlobalHandle(LPCVOID pMem)
-    static private final Callback.Handler GlobalHandle = new ReturnHandlerBase() {
+    static private Callback.Handler GlobalHandle = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GlobalHandle";
         }
         public int processReturn() {
-            return CPU.CPU_Pop32();
+            int hMem = CPU.CPU_Pop32();
+            return hMem;
         }
     };
 
     // LPVOID WINAPI GlobalLock(HGLOBAL hMem)
-    static private final Callback.Handler GlobalLock = new ReturnHandlerBase() {
+    static private Callback.Handler GlobalLock = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GlobalLock";
         }
         public int processReturn() {
-            return CPU.CPU_Pop32();
+            int hMem = CPU.CPU_Pop32();
+            return hMem;
         }
     };
 
     // HGLOBAL WINAPI GlobalReAlloc(HGLOBAL hMem, SIZE_T dwBytes, UINT uFlags)
-    static private final Callback.Handler GlobalReAlloc = new ReturnHandlerBase() {
+    static private Callback.Handler GlobalReAlloc = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GlobalReAlloc";
         }
@@ -1837,7 +1816,7 @@ Win.exit();
     };
 
     // BOOL WINAPI GlobalUnlock(HGLOBAL hMem)
-    static private final Callback.Handler GlobalUnlock = new ReturnHandlerBase() {
+    static private Callback.Handler GlobalUnlock = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GlobalUnlock";
         }
@@ -1848,7 +1827,7 @@ Win.exit();
     };
 
     // void WINAPI GlobalMemoryStatus(LPMEMORYSTATUS lpBuffer)
-    static private final Callback.Handler GlobalMemoryStatus = new HandlerBase() {
+    static private Callback.Handler GlobalMemoryStatus = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.GlobalMemoryStatus";
         }
@@ -1867,12 +1846,12 @@ Win.exit();
             Memory.mem_writed(lpBuffer, physTotal); lpBuffer+=4; // dwTotalPageFile
             Memory.mem_writed(lpBuffer, physFree); lpBuffer+=4; // dwAvailPageFile
             Memory.mem_writed(lpBuffer, 2147483644); lpBuffer+=4; // dwTotalVirtual
-            Memory.mem_writed(lpBuffer, 2147483644-used.value*4096);
+            Memory.mem_writed(lpBuffer, 2147483644-used.value*4096); lpBuffer+=4; // dwAvailVirtual
         }
     };
 
     // LPVOID WINAPI HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes)
-    private final Callback.Handler HeapAlloc = new HandlerBase() {
+    private Callback.Handler HeapAlloc = new HandlerBase() {
         static final int HEAP_GENERATE_EXCEPTIONS = 0x00000004;
         static final int HEAP_NO_SERIALIZE = 0x00000001;
         static final int HEAP_ZERO_MEMORY = 0x00000008;
@@ -1885,7 +1864,7 @@ Win.exit();
             int dwFlags = CPU.CPU_Pop32();
             int dwBytes = CPU.CPU_Pop32();
             if ((dwFlags & HEAP_GENERATE_EXCEPTIONS)!=0) {
-                Log.getLogger().warn(getName()+" option HEAP_GENERATE_EXCEPTIONS not implemented yet");
+                System.out.println(getName()+" option HEAP_GENERATE_EXCEPTIONS not implemented yet");
                 //Win.exit();
             }
             CPU_Regs.reg_eax.dword = WinSystem.getCurrentProcess().getWinHeap().allocateHeap(hHeap, dwBytes);
@@ -1896,7 +1875,7 @@ Win.exit();
     };
 
     // HANDLE WINAPI HeapCreate(DWORD flOptions, SIZE_T dwInitialSize, SIZE_T dwMaximumSize)
-    private final Callback.Handler HeapCreate = new HandlerBase() {
+    private Callback.Handler HeapCreate = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.HeapCreate";
         }
@@ -1905,7 +1884,7 @@ Win.exit();
             int dwInitialSize = (CPU.CPU_Pop32() + Paging.MEM_PAGE_SIZE) & (Paging.MEM_PAGE_SIZE-1);
             int dwMaximumSize = (CPU.CPU_Pop32() + Paging.MEM_PAGE_SIZE) & (Paging.MEM_PAGE_SIZE-1);
             if ((flOptions & HEAP_GENERATE_EXCEPTIONS)!=0) {
-                Log.getLogger().warn(getName()+" option HEAP_GENERATE_EXCEPTIONS not implemented yet");
+                System.out.println(getName()+" option HEAP_GENERATE_EXCEPTIONS not implemented yet");
             }
             if (dwInitialSize==0)
                 dwInitialSize = Paging.MEM_PAGE_SIZE;
@@ -1914,18 +1893,17 @@ Win.exit();
     };
 
     // BOOL WINAPI HeapDestroy(HANDLE hHeap)
-    static private final Callback.Handler HeapDestroy = new HandlerBase() {
+    static private Callback.Handler HeapDestroy = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.HeapDestroy";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem)
-    private final Callback.Handler HeapFree = new HandlerBase() {
+    private Callback.Handler HeapFree = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.HeapFree";
         }
@@ -1938,7 +1916,7 @@ Win.exit();
     };
 
     //LPVOID WINAPI HeapReAlloc(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem, SIZE_T dwBytes)
-    static private final Callback.Handler HeapReAlloc = new HandlerBase() {
+    static private Callback.Handler HeapReAlloc = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.HeapReAlloc";
         }
@@ -1948,14 +1926,14 @@ Win.exit();
             int lpMem = CPU.CPU_Pop32();
             int dwBytes = CPU.CPU_Pop32();
             if ((dwFlags & HEAP_GENERATE_EXCEPTIONS)!=0) {
-                Log.getLogger().warn(getName()+" option HEAP_GENERATE_EXCEPTIONS not implemented yet");
+                System.out.println(getName()+" option HEAP_GENERATE_EXCEPTIONS not implemented yet");
             }
             CPU_Regs.reg_eax.dword = WinSystem.getCurrentProcess().getWinHeap().realloc(hHeap, lpMem, dwBytes, (dwFlags & HEAP_ZERO_MEMORY) != 0);
         }
     };
 
     // SIZE_T WINAPI HeapSize(HANDLE hHeap, DWORD dwFlags, LPCVOID lpMem)
-    static private final Callback.Handler HeapSize = new HandlerBase() {
+    static private Callback.Handler HeapSize = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.HeapSize";
         }
@@ -1968,7 +1946,7 @@ Win.exit();
     };
 
     // BOOL WINAPI HeapValidate(HANDLE hHeap, DWORD dwFlags, LPCVOID lpMem)
-    private final Callback.Handler HeapValidate = new HandlerBase() {
+    private Callback.Handler HeapValidate = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.HeapValidate";
         }
@@ -1981,7 +1959,7 @@ Win.exit();
     };
 
     // LONG WINAPI _hread( HFILE hFile, LPVOID buffer, LONG count)
-    private final Callback.Handler _hread = new ReturnHandlerBase() {
+    private Callback.Handler _hread = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32._hread";
         }
@@ -1999,7 +1977,7 @@ Win.exit();
     };
 
     // void WINAPI InitializeCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-    private final Callback.Handler InitializeCriticalSection = new HandlerBase() {
+    private Callback.Handler InitializeCriticalSection = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.InitializeCriticalSection";
         }
@@ -2009,7 +1987,7 @@ Win.exit();
     };
 
     // BOOL WINAPI InitializeCriticalSectionAndSpinCount(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount)
-    private final Callback.Handler InitializeCriticalSectionAndSpinCount = new HandlerBase() {
+    private Callback.Handler InitializeCriticalSectionAndSpinCount = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.InitializeCriticalSectionAndSpinCount";
         }
@@ -2022,7 +2000,7 @@ Win.exit();
     };
 
     // LONG InterlockedDecrement(LONG volatile *Addend)
-    static private final Callback.Handler InterlockedDecrement = new HandlerBase() {
+    static private Callback.Handler InterlockedDecrement = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.InterlockedDecrement";
         }
@@ -2036,7 +2014,7 @@ Win.exit();
     };
 
     // LONG InterlockedExchange(LONG volatile *Target, LONG Value)
-    static private final Callback.Handler InterlockedExchange = new ReturnHandlerBase() {
+    static private Callback.Handler InterlockedExchange = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.InterlockedExchange";
         }
@@ -2050,7 +2028,7 @@ Win.exit();
     };
 
     // LONG InterlockedIncrement(LONG volatile *Addend)
-    static private final Callback.Handler InterlockedIncrement = new HandlerBase() {
+    static private Callback.Handler InterlockedIncrement = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.InterlockedIncrement";
         }
@@ -2064,7 +2042,7 @@ Win.exit();
     };
 
     // BOOL WINAPI IsBadReadPtr(const VOID *lp, UINT_PTR ucb)
-    static private final Callback.Handler IsBadReadPtr = new ReturnHandlerBase() {
+    static private Callback.Handler IsBadReadPtr = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.IsBadReadPtr";
         }
@@ -2083,7 +2061,7 @@ Win.exit();
             return FALSE;
         }
     };
-    static private final Callback.Handler IsBadWritePtr = new ReturnHandlerBase() {
+    static private Callback.Handler IsBadWritePtr = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.IsBadWritePtr";
         }
@@ -2104,7 +2082,7 @@ Win.exit();
     };
 
     // BOOL WINAPI IsDebuggerPresent(void)
-    static private final Callback.Handler IsDebuggerPresent = new HandlerBase() {
+    static private Callback.Handler IsDebuggerPresent = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.IsDebuggerPresent";
         }
@@ -2114,40 +2092,37 @@ Win.exit();
     };
 
     // BOOL IsValidCodePage(UINT CodePage)
-    static private final Callback.Handler IsValidCodePage = new HandlerBase() {
+    static private Callback.Handler IsValidCodePage = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.IsValidCodePage";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL IsValidLocale(LCID Locale, DWORD dwFlags)
-    static private final Callback.Handler IsValidLocale = new HandlerBase() {
+    static private Callback.Handler IsValidLocale = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.IsValidLocale";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // Direct port of Wine's function
     //
     // int LCMapString(LCID Locale, DWORD dwMapFlags, LPCTSTR lpSrcStr, int cchSrc, LPTSTR lpDestStr, int cchDest)
-    static private final Callback.Handler LCMapStringA = new HandlerBase() {
+    static private Callback.Handler LCMapStringA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.LCMapStringA";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
-    private final Callback.Handler LCMapStringW = new HandlerBase() {
+    private Callback.Handler LCMapStringW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.LCMapStringW";
         }
@@ -2192,9 +2167,8 @@ Win.exit();
 
                 if (srclen < 0) srclen = StringUtil.strlenW(src);
 
-                Log.getLogger().warn(getName()+" LCMAP_SORTKEY not implemented yet");
-                Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                System.out.println(getName()+" LCMAP_SORTKEY not implemented yet");
+                notImplemented();
                 // ret = wine_get_sortkey(flags, src, srclen, (char *)dst, dstlen);
                 if (ret == 0) {
                     Scheduler.getCurrentThread().setLastError(Error.ERROR_INSUFFICIENT_BUFFER);
@@ -2290,7 +2264,7 @@ Win.exit();
     };
 
     // void WINAPI LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-    private final Callback.Handler LeaveCriticalSection = new HandlerBase() {
+    private Callback.Handler LeaveCriticalSection = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.LeaveCriticalSection";
         }
@@ -2300,7 +2274,7 @@ Win.exit();
     };
 
     // HFILE WINAPI _lclose(HFILE hFile)
-    private final Callback.Handler _lclose = new ReturnHandlerBase() {
+    private Callback.Handler _lclose = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32._lclose";
         }
@@ -2317,7 +2291,7 @@ Win.exit();
     };
 
     // LONG _llseek(HFile hFile, LONG lOffset, int nOrigin)
-    private final Callback.Handler _llseek = new ReturnHandlerBase() {
+    private Callback.Handler _llseek = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32._llseek";
         }
@@ -2336,7 +2310,7 @@ Win.exit();
     };
 
     // UINT WINAPI _lread( HFILE handle, LPVOID buffer, UINT count )
-    private final Callback.Handler _lread = new ReturnHandlerBase() {
+    private Callback.Handler _lread = new ReturnHandlerBase() {
         public java.lang.String getName() {
             return "Kernel32._lread";
         }
@@ -2354,7 +2328,7 @@ Win.exit();
     };
 
     // HMODULE WINAPI LoadLibrary(LPCTSTR lpFileName)
-    private final Callback.Handler LoadLibraryA = new HandlerBase() {
+    private Callback.Handler LoadLibraryA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.LoadLibraryA";
         }
@@ -2365,7 +2339,7 @@ Win.exit();
         }
     };
 
-    static private final Callback.Handler LoadLibraryW = new HandlerBase() {
+    static private Callback.Handler LoadLibraryW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.LoadLibraryW";
         }
@@ -2376,7 +2350,7 @@ Win.exit();
     };
 
     // LPTSTR WINAPI lstrcpy(LPTSTR lpString1, LPTSTR lpString2)
-    static private final Callback.Handler lstrcpyA = new HandlerBase() {
+    static private Callback.Handler lstrcpyA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.lstrcpyA";
         }
@@ -2389,7 +2363,7 @@ Win.exit();
     };
 
     // int WINAPI lstrlen(LPCTSTR lpString)
-    static private final Callback.Handler lstrlenA = new HandlerBase() {
+    static private Callback.Handler lstrlenA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.lstrlenA";
         }
@@ -2398,18 +2372,17 @@ Win.exit();
             CPU_Regs.reg_eax.dword = StringUtil.strlenA(lpString);
         }
     };
-    static private final Callback.Handler lstrlenW = new HandlerBase() {
+    static private Callback.Handler lstrlenW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.lstrlenW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // LPVOID WINAPI MapViewOfFile(HANDLE hFileMappingObject, DWORD dwDesiredAccess, DWORD dwFileOffsetHigh, DWORD dwFileOffsetLow, SIZE_T dwNumberOfBytesToMap)
-    private final Callback.Handler MapViewOfFile = new HandlerBase() {
+    private Callback.Handler MapViewOfFile = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.MapViewOfFile";
         }
@@ -2430,7 +2403,7 @@ Win.exit();
     };
 
     // int MulDiv(int nNumber, int nNumerator, int nDenominator)
-    private final Callback.Handler MulDiv = new HandlerBase() {
+    private Callback.Handler MulDiv = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.MulDiv";
         }
@@ -2443,7 +2416,7 @@ Win.exit();
     };
 
     // int MultiByteToWideChar(UINT CodePage, DWORD dwFlags, LPCSTR lpMultiByteStr, int cbMultiByte, LPWSTR lpWideCharStr, int cchWideChar)
-    private final Callback.Handler MultiByteToWideChar = new HandlerBase() {
+    private Callback.Handler MultiByteToWideChar = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.MultiByteToWideChar";
         }
@@ -2470,43 +2443,43 @@ Win.exit();
                         Scheduler.getCurrentThread().setLastError(Error.ERROR_INVALID_PARAMETER);
                     } else {
                         CPU_Regs.reg_eax.dword = c.length+1;
-                        for (char value : c) {
-                            Memory.mem_writew(lpWideCharStr, value);
-                            lpWideCharStr += 2;
+                        for (int i=0;i<c.length;i++) {
+                            Memory.mem_writew(lpWideCharStr, c[i]);
+                            lpWideCharStr+=2;
                         }
                         Memory.mem_writew(lpWideCharStr, 0);
                     }
                     break;
                 default:
-                    Log.getLogger().warn(getName()+" CodePage "+CodePage+" not implemented yet");
-                    Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                    System.out.println(getName()+" CodePage "+CodePage+" not implemented yet");
+                    notImplemented();
+                    return;
             }
         }
     };
     
     // void WINAPI OutputDebugString(LPCTSTR lpOutputString)
-    static private final Callback.Handler OutputDebugStringW = new HandlerBase() {
+    static private Callback.Handler OutputDebugStringW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.OutputDebugStringW";
         }
         public void onCall() {
             int lpOutputString = CPU.CPU_Pop32();
-            Log.getLogger().info(new LittleEndianFile(lpOutputString).readCStringW());
+            System.out.println(new LittleEndianFile(lpOutputString).readCStringW());
         }
     };
-    static private final Callback.Handler OutputDebugStringA = new HandlerBase() {
+    static private Callback.Handler OutputDebugStringA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.OutputDebugStringA";
         }
         public void onCall() {
             int lpOutputString = CPU.CPU_Pop32();
-            Log.getLogger().info(new LittleEndianFile(lpOutputString).readCString());
+            System.out.println(new LittleEndianFile(lpOutputString).readCString());
         }
     };
 
     // BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount)
-    private final Callback.Handler QueryPerformanceCounter = new HandlerBase() {
+    private Callback.Handler QueryPerformanceCounter = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.QueryPerformanceCounter";
         }
@@ -2522,18 +2495,18 @@ Win.exit();
     };
 
     // void WINAPI RaiseException(DWORD dwExceptionCode, DWORD dwExceptionFlags, DWORD nNumberOfArguments, const ULONG_PTR *lpArguments)
-    private final Callback.Handler RaiseException = new HandlerBase() {
+    private Callback.Handler RaiseException = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.RaiseException";
         }
         public void onCall() {
-            Log.getLogger().warn("RaiseException was called\n");
+            System.out.println("RaiseException was called\n");
             Win.exit();
         }
     };
 
     // BOOL WINAPI ReadFile(HANDLE hFile,LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped)
-    private final Callback.Handler ReadFile = new HandlerBase() {
+    private Callback.Handler ReadFile = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.ReadFile";
         }
@@ -2547,7 +2520,7 @@ Win.exit();
             if (lpOverlapped != 0) {
                 Win.panic(getName()+" does not support overlapped reads");
             }
-            int read;
+            int read = 0;
             WinFile file = WinFile.get(hFile);
             if (file == null) {
                 CPU_Regs.reg_eax.dword = WinAPI.FALSE;
@@ -2564,7 +2537,7 @@ Win.exit();
     };
 
     // BOOL WINAPI ReleaseMutex(HANDLE hMutex)
-    private final Callback.Handler ReleaseMutex = new HandlerBase() {
+    private Callback.Handler ReleaseMutex = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.ReleaseMutex";
         }
@@ -2582,7 +2555,7 @@ Win.exit();
     };
 
     // VOID RtlMoveMemory(VOID UNALIGNED *Destination, const VOID UNALIGNED *Source, SIZE_T Length)
-    private final Callback.Handler RtlMoveMemory = new HandlerBase() {
+    private Callback.Handler RtlMoveMemory = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.RtlMoveMemory";
         }
@@ -2595,18 +2568,17 @@ Win.exit();
     };
 
     // void WINAPI RtlUnwind(PVOID TargetFrame, PVOID TargetIp, PEXCEPTION_RECORD ExceptionRecord, PVOID ReturnValue)
-    static private final Callback.Handler RtlUnwind = new HandlerBase() {
+    static private Callback.Handler RtlUnwind = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.RtlUnwind";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // VOID RtlZeroMemory(VOID UNALIGNED *Destination, SIZE_T Length)
-    private final Callback.Handler RtlZeroMemory = new HandlerBase() {
+    private Callback.Handler RtlZeroMemory = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.RtlZeroMemory";
         }
@@ -2618,20 +2590,20 @@ Win.exit();
     };
 
     // BOOL WINAPI SetConsoleCtrlHandler(PHANDLER_ROUTINE HandlerRoutine, BOOL Add)
-    private final Callback.Handler SetConsoleCtrlHandler = new HandlerBase() {
+    private Callback.Handler SetConsoleCtrlHandler = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.SetConsoleCtrlHandler";
         }
         public void onCall() {
             int HandlerRoutine = CPU.CPU_Pop32();
             int Add = CPU.CPU_Pop32();
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = WinAPI.TRUE;
         }
     };
 
     // UINT WINAPI SetErrorMode(UINT uMode)
-    private final Callback.Handler SetErrorMode = new HandlerBase() {
+    private Callback.Handler SetErrorMode = new HandlerBase() {
         private int mode = 0;
 
         public java.lang.String getName() {
@@ -2641,13 +2613,13 @@ Win.exit();
             int uMode = CPU.CPU_Pop32();
             int old = mode;
             mode = uMode;
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = old;
         }
     };
 
     // BOOL WINAPI SetEvent(HANDLE hEvent)
-    private final Callback.Handler SetEvent = new HandlerBase() {
+    private Callback.Handler SetEvent = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.SetEvent";
         }
@@ -2664,7 +2636,7 @@ Win.exit();
     };
 
     // DWORD WINAPI SetFilePointer(HANDLE hFile, LONG lDistanceToMove, PLONG lpDistanceToMoveHigh, DWORD dwMoveMethod)
-    private final Callback.Handler SetFilePointer = new HandlerBase() {
+    private Callback.Handler SetFilePointer = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.SetFilePointer";
         }
@@ -2695,7 +2667,7 @@ Win.exit();
     };
 
     // UINT SetHandleCount(UINT uNumber)
-    private final Callback.Handler SetHandleCount = new HandlerBase() {
+    private Callback.Handler SetHandleCount = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.SetHandleCount";
         }
@@ -2706,7 +2678,7 @@ Win.exit();
     };
 
     // void WINAPI SetLastError(DWORD dwErrCode)
-    private final Callback.Handler SetLastError = new HandlerBase() {
+    private Callback.Handler SetLastError = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.SetLastError";
         }
@@ -2717,18 +2689,17 @@ Win.exit();
     };
 
     // BOOL WINAPI SetStdHandle(DWORD nStdHandle, HANDLE hHandle)
-    private final Callback.Handler SetStdHandle = new HandlerBase() {
+    private Callback.Handler SetStdHandle = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.SetStdHandle";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI SetThreadPriority(HANDLE hThread, int nPriority)
-    private final Callback.Handler SetThreadPriority = new HandlerBase() {
+    private Callback.Handler SetThreadPriority = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.SetThreadPriority";
         }
@@ -2747,19 +2718,19 @@ Win.exit();
     };
 
     // LPTOP_LEVEL_EXCEPTION_FILTER WINAPI SetUnhandledExceptionFilter(LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter)
-    private final Callback.Handler SetUnhandledExceptionFilter = new HandlerBase() {
+    private Callback.Handler SetUnhandledExceptionFilter = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.SetUnhandledExceptionFilter";
         }
         public void onCall() {
             CPU.CPU_Pop32();
-            Log.getLogger().warn(getName()+" faked");
+            System.out.println(getName()+" faked");
             CPU_Regs.reg_eax.dword = 0;
         }
     };
 
     // VOID WINAPI Sleep(DWORD dwMilliseconds)
-    private final Callback.Handler Sleep = new HandlerBase() {
+    private Callback.Handler Sleep = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.Sleep";
         }
@@ -2770,18 +2741,17 @@ Win.exit();
     };
 
     // BOOL WINAPI TerminateProcess(HANDLE hProcess, UINT uExitCode)
-    static private final Callback.Handler TerminateProcess = new HandlerBase() {
+    static private Callback.Handler TerminateProcess = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.TerminateProcess";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // DWORD WINAPI TlsAlloc(void)
-    private final Callback.Handler TlsAlloc = new HandlerBase() {
+    private Callback.Handler TlsAlloc = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.TlsAlloc";
         }
@@ -2791,7 +2761,7 @@ Win.exit();
     };
 
     // BOOL WINAPI TlsFree(DWORD dwTlsIndex)
-    private final Callback.Handler TlsFree = new HandlerBase() {
+    private Callback.Handler TlsFree = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.TlsFree";
         }
@@ -2801,7 +2771,7 @@ Win.exit();
     };
 
     // LPVOID WINAPI TlsGetValue(DWORD dwTlsIndex)
-    private final Callback.Handler TlsGetValue = new HandlerBase() {
+    private Callback.Handler TlsGetValue = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.TlsGetValue";
         }
@@ -2811,7 +2781,7 @@ Win.exit();
     };
 
     // BOOL WINAPI TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue)
-    private final Callback.Handler TlsSetValue = new HandlerBase() {
+    private Callback.Handler TlsSetValue = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.TlsSetValue";
         }
@@ -2823,18 +2793,17 @@ Win.exit();
     };
 
     // LONG WINAPI UnhandledExceptionFilter(struct _EXCEPTION_POINTERS *ExceptionInfo)
-    private final Callback.Handler UnhandledExceptionFilter = new HandlerBase() {
+    private Callback.Handler UnhandledExceptionFilter = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.UnhandledExceptionFilter";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI UnmapViewOfFile(LPCVOID lpBaseAddress)
-    private final Callback.Handler UnmapViewOfFile = new HandlerBase() {
+    private Callback.Handler UnmapViewOfFile = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.UnmapViewOfFile";
         }
@@ -2845,12 +2814,12 @@ Win.exit();
     };
 
     // LPVOID WINAPI VirtualAlloc(LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect)
-    private final Callback.Handler VirtualAlloc = new HandlerBase() {
+    private Callback.Handler VirtualAlloc = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.VirtualAlloc";
         }
         public void onCall() {
-            long address = CPU.CPU_Pop32() & 0xFFFFFFFFL;
+            long address = CPU.CPU_Pop32() & 0xFFFFFFFFl;
             int size = CPU.CPU_Pop32();
             int flags = CPU.CPU_Pop32();
             int protect = CPU.CPU_Pop32();
@@ -2860,12 +2829,13 @@ Win.exit();
             }
             if (address != 0 && (address < 0x1000 || address + size < address)) {
                 SetLastError(Error.ERROR_INVALID_PARAMETER);
+                CPU_Regs.reg_eax.dword = 0;
             } else {
                 if ((flags & MEM_RESERVE)!=0 || address == 0) {
                     address &= ~0xFFF;
                     if (address == 0)
                         address = (int)WinProcess.ADDRESS_EXTRA_START;
-                    long result = WinSystem.getCurrentProcess().addressSpace.getNextAddress(address & 0xFFFFFFFFL, size, true);
+                    long result = WinSystem.getCurrentProcess().addressSpace.getNextAddress(address & 0xFFFFFFFFl, size, true);
                     if (result == 0) {
                         CPU_Regs.reg_eax.dword = 0;
                         return;
@@ -2894,7 +2864,7 @@ Win.exit();
     };
 
     // BOOL WINAPI VirtualFree(LPVOID lpAddress, SIZE_T dwSize, DWORD dwFreeType)
-    private final Callback.Handler VirtualFree = new HandlerBase() {
+    private Callback.Handler VirtualFree = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.VirtualFree";
         }
@@ -2920,38 +2890,35 @@ Win.exit();
     };
 
     // SIZE_T WINAPI VirtualQuery(LPCVOID lpAddress, PMEMORY_BASIC_INFORMATION lpBuffer, SIZE_T dwLength)
-    private final Callback.Handler VirtualQuery = new HandlerBase() {
+    private Callback.Handler VirtualQuery = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.VirtualQuery";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI WriteConsole(HANDLE hConsoleOutput, const VOID *lpBuffer, DWORD nNumberOfCharsToWrite, LPDWORD lpNumberOfCharsWritten, LPVOID lpReserved)
-    private final Callback.Handler WriteConsoleA = new HandlerBase() {
+    private Callback.Handler WriteConsoleA = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.WriteConsoleA";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
-    private final Callback.Handler WriteConsoleW = new HandlerBase() {
+    private Callback.Handler WriteConsoleW = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.WriteConsoleW";
         }
         public void onCall() {
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // BOOL WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped)
-    static private final Callback.Handler WriteFile = new HandlerBase() {
+    static private Callback.Handler WriteFile = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.WriteFile";
         }
@@ -2964,7 +2931,7 @@ Win.exit();
             if (hFile == WinFile.STD_OUT || hFile == WinFile.STD_ERROR) {
                 byte[] buffer = new byte[nNumberOfBytesToWrite];
                 Memory.mem_memcpy(buffer, 0, lpBuffer, nNumberOfBytesToWrite);
-                Log.getLogger().warn(new java.lang.String(buffer));
+                System.out.println(new java.lang.String(buffer));
                 if (lpNumberOfBytesWritten != 0)
                     Memory.mem_writed(lpNumberOfBytesWritten, nNumberOfBytesToWrite);
                 CPU_Regs.reg_eax.dword = WinAPI.TRUE;
@@ -2985,7 +2952,7 @@ Win.exit();
         }
     };
 
-    static private final boolean[] c1252 = new boolean[] {true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+    static private boolean[] c1252 = new boolean[] {true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
                                                     true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
                                                     true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
                                                     true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
@@ -3006,7 +2973,7 @@ Win.exit();
                                                     true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
 
     // int WideCharToMultiByte(UINT CodePage, DWORD dwFlags, LPCWSTR lpWideCharStr, int cchWideChar, LPSTR lpMultiByteStr, int cbMultiByte, LPCSTR lpDefaultChar, LPBOOL lpUsedDefaultChar)
-    private final Callback.Handler WideCharToMultiByte = new HandlerBase() {
+    private Callback.Handler WideCharToMultiByte = new HandlerBase() {
         public java.lang.String getName() {
             return "Kernel32.WideCharToMultiByte";
         }
@@ -3051,9 +3018,8 @@ Win.exit();
                     }
                     break;
                 default:
-                    Log.getLogger().warn(getName()+" CodePage "+CodePage+" not implemented yet");
-                    Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                    System.out.println(getName()+" CodePage "+CodePage+" not implemented yet");
+                    notImplemented();
             }
         }
     };

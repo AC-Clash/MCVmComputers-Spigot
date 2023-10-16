@@ -2,12 +2,10 @@ package jdos.util;
 
 import jdos.Dosbox;
 import jdos.gui.Main;
-import org.apache.logging.log4j.Level;
 
 import java.io.*;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.file.Files;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -28,21 +26,21 @@ public class FileIOFactory {
     }
 
     static private class RamIO implements FileIO {
-        private final byte[] data;
+        private byte[] data;
         private int pos=0;
-        private final int mode;
+        private int mode;
 
         public RamIO(byte[] data, int mode) {
             this.data = data;
             this.mode = mode;
         }
-        public int read() {
+        public int read() throws IOException {
             if (pos>=data.length)
                 return -1;
             return data[pos++];
         }
 
-        public int read(byte[] b, int off, int len) {
+        public int read(byte[] b, int off, int len) throws IOException {
             if (b == null)
                 throw new NullPointerException();
             if (off<0 || off+len>=data.length)
@@ -57,11 +55,11 @@ public class FileIOFactory {
             return len;
         }
 
-        public int read(byte[] b) {
+        public int read(byte[] b) throws IOException {
             return read(b, 0, b.length);
         }
 
-        public int skipBytes(int n) {
+        public int skipBytes(int n) throws IOException {
             if (pos>=data.length)
                 return 0;
             if (n+pos>data.length)
@@ -99,7 +97,7 @@ public class FileIOFactory {
             pos=(int)p;
         }
 
-        public long length() {
+        public long length() throws IOException {
             return data.length;
         }
 
@@ -107,10 +105,10 @@ public class FileIOFactory {
             throw new IOException("Not Supported");
         }
         
-        public void close() {
+        public void close() throws IOException {
         }
 
-        public long getFilePointer() {
+        public long getFilePointer() throws IOException {
             return pos;
         }
 
@@ -120,10 +118,10 @@ public class FileIOFactory {
     }
     
     static private class JarIO implements FileIO {
-        private final String path;
+        private String path;
         private int pos=0;
         private int real_pos=0;
-        private final int mode;
+        private int mode;
         private int len;
         private InputStream is;
         final private int cacheShift = 13;
@@ -146,7 +144,6 @@ public class FileIOFactory {
             try {
                 len = is.available();
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
             }
         }
         private byte[] fill(int offset) throws IOException {
@@ -161,7 +158,7 @@ public class FileIOFactory {
                 skip = offset;
             }
             while (skip>0) {
-                skip-= (int) is.skip(skip);
+                skip-=is.skip(skip);
             }
             real_pos = offset;
 
@@ -184,7 +181,7 @@ public class FileIOFactory {
             if (writeData != null && writeData[offset>>cacheShift]!=null) {
                 return writeData[offset>>cacheShift];
             }
-            Integer i = offset;
+            Integer i = new Integer(offset);
             byte[] b = (byte[])cache.get(i);
             if (b == null) {
                 b = fill(offset);
@@ -234,7 +231,7 @@ public class FileIOFactory {
             return read(b, 0, b.length);
         }
 
-        public int skipBytes(int n) {
+        public int skipBytes(int n) throws IOException {
             if (pos>=len)
                 return 0;
             if (n+pos>len)
@@ -311,7 +308,7 @@ public class FileIOFactory {
             pos = (int)p;
         }
 
-        public long length() {
+        public long length() throws IOException {
             return len;
         }
 
@@ -323,7 +320,7 @@ public class FileIOFactory {
             is.close();
         }
 
-        public long getFilePointer() {
+        public long getFilePointer() throws IOException {
             return pos;
         }
 
@@ -346,12 +343,12 @@ public class FileIOFactory {
         try {
             FileIO f = open(path, mode);
             f.close();
-            return false;
-        } catch (Exception e) {
             return true;
+        } catch (Exception e) {
+            return false;
         }
     }
-    static public String getFullPath(String path) {
+    static public String getFullPath(String path) throws FileNotFoundException {
         if (path.toLowerCase().startsWith("http://")) {
             return path.substring(0, path.lastIndexOf('/'));
         } else if (path.toLowerCase().startsWith("jar://")) {
@@ -378,7 +375,6 @@ public class FileIOFactory {
                 }
                 return is;
             } catch (Throwable e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
             }
             throw new FileNotFoundException(path);
         } else if (path.toLowerCase().startsWith("jar://")) {
@@ -401,7 +397,7 @@ public class FileIOFactory {
                 urlConn.setDoInput(true);
                 urlConn.setUseCaches(true);
                 byte[] b = null;
-                long size;
+                long size = 0;
                 InputStream is = urlConn.getInputStream();
                 ByteArrayOutputStream os;
                 if (path.toLowerCase().endsWith(".zip")) {
@@ -433,9 +429,9 @@ public class FileIOFactory {
                     b = os.toByteArray();
                 return new RamIO(b, mode);
             } catch (OutOfMemoryError e) {
-                Log.getLogger().log(Level.ERROR, "Out of memory: ", e);
+                e.printStackTrace();
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Could not read file: ", e);
+                e.printStackTrace();
             } finally {
                 Main.showProgress(null, 0);
             }
@@ -447,16 +443,14 @@ public class FileIOFactory {
             if (is == null) {
                 return null;
             }
-            try {is.close();} catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-            }
+            try {is.close();} catch (Exception e) {}
             return new JarIO(path, mode);
         } else if (path.toLowerCase().startsWith("jar_tmp://")) {
             path = path.substring(10);
-            Log.getLogger().info("Opening "+path);
+            System.out.println("Opening "+path);
             InputStream is = Dosbox.class.getResourceAsStream(path);
             if (is == null) {
-                Log.getLogger().info("File not found: "+path);
+                System.out.println("File not found: "+path);
                 return null;
             }
             try {
@@ -467,7 +461,7 @@ public class FileIOFactory {
                 File tmpFile = new File(dirPath+File.separator+path);
                 if (tmpFile.exists())
                     tmpFile.delete();
-                OutputStream out = Files.newOutputStream(tmpFile.toPath());
+                OutputStream out = new FileOutputStream(tmpFile);
                 byte[] buffer = new byte[16384];
                 int read;
                 int count = 0;
@@ -479,16 +473,12 @@ public class FileIOFactory {
                     }
                 } while (read>0);
                 tmpFile.deleteOnExit();
-                Log.getLogger().info("Copied "+count+" bytes to "+tmpFile.getAbsolutePath());
-                try {is.close();} catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                }
-                try {out.close();} catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                }
+                System.out.println("Copied "+count+" bytes to "+tmpFile.getAbsolutePath());
+                try {is.close();} catch (Exception e) {}
+                try {out.close();} catch (Exception e) {}
                 return new RandomIO(tmpFile, "rw");
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Could not open file: ", e);
+                e.printStackTrace();
             }
             return null;
         } else {

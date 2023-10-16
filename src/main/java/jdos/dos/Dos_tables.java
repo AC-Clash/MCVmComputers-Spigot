@@ -2,9 +2,8 @@ package jdos.dos;
 
 import jdos.cpu.Callback;
 import jdos.hardware.Memory;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.util.Ptr;
-import org.apache.logging.log4j.Level;
 
 public class Dos_tables {
     static private final int DOS_PRIVATE_SEGMENT = 0xc800;
@@ -24,14 +23,14 @@ public class Dos_tables {
 
     static public /*Bit16u*/int DOS_GetMemory(/*Bit16u*/int pages) {
         if (pages+dos_memseg>=DOS_PRIVATE_SEGMENT_END) {
-            Log.exit("DOS:Not enough memory for internal tables", Level.ERROR);
+            Log.exit("DOS:Not enough memory for internal tables");
         }
         /*Bit16u*/int page=dos_memseg;
         dos_memseg+=pages;
         return page;
     }
 
-    static private final Callback.Handler DOS_CaseMapFunc = new Callback.Handler() {
+    static private Callback.Handler DOS_CaseMapFunc = new Callback.Handler() {
         public String getName() {
             return "Dos_tables.DOS_CaseMapFunc";
         }
@@ -41,7 +40,7 @@ public class Dos_tables {
         }
     };
 
-    static private final byte[] country_info = {
+    static private byte[] country_info = {
     /* Date format      */  0x00, 0x00,
     /* Currencystring   */  0x24, 0x00, 0x00, 0x00, 0x00,
     /* Thousands sep    */  0x2c, 0x00,
@@ -82,12 +81,12 @@ public class Dos_tables {
         Memory.real_writed(seg,0x06,0xffffffff);	// strategy routine
         Memory.real_writed(seg,0x0a,0x204e4f43);	// driver name
         Memory.real_writed(seg,0x0e,0x20202020);	// driver name
-        Dos.dos_infoblock.SetDeviceChainStart(Memory.RealMake(seg,0));
+        Dos.dos_infoblock.SetDeviceChainStart((int)Memory.RealMake(seg,0));
 
         /* Create a fake Current Directory Structure */
         seg=Dos.DOS_CDS_SEG;
         Memory.real_writed(seg,0x00,0x005c3a43);
-        Dos.dos_infoblock.SetCurDirStruct(Memory.RealMake(seg,0));
+        Dos.dos_infoblock.SetCurDirStruct((int)Memory.RealMake(seg,0));
 
 
 
@@ -96,7 +95,7 @@ public class Dos_tables {
         Memory.mem_writed(Memory.Real2Phys(Dos.dos.tables.dbcs),0); //empty table
         /* FILENAME CHARACTER TABLE */
         Dos.dos.tables.filenamechar=Memory.RealMake(DOS_GetMemory(2),0);
-        Memory.mem_writew(Memory.Real2Phys(Dos.dos.tables.filenamechar),0x16);
+        Memory.mem_writew(Memory.Real2Phys(Dos.dos.tables.filenamechar)+0x00,0x16);
         Memory.mem_writeb(Memory.Real2Phys(Dos.dos.tables.filenamechar)+0x02,0x01);
         Memory.mem_writeb(Memory.Real2Phys(Dos.dos.tables.filenamechar)+0x03,0x00);	// allowed chars from
         Memory.mem_writeb(Memory.Real2Phys(Dos.dos.tables.filenamechar)+0x04,0xff);	// ...to
@@ -133,7 +132,7 @@ public class Dos_tables {
         seg=DOS_GetMemory(4);
         Memory.real_writed(seg,0,0xffffffff);		//Last File Table
         Memory.real_writew(seg,4,100);				//File Table supports 100 files
-        Dos.dos_infoblock.SetFCBTable(Memory.RealMake(seg,0));
+        Dos.dos_infoblock.SetFCBTable((int)Memory.RealMake(seg,0));
 
         /* Create a fake DPB */
         Dos.dos.tables.dpb=DOS_GetMemory(2);
@@ -147,7 +146,7 @@ public class Dos_tables {
         Memory.real_writeb(seg,0x04,0xff);			// not in use
         Memory.real_writeb(seg,0x0a,0x01);			// number of FATs
         Memory.real_writed(seg,0x0d,0xffffffff);	// pointer to DPB
-        Dos.dos_infoblock.SetDiskBufferHeadPt(Memory.RealMake(seg,0));
+        Dos.dos_infoblock.SetDiskBufferHeadPt((int)Memory.RealMake(seg,0));
 
         /* Set buffers to a nice value */
         Dos.dos_infoblock.SetBuffers(50,50);

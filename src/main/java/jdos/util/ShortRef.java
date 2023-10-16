@@ -1,7 +1,5 @@
 package jdos.util;
 
-import org.apache.logging.log4j.Level;
-
 public class ShortRef {
     public ShortRef() {
         this.value = 0;
@@ -14,7 +12,6 @@ public class ShortRef {
     }
     public short value;
     public String toString() {
-        Log.getLogger().log(Level.ERROR, "Ref error: ");
-        return null;
+        throw new RuntimeException("Ooops");
     }
 }

@@ -15,7 +15,6 @@ package jdos.hardware.qemu;
  * archive for more details.
  *
  */
-
 public class VGA_header {
     /* Some of the code below is taken from SVGAlib.  The original,
        unmodified copyright notice for that code is below. */

@@ -1,8 +1,5 @@
 package jdos.hardware.mame;
 
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
-
 import java.util.Arrays;
 import java.util.LinkedList;
 
@@ -41,7 +38,7 @@ public class Poly {
         }
     	float       x;                          /* X coordinate */
     	float       y;                          /* Y coordinate */
-    	final float[]     p = new float[MAX_VERTEX_PARAMS];       /* interpolated parameter values */
+    	float[]     p = new float[MAX_VERTEX_PARAMS];       /* interpolated parameter values */
     }
 
 
@@ -110,7 +107,7 @@ public class Poly {
                 extent[i] = new tri_extent();
             }
         }
-    	final tri_extent[] extent = new tri_extent[SCANLINES_PER_BUCKET]; /* array of scanline extents */
+    	tri_extent[] extent = new tri_extent[SCANLINES_PER_BUCKET]; /* array of scanline extents */
     }
 
 
@@ -130,7 +127,7 @@ public class Poly {
                 extent[i] = new poly_extent();
             }
         }
-    	final poly_extent[] extent = new poly_extent[SCANLINES_PER_BUCKET]; /* array of scanline extents */
+    	poly_extent[] extent = new poly_extent[SCANLINES_PER_BUCKET]; /* array of scanline extents */
     }
 
     /* polygon_info describes a single polygon, which includes the poly_params */
@@ -156,7 +153,7 @@ public class Poly {
     	poly_draw_scanline_func     callback;               /* callback to handle a scanline's worth of work */
     	int                 xorigin;                /* X origin for all parameters */
     	int                 yorigin;                /* Y origin for all parameters */
-    	final poly_param[]        param = new poly_param[MAX_VERTEX_PARAMS];/* array of parameter data */
+    	poly_param[]        param = new poly_param[MAX_VERTEX_PARAMS];/* array of parameter data */
     }
 
 
@@ -190,7 +187,7 @@ public class Poly {
         int                 flags;                  /* flags */
 
     	/* buckets */
-        final int[]               unit_bucket = new int[TOTAL_BUCKETS]; /* buckets for tracking unit usage */
+        int[]               unit_bucket = new int[TOTAL_BUCKETS]; /* buckets for tracking unit usage */
 
     	/* statistics */
         int                 triangles;              /* number of triangles queued */
@@ -202,8 +199,8 @@ public class Poly {
         int                 polygon_max;            /* maximum polygons used */
         int                 extra_waits;            /* number of times we waited for an extra data */
         int                 extra_max;              /* maximum extra data used */
-        final int[]               conflicts = new int[WORK_MAX_THREADS]; /* number of conflicts found, per thread */
-    	final int[]               resolved = new int[WORK_MAX_THREADS]; /* number of conflicts resolved, per thread */
+        int[]               conflicts = new int[WORK_MAX_THREADS]; /* number of conflicts found, per thread */
+    	int[]               resolved = new int[WORK_MAX_THREADS]; /* number of conflicts resolved, per thread */
     }
 
     /***************************************************************************
@@ -343,7 +340,7 @@ public class Poly {
     
     	/* create the work queue */
     	if ((flags & POLYFLAG_NO_WORK_QUEUE)==0)
-    		poly.queue = new LinkedList<>();
+    		poly.queue = new LinkedList<work_unit>();
 
     	return poly;
     }
@@ -401,7 +398,7 @@ public class Poly {
     	/* wait for all pending work items to complete */
         PolyThread.waitUntilDone();
 
-    	/* specializedLog any long waits */
+    	/* log any long waits */
 //    	if (LOG_WAITS)
 //    	{
 //    		time = get_profile_ticks() - time;
@@ -600,13 +597,13 @@ public class Poly {
     	return pixels;
     }
 
-    static final Thread[] threads;
+    static Thread[] threads;
 
     static private final class PolyThread extends Thread {
-        static final LinkedList<work_unit> queue = new LinkedList<>();
+        static final LinkedList<work_unit> queue = new LinkedList<work_unit>();
         static int active = WORK_MAX_THREADS;
         static final Object busyNotifier = new Object();
-        public final int id;
+        public int id;
         static public int count;
 
         public PolyThread(int id) {
@@ -614,10 +611,10 @@ public class Poly {
         }
         public void run() {
             try {
-                while (!Thread.currentThread().isInterrupted()) {
+                while (true) {
                     work_unit unit;
                     synchronized (queue) {
-                        while (queue.isEmpty()) {
+                        if (queue.size()==0) {
                             if (count == 0) {
                                 synchronized (busyNotifier) {
                                     busyNotifier.notify();
@@ -625,6 +622,8 @@ public class Poly {
                             }
                             queue.wait();
                         }
+                        if (queue.size()==0)
+                            continue;
                         unit = queue.removeFirst();
                     }
                     poly_item_callback(unit, id);
@@ -633,14 +632,11 @@ public class Poly {
                     }
                 }
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // Re-interrupt the thread
-                Log.getLogger().log(Level.ERROR, "Poly thread was interrupted: ", e);
+                e.printStackTrace();
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Error running poly thread: ", e);
+                e.printStackTrace();
             }
         }
-
-
         static public void addUnit(work_unit unit) {
             synchronized (queue) {
                 synchronized (busyNotifier) {
@@ -653,9 +649,7 @@ public class Poly {
         static public void waitUntilDone() {
             synchronized (busyNotifier) {
                 if (count>0) {
-                    try {busyNotifier.wait();} catch (Exception e) {
-                        Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                    }
+                    try {busyNotifier.wait();} catch (Exception e) {}
                 }
             }
         }
@@ -769,7 +763,7 @@ public class Poly {
         item
     -------------------------------------------------*/
 
-    static final poly_extent[] tmpextents = poly_extent.create(WORK_MAX_THREADS);
+    static poly_extent[] tmpextents = poly_extent.create(WORK_MAX_THREADS);
     static void poly_item_callback(work_unit unit, int threadid)
     {
     	while (true)
