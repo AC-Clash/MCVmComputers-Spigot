@@ -21,8 +21,6 @@
 
 package javazoom.jl.decoder;
 
-import java.util.Arrays;
-
 /**
  * The <code>Equalizer</code> class can be used to specify
  * equalization settings for the MPEG audio decoder. 
@@ -76,7 +74,7 @@ public final class Equalizer
 	public void setFrom(float[] eq)
 	{
 		reset();
-		int max = Math.min(eq.length, BANDS);
+		int max = (eq.length > BANDS) ? BANDS : eq.length;
 		
 		for (int i=0; i<max; i++)
 		{
@@ -115,7 +113,10 @@ public final class Equalizer
 	 */
 	public void reset()
 	{
-        Arrays.fill(settings, 0.0f);
+		for (int i=0; i<BANDS; i++)
+		{
+			settings[i] = 0.0f;
+		}
 	}
 
 	
@@ -163,9 +164,11 @@ public final class Equalizer
 			return eq;
 		if (eq > 1.0f)
 			return 1.0f;
-        return Math.max(eq, -1.0f);
-
-    }
+		if (eq < -1.0f)
+			return -1.0f;
+		
+		return eq;
+	}
 	
 	/**
 	 * Retrieves an array of floats whose values represent a

@@ -1004,7 +1004,7 @@ public class Dos_keyboard_layout {
 //    }
 //
 //
-    static private final keyboard_layout loaded_layout=null;
+    static private keyboard_layout loaded_layout=null;
 //
 //// CTRL-ALT-F2 switches between foreign and US-layout using this function
 ///* static void switch_keyboard_layout(bool pressed) {
@@ -1039,7 +1039,17 @@ public class Dos_keyboard_layout {
     }
 //
     static public /*Bitu*/int DOS_SwitchKeyboardLayout(String new_layout, /*Bit32s*/IntRef tried_cp) {
-        return 0xff; // :TODO: remove
+        if (loaded_layout != null) {
+//            keyboard_layout* changed_layout=NULL;
+//            Bitu ret_code=loaded_layout->switch_keyboard_layout(new_layout, changed_layout, tried_cp);
+//            if (changed_layout) {
+//                // Remove old layout, activate new layout
+//                delete loaded_layout;
+//                loaded_layout=changed_layout;
+//            }
+//            return ret_code;
+            return 0xff; // :TODO: remove
+        } else return 0xff;
     }
 //
 // get currently loaded layout name (NULL if no layout is loaded)

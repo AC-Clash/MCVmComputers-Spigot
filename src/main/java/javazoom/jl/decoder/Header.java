@@ -68,7 +68,7 @@ public final class Header
 	private int				h_number_of_subbands, h_intensity_stereo_bound;
 	private boolean			h_copyright, h_original;
 	// VBR support added by E.B
-	private final double[] 		h_vbr_time_per_frame = {-1, 384, 1152, 1152};
+	private double[] 		h_vbr_time_per_frame = {-1, 384, 1152, 1152};
 	private boolean			h_vbr;
 	private int				h_vbr_frames;
 	private int				h_vbr_scale;
@@ -89,7 +89,7 @@ public final class Header
 	}
 	public String toString()
 	{
-		StringBuilder buffer = new StringBuilder(200);
+		StringBuffer buffer = new StringBuffer(200);
 		buffer.append("Layer ");
 		buffer.append(layer_string());
 		buffer.append(" frame ");
@@ -242,8 +242,8 @@ public final class Header
 	{
 		// Trying Xing header.
 		String xing = "Xing";
-		byte[] tmp = new byte[4];
-		int offset;
+		byte tmp[] = new byte[4];
+		int offset = 0;
 		// Compute "Xing" offset depending on MPEG version and channels.
 		if (h_version == MPEG1) 
 		{
@@ -270,11 +270,11 @@ public final class Header
 								
 				int length = 4;
 				// Read flags.
-				byte[] flags = new byte[4];
+				byte flags[] = new byte[4];
 				System.arraycopy(firstframe, offset + length, flags, 0, flags.length);
 				length += flags.length;
 				// Read number of frames (if available).
-				if ((flags[3] & (byte) (1)) != 0)
+				if ((flags[3] & (byte) (1 << 0)) != 0)
 				{
 					System.arraycopy(firstframe, offset + length, tmp, 0, tmp.length);
 					h_vbr_frames = (tmp[0] << 24)&0xFF000000 | (tmp[1] << 16)&0x00FF0000 | (tmp[2] << 8)&0x0000FF00 | tmp[3]&0x000000FF;
@@ -298,6 +298,7 @@ public final class Header
 				{
 					System.arraycopy(firstframe, offset + length, tmp, 0, tmp.length);
 					h_vbr_scale = (tmp[0] << 24)&0xFF000000 | (tmp[1] << 16)&0x00FF0000 | (tmp[2] << 8)&0x0000FF00 | tmp[3]&0x000000FF;
+					length += 4;	
 				}
 				//System.out.println("VBR:"+xing+" Frames:"+ h_vbr_frames +" Size:"+h_vbr_bytes);			
 			}				
@@ -330,6 +331,7 @@ public final class Header
 				// Frames.	
 				System.arraycopy(firstframe, offset + length, tmp, 0, tmp.length);
 				h_vbr_frames = (tmp[0] << 24)&0xFF000000 | (tmp[1] << 16)&0x00FF0000 | (tmp[2] << 8)&0x0000FF00 | tmp[3]&0x000000FF;
+				length += 4;	
 				//System.out.println("VBR:"+vbri+" Frames:"+ h_vbr_frames +" Size:"+h_vbr_bytes);
 				// TOC
 				// TODO				
@@ -436,7 +438,7 @@ public final class Header
 	public int mode_extension() { return h_mode_extension; }
 
 	// E.B -> private to public
-	public static final int[][][] bitrates = {
+	public static final int bitrates[][][] = {
 		{{0 /*free format*/, 32000, 48000, 56000, 64000, 80000, 96000,
 	  112000, 128000, 144000, 160000, 176000, 192000 ,224000, 256000, 0},
 	 	{0 /*free format*/, 8000, 16000, 24000, 32000, 40000, 48000,
@@ -465,7 +467,7 @@ public final class Header
 	 * Calculate Frame size.
 	 * Calculates framesize in bytes excluding header size.
 	 */
-	public void calculate_framesize()
+	public int calculate_framesize()
 	{
 
 	 if (h_layer == 1)
@@ -504,6 +506,7 @@ public final class Header
 	   }
 	 }
 	 framesize -= 4;             // subtract header size
+	 return framesize;
 	}
 
 	/**
@@ -551,7 +554,7 @@ public final class Header
 		}
 		else
 		{
-			float[][] ms_per_frame_array = {{8.707483f,  8.0f, 12.0f},
+			float ms_per_frame_array[][] = {{8.707483f,  8.0f, 12.0f},
 											{26.12245f, 24.0f, 36.0f},
 											{26.12245f, 24.0f, 36.0f}};
 			return(ms_per_frame_array[h_layer-1][h_sample_frequency]);
@@ -595,7 +598,7 @@ public final class Header
 	}
 
 	// E.B -> private to public
-	public static final String[][][] bitrate_str = {
+	public static final String bitrate_str[][][] = {
 		{{"free format", "32 kbit/s", "48 kbit/s", "56 kbit/s", "64 kbit/s",
 	  "80 kbit/s", "96 kbit/s", "112 kbit/s", "128 kbit/s", "144 kbit/s",
 	  "160 kbit/s", "176 kbit/s", "192 kbit/s", "224 kbit/s", "256 kbit/s",
@@ -644,7 +647,7 @@ public final class Header
 	{
 		if (h_vbr == true)
 		{
-			return bitrate() / 1000 +" kb/s";
+			return Integer.toString(bitrate()/1000)+" kb/s";		
 		}
 	  else return bitrate_str[h_version][h_layer - 1][h_bitrate_index];
 	}

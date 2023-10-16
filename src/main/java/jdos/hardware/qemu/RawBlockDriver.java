@@ -1,12 +1,10 @@
 package jdos.hardware.qemu;
 
-import jdos.util.Log;
 import jdos.util.FileIO;
-import org.apache.logging.log4j.Level;
 
 public class RawBlockDriver extends BlockDriver {
-    final FileIO file;
-    final int sector_size = 512;
+    FileIO file;
+    int sector_size = 512;
     long current_fpos = -1;
 
     public RawBlockDriver(FileIO file) {
@@ -52,7 +50,7 @@ public class RawBlockDriver extends BlockDriver {
             }
             current_fpos+=read;
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Could not read block: ", e);
+            e.printStackTrace();
             return -Error.EIO;
         }
         return 0;
@@ -74,7 +72,7 @@ public class RawBlockDriver extends BlockDriver {
                 bufferOffset+=sector_size;
             }
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Could not write block: ", e);
+            e.printStackTrace();
             return -Error.EIO;
         }
         return 0;

@@ -11,8 +11,10 @@ import jdos.misc.setup.CommandLine;
 import jdos.misc.setup.Section;
 import jdos.shell.Dos_shell;
 import jdos.shell.Shell;
-import jdos.util.*;
-import org.apache.logging.log4j.Level;
+import jdos.util.FileIOFactory;
+import jdos.util.IntRef;
+import jdos.util.StringHelper;
+import jdos.util.StringRef;
 
 import java.util.Vector;
 
@@ -34,11 +36,11 @@ public abstract class Program {
 
     private static final int CB_POS=12;
 
-    public interface PROGRAMS_Main {
-        Program call();
+    static public interface PROGRAMS_Main {
+        public Program call();
     }
 
-    static private final Vector internal_progs = new Vector();
+    static private Vector internal_progs = new Vector();
 
     public abstract void Run();
     static public void PROGRAMS_MakeFile(String name,PROGRAMS_Main main) {
@@ -48,7 +50,7 @@ public abstract class Program {
         comdata[CB_POS+1]=(byte)((call_program>>8)&0xff);
 
         /* Copy save the pointer in the vector and save it's index */
-        if (internal_progs.size()>255) Log.exit("PROGRAMS_MakeFile program size too large ("+internal_progs.size()+")", Level.ERROR);
+        if (internal_progs.size()>255) Log.exit("PROGRAMS_MakeFile program size too large ("+internal_progs.size()+")");
         /*Bit8u*/int index = internal_progs.size();
         internal_progs.addElement(main);
         comdata[exe_block.length] = (byte)(index & 0xFF);
@@ -56,7 +58,7 @@ public abstract class Program {
         Drive_virtual.VFILE_Register(name,comdata,size);
     }
 
-    static private final Callback.Handler PROGRAMS_Handler = new Callback.Handler() {
+    static private Callback.Handler PROGRAMS_Handler = new Callback.Handler() {
         public String getName() {
             return "Program.PROGRAMS_Handler";
         }
@@ -68,7 +70,7 @@ public abstract class Program {
             /*PhysPt*/int reader= Memory.PhysMake(Dos.dos.psp(),256+exe_block.length);
             index=Memory.mem_readb(reader++);
             Program new_program;
-            if(index > internal_progs.size()) Log.exit("Something is messing with the memory", Level.ERROR);
+            if(index > internal_progs.size()) Log.exit("something is messing with the memory");
             PROGRAMS_Main handler = (PROGRAMS_Main)internal_progs.elementAt(index);
             new_program = handler.call();
             new_program.Run();
@@ -80,7 +82,7 @@ public abstract class Program {
 
     protected String temp_line;
     protected CommandLine cmd;
-    protected final Dos_PSP psp;
+    protected Dos_PSP psp;
 
     public Program() {
         /* Find the command line and setup the PSP */
@@ -91,7 +93,7 @@ public abstract class Program {
         envscan+=3;
         String tail;
         tail = Memory.MEM_BlockRead(Memory.PhysMake(Dos.dos.psp(),128),128);
-        if (!tail.isEmpty())
+        if (tail.length()>0)
             tail = tail.substring(1, (int)tail.charAt(0)+1);
         String filename = Memory.MEM_StrCopy(envscan,256);
         cmd = new CommandLine(filename,tail);
@@ -111,7 +113,8 @@ public abstract class Program {
     	 */
 
     	if(/*control->SecureMode() ||*/ cmd.Get_arglength() > 100) {
-            cmd = new CommandLine(cmd.GetFileName(),Dos_shell.full_arguments);
+    		CommandLine temp = new CommandLine(cmd.GetFileName(),Dos_shell.full_arguments);
+    		cmd = temp;
     	}
     	Dos_shell.full_arguments=""; //Clear so it gets even more save
     }
@@ -158,10 +161,10 @@ public abstract class Program {
 
     	String env_string;
     	result.value="";
-    	if (entry.isEmpty()) return false;
+    	if (entry.length()==0) return false;
     	do 	{
     		env_string=Memory.MEM_StrCopy(env_read,1024);
-    		if (env_string.isEmpty()) return false;
+    		if (env_string.length()==0) return false;
     		env_read += env_string.length()+1;
             int pos = env_string.indexOf('=');
     		if (pos<0) continue;
@@ -178,7 +181,7 @@ public abstract class Program {
     	/*PhysPt*/int env_read=Memory.PhysMake(psp.GetEnvironment(),0);
     	do 	{
     		env_string=Memory.MEM_StrCopy(env_read,1024);
-    		if (env_string.isEmpty()) return false;
+    		if (env_string.length()==0) return false;
     		if (num==0) { result.value=env_string;return true;}
     		env_read += env_string.length()+1;
     		num--;
@@ -189,8 +192,8 @@ public abstract class Program {
     	/*PhysPt*/int env_read=Memory.PhysMake(psp.GetEnvironment(),0);
         /*Bitu*/int num=0;
     	while (Memory.mem_readb(env_read)!=0) {
-    		for (;Memory.mem_readb(env_read)!=0;env_read++) {}
-            env_read++;
+    		for (;Memory.mem_readb(env_read)!=0;env_read++) {};
+    		env_read++;
     		num++;
     	}
         return num;
@@ -202,7 +205,7 @@ public abstract class Program {
     	String env_string;
     	do 	{
     		env_string = Memory.MEM_StrCopy(env_read,1024);
-    		if (env_string.isEmpty()) break;
+    		if (env_string.length()==0) break;
     		env_read += env_string.length()+1;
             int pos = env_string.indexOf('=');
     		if (pos<0) continue; /* Remove corrupt entry? */
@@ -215,7 +218,7 @@ public abstract class Program {
     	} while (true);
     /* TODO Maybe save the program name sometime. not really needed though */
     	/* Save the new entry */
-    	if (!new_string.isEmpty()) {
+    	if (new_string.length()>0) {
             new_string=entry.toUpperCase()+"="+new_string;
     		Memory.MEM_BlockWrite(env_write,new_string,new_string.length()+1);
     		env_write += new_string.length()+1;
@@ -233,7 +236,7 @@ public abstract class Program {
                     WriteOut(Msg.get("PROGRAM_CONFIG_SECURE_DISALLOW"));
                     return;
                 }
-                if (FileIOFactory.canOpen(temp_line, FileIOFactory.MODE_WRITE)) {
+                if (!FileIOFactory.canOpen(temp_line, FileIOFactory.MODE_WRITE)) {
                     WriteOut(Msg.get("PROGRAM_CONFIG_FILE_ERROR"),new Object[] {temp_line});
                     return;
                 }
@@ -247,7 +250,7 @@ public abstract class Program {
                     WriteOut(Msg.get("PROGRAM_CONFIG_SECURE_DISALLOW"));
                     return;
                 }
-                if (FileIOFactory.canOpen(temp_line, FileIOFactory.MODE_WRITE)) {
+                if (!FileIOFactory.canOpen(temp_line, FileIOFactory.MODE_WRITE)) {
                     WriteOut(Msg.get("PROGRAM_CONFIG_FILE_ERROR"),new Object[] {temp_line});
                     return;
                 }
@@ -267,7 +270,7 @@ public abstract class Program {
              * As a bonus it will set %CONFIG% to this value as well */
             if((temp_line=cmd.FindString("-get",true))!=null) {
                 String temp2 = cmd.GetStringRemain();//So -get n1 n2= can be used without quotes
-                if(temp2 != null && !temp2.isEmpty()) temp_line = temp_line + " " + temp2;
+                if(temp2 != null && temp2.length()>0) temp_line = temp_line + " " + temp2;
 
                 int space = temp_line.indexOf(" ");
                 if(space<0) {
@@ -301,7 +304,7 @@ public abstract class Program {
 
             if ((temp_line=cmd.FindString("-set",true))!=null) { //get all arguments
                 String temp2 = cmd.GetStringRemain();//So -set n1 n2=n3 can be used without quotes
-                if(temp2!=null && !temp2.isEmpty()) temp_line = temp_line + " " + temp2;
+                if(temp2!=null && temp2.length()>0) temp_line = temp_line + " " + temp2;
             } else 	if((temp_line=cmd.GetStringRemain())==null) {//no set
                 WriteOut(Msg.get("PROGRAM_CONFIG_USAGE")); //and no arguments specified
                 return;
@@ -357,9 +360,13 @@ public abstract class Program {
         }
     }
 
-    static private final PROGRAMS_Main CONFIG_ProgramStart = () -> new CONFIG();
+    static private PROGRAMS_Main CONFIG_ProgramStart = new PROGRAMS_Main() {
+        public Program call() {
+            return new CONFIG();
+        }
+    };
 
-    public static final Section.SectionFunction PROGRAMS_Init = new Section.SectionFunction() {
+    public static Section.SectionFunction PROGRAMS_Init = new Section.SectionFunction() {
         public void call(Section section) {
             call_program=Callback.CALLBACK_Allocate();
             Callback.CALLBACK_Setup(call_program,PROGRAMS_Handler,Callback.CB_RETF,"internal program");

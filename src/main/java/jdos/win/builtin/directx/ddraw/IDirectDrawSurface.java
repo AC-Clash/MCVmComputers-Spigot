@@ -5,7 +5,6 @@ import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
 import jdos.gui.Main;
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
 import jdos.win.builtin.HandlerBase;
 import jdos.win.builtin.directx.DError;
@@ -66,23 +65,23 @@ public class IDirectDrawSurface extends IUnknown {
     static final int DDCKEY_SRCBLT =        0x00000008;  /* To be used as src for blt */
     static final int DDCKEY_SRCOVERLAY =    0x00000010;  /* To be used as src for CK overlays */
 
-    static final int FLAGS_CAPS2 =    0x00000001;
-    static final int FLAGS_DESC2 =    0x00000002;
-    static final int FLAGS_LOCKED =   0x00000004;
+    static int FLAGS_CAPS2 =    0x00000001;
+    static int FLAGS_DESC2 =    0x00000002;
+    static int FLAGS_LOCKED =   0x00000004;
 
-    static final int OFFSET_FLAGS = 0;
-    static final int OFFSET_PALETTE = 4;
-    static final int OFFSET_BACK_BUFFER = 8;
-    static final int OFFSET_DC = 12;
-    static final int OFFSET_IMAGE_CACHE = 16;
-    static final int OFFSET_IMAGE_CACHE_TIME = 20;
-    static final int OFFSET_DIRECT_DRAW = 24;
-    static final int OFFSET_CLIPPER = 28;
+    static int OFFSET_FLAGS = 0;
+    static int OFFSET_PALETTE = 4;
+    static int OFFSET_BACK_BUFFER = 8;
+    static int OFFSET_DC = 12;
+    static int OFFSET_IMAGE_CACHE = 16;
+    static int OFFSET_IMAGE_CACHE_TIME = 20;
+    static int OFFSET_DIRECT_DRAW = 24;
+    static int OFFSET_CLIPPER = 28;
 
     // doesn't include description since that gets computed on the fly
-    static final int DATA_SIZE = 32;
+    static int DATA_SIZE = 32;
 
-    static final int OFFSET_DESC = DATA_SIZE;
+    static int OFFSET_DESC = DATA_SIZE;
 
     static public int lastPaletteChange = 0;
 
@@ -154,7 +153,7 @@ public class IDirectDrawSurface extends IUnknown {
         return create("IDirectDrawSurface", pDirectDraw, pDesc, 0);
     }
 
-    static private final Callback.Handler CleanUp = new DirectCallback() {
+    static private Callback.Handler CleanUp = new DirectCallback() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.CleanUp";
         }
@@ -308,7 +307,7 @@ public class IDirectDrawSurface extends IUnknown {
             setData(result, OFFSET_DESC+0x04, getData(result, OFFSET_DESC+0x04)|DDSurfaceDesc.DDSD_BACKBUFFERCOUNT);
             setData(result, OFFSET_DESC+0x14, 1);
             if (d.dwBackBufferCount != 1) {
-                Log.getLogger().warn(name+".CreateSurface faking "+ d.dwBackBufferCount+" back buffers.");
+                System.out.println(name+".CreateSurface faking "+ d.dwBackBufferCount+" back buffers.");
             }
             Scheduler.monitor = 0;
         } else if ((d.ddsCaps & DDSCAPS_PRIMARYSURFACE)!=0) {
@@ -322,7 +321,7 @@ public class IDirectDrawSurface extends IUnknown {
         return result;
     }
 
-    static final int VTABLE_COUNT = 33;
+    static int VTABLE_COUNT = 33;
 
     static private int createVTable() {
         int address = allocateVTable("IDirectDrawSurface", VTABLE_COUNT);
@@ -370,33 +369,31 @@ public class IDirectDrawSurface extends IUnknown {
     }
 
     // HRESULT AddAttachedSurface(this, LPDIRECTDRAWSURFACE lpDDSAttachedSurface)
-    static private final Callback.Handler AddAttachedSurface = new HandlerBase() {
+    static private Callback.Handler AddAttachedSurface = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.AddAttachedSurface";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int lpDDSAttachedSurface = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
     
     // HRESULT AddOverlayDirtyRect(this, LPRECT lpRect)
-    static private final Callback.Handler AddOverlayDirtyRect = new HandlerBase() {
+    static private Callback.Handler AddOverlayDirtyRect = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.AddOverlayDirtyRect";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int lpRect = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT Blt(this, LPRECT lpDestRect, LPDIRECTDRAWSURFACE lpDDSrcSurface, LPRECT lpSrcRect, DWORD dwFlags, LPDDBLTFX lpDDBltFx)
-    static private final Callback.Handler Blt = new HandlerBase() {
+    static private Callback.Handler Blt = new HandlerBase() {
         static public final int DDBLT_ALPHADEST =                   0x00000001;
         static public final int DDBLT_ALPHADESTCONSTOVERRIDE =      0x00000002;
         static public final int DDBLT_ALPHADESTNEG =                0x00000004;
@@ -479,8 +476,7 @@ Win.exit();
                 int srcY2 = Memory.mem_readd(lpSrcRect+12);
                 g.drawImage(src, destX1, destY1, destX2, destY2, srcX1, srcY1, srcX2, srcY2, null);
             } else {
-                Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                notImplemented();
             }
             if (StaticData.currentPrimarySurface == This)
                 Main.drawImage(getImage(This, true).getImage());
@@ -490,7 +486,7 @@ Win.exit();
     };
 
     // HRESULT BltBatch(this, LPDDBLTBATCH lpDDBltBatch, DWORD dwCount, DWORD dwFlags)
-    static private final Callback.Handler BltBatch = new HandlerBase() {
+    static private Callback.Handler BltBatch = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.BltBatch";
         }
@@ -499,13 +495,12 @@ Win.exit();
             int lpDDBltBatch = CPU.CPU_Pop32();
             int dwCount = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT BltFast(this, DWORD dwX, DWORD dwY, LPDIRECTDRAWSURFACE lpDDSrcSurface, LPRECT lpSrcRect, DWORD dwTrans)
-    static private final Callback.Handler BltFast = new HandlerBase() {
+    static private Callback.Handler BltFast = new HandlerBase() {
         static private final int DDBLTFAST_NOCOLORKEY =     0x00000000;
         static private final int DDBLTFAST_SRCCOLORKEY =    0x00000001;
         static private final int DDBLTFAST_DESTCOLORKEY =   0x00000002;
@@ -540,8 +535,8 @@ Win.exit();
                 BufferedImage src = getImage(lpDDSrcSurface, true).getImageColorKey(getData(This, OFFSET_DESC + 0x40));
                 g.drawImage(src, dwX, dwY, dwX+width, dwY+height, srcX1, srcY1, srcX2, srcY1+height, null);
             } else if ((dwTrans & 0xF) == DDBLTFAST_DESTCOLORKEY) {
-                Log.getLogger().warn(getName()+" DDBLTFAST_DESTCOLORKEY not implemented yet");
-                Win.exit();
+                System.out.println(getName()+" DDBLTFAST_DESTCOLORKEY not implemented yet");
+                notImplemented();
             }
             g.dispose();
             if (StaticData.currentPrimarySurface == This)
@@ -551,7 +546,7 @@ Win.exit();
     };
 
     // HRESULT DeleteAttachedSurface(this, DWORD dwFlags, LPDIRECTDRAWSURFACE lpDDSAttachedSurface)
-    static private final Callback.Handler DeleteAttachedSurface = new HandlerBase() {
+    static private Callback.Handler DeleteAttachedSurface = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.DeleteAttachedSurface";
         }
@@ -559,13 +554,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
             int lpDDSAttachedSurface = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT EnumAttachedSurfaces(this, LPVOID lpContext, LPDDENUMSURFACESCALLBACK lpEnumSurfacesCallback)
-    static private final Callback.Handler EnumAttachedSurfaces = new HandlerBase() {
+    static private Callback.Handler EnumAttachedSurfaces = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.EnumAttachedSurfaces";
         }
@@ -573,13 +567,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int lpContext = CPU.CPU_Pop32();
             int lpEnumSurfacesCallback = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT EnumOverlayZOrders(this, DWORD dwFlags, LPVOID lpContext, LPDDENUMSURFACESCALLBACK lpfnCallback)
-    static private final Callback.Handler EnumOverlayZOrders = new HandlerBase() {
+    static private Callback.Handler EnumOverlayZOrders = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.EnumOverlayZOrders";
         }
@@ -588,13 +581,12 @@ Win.exit();
             int dwFlags = CPU.CPU_Pop32();
             int lpContext = CPU.CPU_Pop32();
             int lpfnCallback = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT Flip(this, LPDIRECTDRAWSURFACE lpDDSurfaceTargetOverride, DWORD dwFlags)
-    static private final Callback.Handler Flip = new HandlerBase() {
+    static private Callback.Handler Flip = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.Flip";
         }
@@ -624,7 +616,7 @@ Win.exit();
     };
 
     // HRESULT GetAttachedSurface(this, LPDDSCAPS lpDDSCaps, LPDIRECTDRAWSURFACE *lplpDDAttachedSurface)
-    static private final Callback.Handler GetAttachedSurface = new HandlerBase() {
+    static private Callback.Handler GetAttachedSurface = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetAttachedSurface";
         }
@@ -647,7 +639,7 @@ Win.exit();
     };
 
     // HRESULT GetBltStatus(this, DWORD dwFlags)
-    static private final Callback.Handler GetBltStatus = new HandlerBase() {
+    static private Callback.Handler GetBltStatus = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetBltStatus";
         }
@@ -659,7 +651,7 @@ Win.exit();
     };
 
     // HRESULT GetCaps(this, LPDDSCAPS lpDDSCaps)
-    static private final Callback.Handler GetCaps = new HandlerBase() {
+    static private Callback.Handler GetCaps = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetCaps";
         }
@@ -681,7 +673,7 @@ Win.exit();
     };
 
     // HRESULT GetClipper(this, LPDIRECTDRAWCLIPPER *lplpDDClipper)
-    static private final Callback.Handler GetClipper = new HandlerBase() {
+    static private Callback.Handler GetClipper = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetClipper";
         }
@@ -700,7 +692,7 @@ Win.exit();
     };
 
     // HRESULT GetColorKey(this, DWORD dwFlags, LPDDCOLORKEY lpDDColorKey)
-    static private final Callback.Handler GetColorKey = new HandlerBase() {
+    static private Callback.Handler GetColorKey = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetColorKey";
         }
@@ -708,13 +700,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
             int lpDDColorKey = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetDC(this, HDC *lphDC)
-    static private final Callback.Handler GetDC = new HandlerBase() {
+    static private Callback.Handler GetDC = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetDC";
         }
@@ -740,20 +731,19 @@ Win.exit();
     };
 
     // HRESULT GetFlipStatus(this, DWORD dwFlags)
-    static private final Callback.Handler GetFlipStatus = new HandlerBase() {
+    static private Callback.Handler GetFlipStatus = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetFlipStatus";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetOverlayPosition(this, LPLONG lplX, LPLONG lplY)
-    static private final Callback.Handler GetOverlayPosition = new HandlerBase() {
+    static private Callback.Handler GetOverlayPosition = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetOverlayPosition";
         }
@@ -761,26 +751,24 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int lplX = CPU.CPU_Pop32();
             int lplY = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetPalette(this, LPDIRECTDRAWPALETTE *lplpDDPalette)
-    static private final Callback.Handler GetPalette = new HandlerBase() {
+    static private Callback.Handler GetPalette = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetPalette";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int lplpDDPalette = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetPixelFormat(this, LPDDPIXELFORMAT lpDDPixelFormat)
-    static private final Callback.Handler GetPixelFormat = new HandlerBase() {
+    static private Callback.Handler GetPixelFormat = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetPixelFormat";
         }
@@ -792,7 +780,7 @@ Win.exit();
             } else {
                 int size = Memory.mem_readd(This+OFFSET_DATA_START +OFFSET_DESC+0x48);
                 if (Memory.mem_readd(lpDDPixelFormat) != size) {
-                    Log.getLogger().error(getName()+": wrong size."+Memory.mem_readd(lpDDPixelFormat)+" does not equal "+size);
+                    System.out.println(getName()+": wrong size."+Memory.mem_readd(lpDDPixelFormat)+" does not equal "+size);
                     CPU_Regs.reg_eax.dword = Error.DDERR_INVALIDPARAMS;
                 } else {
                     Memory.mem_memcpy(lpDDPixelFormat, This+OFFSET_DATA_START + OFFSET_DESC + 0x48, size);
@@ -803,7 +791,7 @@ Win.exit();
     };
 
     // HRESULT GetSurfaceDesc(this, LPDDSURFACEDESC lpDDSurfaceDesc)
-    static private final Callback.Handler GetSurfaceDesc = new HandlerBase() {
+    static private Callback.Handler GetSurfaceDesc = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.GetSurfaceDesc";
         }
@@ -816,7 +804,7 @@ Win.exit();
             } else {
                 int size = Memory.mem_readd(This+OFFSET_DATA_START +OFFSET_DESC);
                 if (Memory.mem_readd(lpDDSurfaceDesc) != size) {
-                    Log.getLogger().error(getName()+": wrong size."+Memory.mem_readd(lpDDSurfaceDesc)+" does not equal "+size);
+                    System.out.println(getName()+": wrong size."+Memory.mem_readd(lpDDSurfaceDesc)+" does not equal "+size);
                     CPU_Regs.reg_eax.dword = Error.DDERR_INVALIDPARAMS;
                 } else {
                     Memory.mem_memcpy(lpDDSurfaceDesc, This+OFFSET_DATA_START +OFFSET_DESC, size);
@@ -827,7 +815,7 @@ Win.exit();
     };
 
     // HRESULT Initialize(this, LPDIRECTDRAW lpDD, LPDDSURFACEDESC lpDDSurfaceDesc)
-    static private final Callback.Handler Initialize = new HandlerBase() {
+    static private Callback.Handler Initialize = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.Initialize";
         }
@@ -835,13 +823,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int lpDD = CPU.CPU_Pop32();
             int lpDDSurfaceDesc = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT IsLost(this)
-    static private final Callback.Handler IsLost = new HandlerBase() {
+    static private Callback.Handler IsLost = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.IsLost";
         }
@@ -852,7 +839,7 @@ Win.exit();
     };
 
     // HRESULT Lock(this, LPRECT lpDestRect, LPDDSURFACEDESC lpDDSurfaceDesc, DWORD dwFlags, HANDLE hEvent)
-    static private final Callback.Handler Lock = new HandlerBase() {
+    static private Callback.Handler Lock = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.Lock";
         }
@@ -864,24 +851,20 @@ Win.exit();
             int hEvent = CPU.CPU_Pop32();
 
             if ((dwFlags & DDLOCK_EVENT)!=0) {
-                Log.getLogger().warn(getName()+" flag DDLOCK_EVENT not implemented yet ");
-                Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                System.out.println(getName()+" flag DDLOCK_EVENT not implemented yet ");
+                notImplemented();
             }
             if ((dwFlags & DDLOCK_NOSYSLOCK)!=0) {
-                Log.getLogger().warn(getName()+" flag DDLOCK_NOSYSLOCK not implemented yet ");
-                Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                System.out.println(getName()+" flag DDLOCK_NOSYSLOCK not implemented yet ");
+                notImplemented();
             }
             if ((dwFlags & DDLOCK_NOOVERWRITE)!=0) {
-                Log.getLogger().warn(getName()+" flag DDLOCK_NOOVERWRITE not implemented yet ");
-                Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                System.out.println(getName()+" flag DDLOCK_NOOVERWRITE not implemented yet ");
+                notImplemented();
             }
             if ((dwFlags & DDLOCK_DISCARDCONTENTS)!=0) {
-                Log.getLogger().warn(getName()+" flag DDLOCK_DISCARDCONTENTS not implemented yet ");
-                Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+                System.out.println(getName()+" flag DDLOCK_DISCARDCONTENTS not implemented yet ");
+                notImplemented();
             }
             if (lpDDSurfaceDesc == 0) {
                 CPU_Regs.reg_eax.dword = Error.E_POINTER;
@@ -899,7 +882,7 @@ Win.exit();
     };
 
     // HRESULT ReleaseDC(this, HDC hDC)
-    static private final Callback.Handler ReleaseDC = new HandlerBase() {
+    static private Callback.Handler ReleaseDC = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.ReleaseDC";
         }
@@ -920,7 +903,7 @@ Win.exit();
     };
 
     // HRESULT Restore(this)
-    static private final Callback.Handler Restore = new HandlerBase() {
+    static private Callback.Handler Restore = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.Restore";
         }
@@ -932,7 +915,7 @@ Win.exit();
     };
 
     // HRESULT SetClipper(this, LPDIRECTDRAWCLIPPER lpDDClipper)
-    static private final Callback.Handler SetClipper = new HandlerBase() {
+    static private Callback.Handler SetClipper = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.SetClipper";
         }
@@ -946,7 +929,7 @@ Win.exit();
     };
 
     // HRESULT SetColorKey(this, DWORD dwFlags, LPDDCOLORKEY lpDDColorKey)
-    static private final Callback.Handler SetColorKey = new HandlerBase() {
+    static private Callback.Handler SetColorKey = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.SetColorKey";
         }
@@ -976,8 +959,8 @@ Win.exit();
                 int c2 = 0;
                 if (!single) {
                     c2 = Memory.mem_readd(lpDDColorKey+4);
-                    Log.getLogger().warn(getName()+" color space not implemented yet");
-                    Win.exit();
+                    System.out.println(getName()+" color space not implemented yet");
+                    notImplemented();
                 }
 
                 switch (dwFlags & ~DDCKEY_COLORSPACE) {
@@ -1005,7 +988,7 @@ Win.exit();
     };
 
     // HRESULT SetOverlayPosition(this, LONG lX, LONG lY)
-    static private final Callback.Handler SetOverlayPosition = new HandlerBase() {
+    static private Callback.Handler SetOverlayPosition = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.SetOverlayPosition";
         }
@@ -1013,13 +996,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int lX = CPU.CPU_Pop32();
             int lY = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetPalette(this, LPDIRECTDRAWPALETTE lpDDPalette)
-    static private final Callback.Handler SetPalette = new HandlerBase() {
+    static private Callback.Handler SetPalette = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.SetPalette";
         }
@@ -1068,7 +1050,7 @@ Win.exit();
     };
 
     // HRESULT Unlock(this, LPVOID lpSurfaceData)
-    static private final Callback.Handler Unlock = new HandlerBase() {
+    static private Callback.Handler Unlock = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.Unlock";
         }
@@ -1083,7 +1065,7 @@ Win.exit();
     };
 
     // HRESULT UpdateOverlay(this, LPRECT lpSrcRect, LPDIRECTDRAWSURFACE lpDDDestSurface, LPRECT lpDestRect, DWORD dwFlags, LPDDOVERLAYFX lpDDOverlayFx)
-    static private final Callback.Handler UpdateOverlay = new HandlerBase() {
+    static private Callback.Handler UpdateOverlay = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.UpdateOverlay";
         }
@@ -1094,26 +1076,24 @@ Win.exit();
             int lpDestRect = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
             int lpDDOverlayFx = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT UpdateOverlayDisplay(this, DWORD dwFlags)
-    static private final Callback.Handler UpdateOverlayDisplay = new HandlerBase() {
+    static private Callback.Handler UpdateOverlayDisplay = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.UpdateOverlayDisplay";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT UpdateOverlayZOrder(this, DWORD dwFlags, LPDIRECTDRAWSURFACE lpDDSReference)
-    static private final Callback.Handler UpdateOverlayZOrder = new HandlerBase() {
+    static private Callback.Handler UpdateOverlayZOrder = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawSurface.UpdateOverlayZOrder";
         }
@@ -1121,8 +1101,7 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
             int lpDDSReference = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 }

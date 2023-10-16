@@ -9,14 +9,14 @@ import jdos.dos.Dos_programs;
 import jdos.dos.Dos_tables;
 import jdos.hardware.*;
 import jdos.hardware.pci.PCI;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Config;
 import jdos.misc.setup.Module_base;
 import jdos.misc.setup.Section;
-import jdos.types.LogType;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 import jdos.types.MachineType;
 import jdos.util.IntRef;
-import org.apache.logging.log4j.Level;
 
 import java.util.Calendar;
 import java.util.Vector;
@@ -127,7 +127,7 @@ public class Bios extends Module_base {
     static /*Bit16u*/int size_extended;
     static /*Bits*/int other_memsystems=0;
 
-    private static final Callback.Handler INT70_Handler = new Callback.Handler() {
+    private static Callback.Handler INT70_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT70_Handler";
         }
@@ -136,7 +136,7 @@ public class Bios extends Module_base {
             IoHandler.IO_Write(0x70,0xc);
             IoHandler.IO_Read(0x71);
             if (Memory.mem_readb(BIOS_WAIT_FLAG_ACTIVE)!=0) {
-                /*Bit32u*/long count=Memory.mem_readd(BIOS_WAIT_FLAG_COUNT) & 0xFFFFFFFFL;
+                /*Bit32u*/long count=Memory.mem_readd(BIOS_WAIT_FLAG_COUNT) & 0xFFFFFFFFl;
                 if (count>997) {
                     Memory.mem_writed(BIOS_WAIT_FLAG_COUNT,(int)count-997);
                 } else {
@@ -156,7 +156,7 @@ public class Bios extends Module_base {
         }
     };
 
-    static private final Callback[] tandy_DAC_callback = new Callback[2];
+    static private Callback[] tandy_DAC_callback = new Callback[2];
     static private class Tandy_sb {
         /*Bit16u*/int port;
         /*Bit8u*/short irq;
@@ -174,8 +174,7 @@ public class Bios extends Module_base {
         /* see if soundblaster module available and at what port/IRQ/DMA */
         /*Bitu*/IntRef sbport=new IntRef(0), sbirq=new IntRef(0), sbdma=new IntRef(0);
         if (SBlaster.SB_Get_Address(sbport, sbirq, sbdma)) {
-            /*Bit16u*/
-            tandy_sb.port= sbport.value&0xffff;
+            tandy_sb.port=(/*Bit16u*/int)(sbport.value&0xffff);
             tandy_sb.irq =(/*Bit8u*/short)(sbirq.value&0xff);
             tandy_sb.dma =(/*Bit8u*/short)(sbdma.value&0xff);
             return true;
@@ -214,9 +213,12 @@ public class Bios extends Module_base {
         IoHandler.IO_Write(0x0c,0x00);
         /*Bit16u*/int datalen=(/*Bit8u*/short)(IO.IO_ReadB(tandy_dma*2+1)&0xff);
         datalen|=(IO.IO_ReadB(tandy_dma*2+1)<<8);
-        /* stop already requested */
         if (datalen==0xffff) return false;	/* no DMA transfer */
-        else return (datalen >= 0x10) || (Memory.real_readb(0x40, 0xd4) != 0x0f) || (Memory.real_readw(0x40, 0xd2) != 0x1c);
+        else if ((datalen<0x10) && (Memory.real_readb(0x40,0xd4)==0x0f) && (Memory.real_readw(0x40,0xd2)==0x1c)) {
+            /* stop already requested */
+            return false;
+        }
+        return true;
     }
 
     private static void Tandy_SetupTransfer(/*PhysPt*/int bufpt,boolean isplayback) {
@@ -278,8 +280,7 @@ public class Bios extends Module_base {
         IoHandler.IO_Write(tandy_dma*2+1,(/*Bit8u*/short)(tlength&0xff));
         IoHandler.IO_Write(tandy_dma*2+1,(/*Bit8u*/short)((tlength>>8)&0xff));
 
-        /*Bit16u*//*Bit16u*/
-        int delay= Memory.real_readw(0x40,0xd2)&0xfff;
+        /*Bit16u*/int delay=(/*Bit16u*/int)(Memory.real_readw(0x40,0xd2)&0xfff);
         /*Bit8u*/short amplitude=(/*Bit8u*/short)((Memory.real_readw(0x40,0xd2)>>13)&0x7);
         if (tandy_sb.port!=0) {
             IoHandler.IO_Write(0x0a,tandy_dma);	/* enable DMA channel */
@@ -304,12 +305,11 @@ public class Bios extends Module_base {
 
         if (!isplayback) {
             /* mark transfer as recording operation */
-            /*Bit16u*/
-            Memory.real_writew(0x40,0xd2, delay|0x1000);
+            Memory.real_writew(0x40,0xd2,(/*Bit16u*/int)(delay|0x1000));
         }
     }
 
-    private static final Callback.Handler IRQ_TandyDAC = new Callback.Handler() {
+    private static Callback.Handler IRQ_TandyDAC = new Callback.Handler() {
         public String getName() {
             return "Bios.IRQ_TandyDAC";
         }
@@ -384,7 +384,7 @@ public class Bios extends Module_base {
             Memory.real_writew(0x40,0xd0,CPU_Regs.reg_ecx.word());
             /* store delay and volume */
             Memory.real_writew(0x40,0xd2,(CPU_Regs.reg_edx.word()&0xfff)|((CPU_Regs.reg_eax.low()&7)<<13));
-            Tandy_SetupTransfer(Memory.PhysMake(CPU_Regs.reg_esVal.dword,CPU_Regs.reg_ebx.word()),CPU_Regs.reg_eax.high()==0x83);
+            Tandy_SetupTransfer(Memory.PhysMake((int)CPU_Regs.reg_esVal.dword,CPU_Regs.reg_ebx.word()),CPU_Regs.reg_eax.high()==0x83);
             CPU_Regs.reg_eax.high(0x00);
             Callback.CALLBACK_SCF(false);
             break;
@@ -407,7 +407,7 @@ public class Bios extends Module_base {
         }
     }
 
-    private static final Callback.Handler INT1A_Handler = new Callback.Handler() {
+    private static Callback.Handler INT1A_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT1A_Handler 0x"+Integer.toHexString(CPU_Regs.reg_eax.high());
         }
@@ -447,7 +447,7 @@ public class Bios extends Module_base {
                 Callback.CALLBACK_SCF(false);
                 break;
             case 0x80:	/* Pcjr Setup Sound Multiplexer */
-                Log.specializedLog(LogType.LOG_BIOS, Level.ERROR,"INT1A:80:Setup tandy sound multiplexer to "+ CPU_Regs.reg_eax.low());
+                if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_BIOS, LogSeverities.LOG_ERROR,"INT1A:80:Setup tandy sound multiplexer to "+Integer.toString(CPU_Regs.reg_eax.low()));
                 break;
             case 0x81:	/* Tandy sound system check */
             case 0x82:	/* Tandy sound system start recording */
@@ -457,7 +457,7 @@ public class Bios extends Module_base {
                 TandyDAC_Handler((short)CPU_Regs.reg_eax.high());
                 break;
             case 0xb1:		/* PCI Bios Calls */
-                Log.specializedLog(LogType.LOG_BIOS,Level.WARN,"INT1A:PCI bios call "+Integer.toString(CPU_Regs.reg_eax.low(),16));
+                if (Log.level<=LogSeverities.LOG_WARN) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_WARN,"INT1A:PCI bios call "+Integer.toString(CPU_Regs.reg_eax.low(),16));
                 if (!Config.PCI_FUNCTIONALITY_ENABLED) {
                     Callback.CALLBACK_SCF(true);
                 } else {
@@ -566,7 +566,7 @@ public class Bios extends Module_base {
                             break;
                         case 0x0e: /// Get IRQ Routine Information
                         default:
-                            Log.specializedLog(LogType.LOG_BIOS,Level.ERROR,"INT1A:PCI BIOS: unknown function "+Integer.toString(CPU_Regs.reg_eax.word(), 16)+" ("+Integer.toString(CPU_Regs.reg_ebx.word(), 16)+" "+Integer.toString(CPU_Regs.reg_ecx.word(), 16)+" "+Integer.toString(CPU_Regs.reg_edx.word(), 16)+")");
+                            if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_ERROR,"INT1A:PCI BIOS: unknown function "+Integer.toString(CPU_Regs.reg_eax.word(), 16)+" ("+Integer.toString(CPU_Regs.reg_ebx.word(), 16)+" "+Integer.toString(CPU_Regs.reg_ecx.word(), 16)+" "+Integer.toString(CPU_Regs.reg_edx.word(), 16)+")");
                             Callback.CALLBACK_SCF(true);
                             break;
                     }
@@ -574,13 +574,13 @@ public class Bios extends Module_base {
 
                 break;
             default:
-                Log.specializedLog(LogType.LOG_BIOS,Level.ERROR,"INT1A:Undefined call "+Integer.toString(CPU_Regs.reg_eax.high(),16));
+                if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_ERROR,"INT1A:Undefined call "+Integer.toString(CPU_Regs.reg_eax.high(),16));
             }
             return Callback.CBRET_NONE;
         }
     };
 
-    private static final Callback.Handler INT11_Handler = new Callback.Handler() {
+    private static Callback.Handler INT11_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT11_Handler";
         }
@@ -613,7 +613,7 @@ public class Bios extends Module_base {
         Memory.mem_writed(BIOS_TIMER, (int)ticks);
     }
 
-    private static final Callback.Handler INT8_Handler = new Callback.Handler() {
+    private static Callback.Handler INT8_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT8_Handler";
         }
@@ -658,7 +658,7 @@ public class Bios extends Module_base {
 //    #undef DOSBOX_CLOCKSYNC
 
 
-    private static final Callback.Handler INT1C_Handler = new Callback.Handler() {
+    private static Callback.Handler INT1C_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT1C_Handler";
         }
@@ -667,7 +667,7 @@ public class Bios extends Module_base {
         }
     };
 
-    private static final Callback.Handler INT12_Handler = new Callback.Handler() {
+    private static Callback.Handler INT12_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT12_Handler";
         }
@@ -677,12 +677,12 @@ public class Bios extends Module_base {
         }
     };
 
-    private static final Callback.Handler INT17_Handler = new Callback.Handler() {
+    private static Callback.Handler INT17_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT17_Handler";
         }
         public /*Bitu*/int call() {
-            Log.specializedLog(LogType.LOG_BIOS,Level.INFO,"INT17:Function "+Integer.toString(CPU_Regs.reg_eax.high(),16));
+            if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_NORMAL,"INT17:Function "+Integer.toString(CPU_Regs.reg_eax.high(),16));
             switch(CPU_Regs.reg_eax.high()) {
             case 0x00:		/* PRINTER: Write Character */
                 CPU_Regs.reg_eax.high(1);	/* Report a timeout */
@@ -695,7 +695,7 @@ public class Bios extends Module_base {
             case 0x20:		/* Some sort of printerdriver install check*/
                 break;
             default:
-                Log.exit("Unhandled INT 17 call "+Integer.toString(CPU_Regs.reg_eax.high(),16), Level.ERROR);
+                Log.exit("Unhandled INT 17 call "+Integer.toString(CPU_Regs.reg_eax.high(),16));
             }
             return Callback.CBRET_NONE;
         }
@@ -713,21 +713,21 @@ public class Bios extends Module_base {
         return true;
     }
 
-    private static final Callback.Handler INT14_Handler = new Callback.Handler() {
+    private static Callback.Handler INT14_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT14_Handler";
         }
         public /*Bitu*/int call() {
             if (CPU_Regs.reg_eax.high() > 0x3 || CPU_Regs.reg_edx.word() > 0x3) {	// 0-3 serial port functions
                                                 // and no more than 4 serial ports
-                Log.getLogger().warn("BIOS INT14: Unhandled call AH="+Integer.toString(CPU_Regs.reg_eax.high(), 16)+" DX="+Integer.toString(CPU_Regs.reg_edx.word(),16));
+                System.out.println("BIOS INT14: Unhandled call AH="+Integer.toString(CPU_Regs.reg_eax.high(), 16)+" DX="+Integer.toString(CPU_Regs.reg_edx.word(),16));
                 return Callback.CBRET_NONE;
             }
 
             /*Bit16u*/int port = Memory.real_readw(0x40,CPU_Regs.reg_edx.word()*2); // DX is always port number
             /*Bit8u*/short timeout = (short)Memory.mem_readb(BIOS_COM1_TIMEOUT + CPU_Regs.reg_edx.word());
             if (port==0)	{
-                Log.specializedLog(LogType.LOG_BIOS,Level.INFO,"BIOS INT14: port "+CPU_Regs.reg_edx.word()+" does not exist.");
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_NORMAL,"BIOS INT14: port "+CPU_Regs.reg_edx.word()+" does not exist.");
                 return Callback.CBRET_NONE;
             }
             switch (CPU_Regs.reg_eax.high())	{
@@ -751,8 +751,7 @@ public class Bios extends Module_base {
                 else if (rawbaud==6){ baudrate=4800;}
                 else if (rawbaud==7){ baudrate=9600;}
 
-                /*Bit16u*/
-                baudresult = 115200 / baudrate;
+                baudresult = (/*Bit16u*/int)(115200 / baudrate);
 
                 IO.IO_WriteB(port+3, 0x80);	// enable divider access
                 IO.IO_WriteB(port, (/*Bit8u*/short)baudresult&0xff);
@@ -844,13 +843,13 @@ public class Bios extends Module_base {
             this.len = len;
             this.reserved = reserved;
         }
-        final int base;
-        final int len;
-        final boolean reserved;
+        int base;
+        int len;
+        boolean reserved;
     }
-    private static final Vector<E820> e820table = new Vector<>();
+    private static Vector<E820> e820table = new Vector<E820>();
 
-    static {
+    {
         e820table.add(new E820(0, 0x09F000, false));
         e820table.add(new E820(0xf0000, 0x010000, true));
         e820table.add(new E820(0x100000, (Memory.MEM_TotalPages()*4096)-0x100000, false));
@@ -860,14 +859,14 @@ public class Bios extends Module_base {
                                  *    1) 0x0C0000-0x0FFFFF       Reserved
                                  *    2) 0x100000-...            Free memory (no ACPI tables) */
     }
-    private static final Callback.Handler INT15_Handler = new Callback.Handler() {
+    private static Callback.Handler INT15_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.INT15_Handler "+Integer.toHexString(CPU_Regs.reg_eax.high() & 0xFF);
         }
         public /*Bitu*/int call() {
             switch (CPU_Regs.reg_eax.high() & 0xFF) {
             case 0x06:
-                Log.specializedLog(LogType.LOG_BIOS,Level.INFO,"INT15 Unkown Function 6");
+                Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_NORMAL,"INT15 Unkown Function 6");
                 break;
             case 0xC1:
                 CPU_Regs.reg_eax.high(0x80);
@@ -923,7 +922,7 @@ public class Bios extends Module_base {
                         Callback.CALLBACK_SCF(true);
                         break;
                     }
-                    /*Bit32u*/long count=((long) CPU_Regs.reg_ecx.word() <<16)|CPU_Regs.reg_edx.word();
+                    /*Bit32u*/long count=(CPU_Regs.reg_ecx.word()<<16)|CPU_Regs.reg_edx.word();
                     Memory.mem_writed(BIOS_WAIT_FLAG_POINTER,Memory.RealMake(CPU_Regs.reg_esVal.dword,CPU_Regs.reg_ebx.word()));
                     Memory.mem_writed(BIOS_WAIT_FLAG_COUNT,(int)count);
                     Memory.mem_writeb(BIOS_WAIT_FLAG_ACTIVE,1);
@@ -966,7 +965,7 @@ public class Bios extends Module_base {
                         Callback.CALLBACK_SCF(true);
                     }
                 } else {
-                    Log.specializedLog(LogType.LOG_BIOS,Level.ERROR,"INT15:84:Unknown Bios Joystick functionality.");
+                    Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_ERROR,"INT15:84:Unknown Bios Joystick functionality.");
                 }
                 break;
             case 0x86:	/* BIOS - WAIT (AT,PS) */
@@ -976,7 +975,7 @@ public class Bios extends Module_base {
                         Callback.CALLBACK_SCF(true);
                         break;
                     }
-                    /*Bit32u*/long count=((long) CPU_Regs.reg_ecx.word() <<16)|CPU_Regs.reg_edx.word();
+                    /*Bit32u*/long count=(CPU_Regs.reg_ecx.word()<<16)|CPU_Regs.reg_edx.word();
                     Memory.mem_writed(BIOS_WAIT_FLAG_POINTER,Memory.RealMake(0,BIOS_WAIT_FLAG_TEMP));
                     Memory.mem_writed(BIOS_WAIT_FLAG_COUNT,(int)count);
                     Memory.mem_writeb(BIOS_WAIT_FLAG_ACTIVE,1);
@@ -1017,7 +1016,7 @@ public class Bios extends Module_base {
                                 sz -= 1024;
                             else
                                 sz = 0;
-                            int t = Math.min(sz, 0x3C00);
+                            int t = (sz > 0x3C00) ? 0x3C00 : sz;
                             CPU_Regs.reg_eax.word(t); /* extended memory between 1MB and 16MB in KBs */
                             CPU_Regs.reg_ecx.word(t); /* extended memory between 1MB and 16MB in KBs */
                             sz -= t;
@@ -1034,7 +1033,7 @@ public class Bios extends Module_base {
                                     E820 e820 = e820table.elementAt(CPU_Regs.reg_ebx.dword);
 
                                     /* write to ES:DI */
-                                    Memory.real_writed(CPU_Regs.reg_esVal.dword, CPU_Regs.reg_edi.word(), e820.base);
+                                    Memory.real_writed(CPU_Regs.reg_esVal.dword, CPU_Regs.reg_edi.word() + 0x00, e820.base);
                                     Memory.real_writed(CPU_Regs.reg_esVal.dword, CPU_Regs.reg_edi.word() + 0x04, 0);
                                     Memory.real_writed(CPU_Regs.reg_esVal.dword, CPU_Regs.reg_edi.word() + 0x08, e820.len);
                                     Memory.real_writed(CPU_Regs.reg_esVal.dword, CPU_Regs.reg_edi.word() + 0x0C, 0);
@@ -1055,7 +1054,7 @@ public class Bios extends Module_base {
                         }
                         break;
                         default:
-                            Log.specializedLog(LogType.LOG_BIOS,Level.ERROR,"INT15:Unknown call "+Integer.toString(CPU_Regs.reg_eax.word(),16));
+                            if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_ERROR,"INT15:Unknown call "+Integer.toString(CPU_Regs.reg_eax.word(),16));
                             CPU_Regs.reg_eax.high(0x86);
                             Callback.CALLBACK_SCF(true);
                             if ((Dosbox.IS_EGAVGA_ARCH()) || (Dosbox.machine == MachineType.MCH_CGA)/* || (Dosbox.machine == MachineType.MCH_AMSTRAD)*/) {
@@ -1066,7 +1065,7 @@ public class Bios extends Module_base {
                     break;
             case 0x88:	/* SYSTEM - GET EXTENDED MEMORY SIZE (286+) */
                 CPU_Regs.reg_eax.word(other_memsystems!=0?0:size_extended);
-                Log.specializedLog(LogType.LOG_BIOS,Level.INFO,"INT15:Function 0x88 Remaining "+Integer.toString(CPU_Regs.reg_eax.word(), 16)+" kb");
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_NORMAL,"INT15:Function 0x88 Remaining "+Integer.toString(CPU_Regs.reg_eax.word(), 16)+" kb");
                 Callback.CALLBACK_SCF(false);
                 break;
             case 0x89:	/* SYSTEM - SWITCH TO PROTECTED MODE */
@@ -1143,7 +1142,7 @@ public class Bios extends Module_base {
                     }
                     break;
                 case 0x07:		// set callback
-                    Mouse.Mouse_ChangePS2Callback(CPU_Regs.reg_esVal.dword,CPU_Regs.reg_ebx.word());
+                    Mouse.Mouse_ChangePS2Callback((int)CPU_Regs.reg_esVal.dword,CPU_Regs.reg_ebx.word());
                     Callback.CALLBACK_SCF(false);
                     CPU_Regs.reg_eax.high(0);
                     break;
@@ -1158,7 +1157,7 @@ public class Bios extends Module_base {
                 Callback.CALLBACK_SCF(true);
                 break;
             case 0xc4:	/* BIOS POS Programm option Select */
-                Log.specializedLog(LogType.LOG_BIOS,Level.INFO,"INT15:Function "+Integer.toString(CPU_Regs.reg_eax.high(), 16)+" called, bios mouse not supported");
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_NORMAL,"INT15:Function "+Integer.toString(CPU_Regs.reg_eax.high(), 16)+" called, bios mouse not supported");
                 Callback.CALLBACK_SCF(true);
                 break;
             case 0x53: // APM BIOS
@@ -1209,11 +1208,14 @@ public class Bios extends Module_base {
                         Callback.CALLBACK_SCF(true);
                         break;
                     }
-                    if (CPU_Regs.reg_ecx.word() == 0x3) { // power off
-                        Log.exit("Power Off", Level.INFO);
-                    } else {
+                    switch(CPU_Regs.reg_ecx.word()) {
+                    case 0x3: // power off
+                        Log.exit("Power Off");
+                        break;
+                    default:
                         CPU_Regs.reg_eax.high(0x0A); // invalid parameter value in CX
                         Callback.CALLBACK_SCF(true);
+                        break;
                     }
                     break;
                 case 0x08: // ENABLE/DISABLE POWER MANAGEMENT
@@ -1226,8 +1228,8 @@ public class Bios extends Module_base {
                         Callback.CALLBACK_SCF(true);
                         break;
                     }
-                    if(CPU_Regs.reg_ecx.word()==0x0) Log.getLogger().info("disable APM for device "+Integer.toString(CPU_Regs.reg_ebx.word(),16));
-                    else if(CPU_Regs.reg_ecx.word()==0x1) Log.getLogger().info("enable APM for device "+Integer.toString(CPU_Regs.reg_ebx.word(),16));
+                    if(CPU_Regs.reg_ecx.word()==0x0) System.out.println("disable APM for device "+Integer.toString(CPU_Regs.reg_ebx.word(),16));
+                    else if(CPU_Regs.reg_ecx.word()==0x1) System.out.println("enable APM for device "+Integer.toString(CPU_Regs.reg_ebx.word(),16));
                     else {
                         CPU_Regs.reg_eax.high(0x0A); // invalid parameter value in CX
                         Callback.CALLBACK_SCF(true);
@@ -1257,21 +1259,21 @@ public class Bios extends Module_base {
                         Callback.CALLBACK_SCF(true);
                         break;
                     }
-                    if(CPU_Regs.reg_ecx.word()==0x0) Log.getLogger().info("disengage APM for device "+Integer.toString(CPU_Regs.reg_ebx.word(),16));
-                    else if(CPU_Regs.reg_ecx.word()==0x1) Log.getLogger().info("engage APM for device "+Integer.toString(CPU_Regs.reg_ebx.word(),16));
+                    if(CPU_Regs.reg_ecx.word()==0x0) System.out.println("disengage APM for device "+Integer.toString(CPU_Regs.reg_ebx.word(),16));
+                    else if(CPU_Regs.reg_ecx.word()==0x1) System.out.println("engage APM for device "+Integer.toString(CPU_Regs.reg_ebx.word(),16));
                     else {
                         CPU_Regs.reg_eax.high(0x0A); // invalid parameter value in CX
                         Callback.CALLBACK_SCF(true);
                     }
                     break;
                 default:
-                    Log.specializedLog(LogType.LOG_BIOS,Level.INFO,"unknown APM BIOS call "+Integer.toString(CPU_Regs.reg_eax.word(),16));
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_NORMAL,"unknown APM BIOS call "+Integer.toString(CPU_Regs.reg_eax.word(),16));
                     break;
                 }
                 Callback.CALLBACK_SCF(false);
                 break;
             default:
-                Log.specializedLog(LogType.LOG_BIOS,Level.ERROR,"INT15:Unknown call "+Integer.toString(CPU_Regs.reg_eax.word(),16));
+                if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_ERROR,"INT15:Unknown call "+Integer.toString(CPU_Regs.reg_eax.word(),16));
                 CPU_Regs.reg_eax.high(0x86);
                 Callback.CALLBACK_SCF(true);
                 if ((Dosbox.IS_EGAVGA_ARCH()) || (Dosbox.machine==MachineType.MCH_CGA)) {
@@ -1283,7 +1285,7 @@ public class Bios extends Module_base {
         }
     };
 
-    private static final Callback.Handler Reboot_Handler = new Callback.Handler() {
+    private static Callback.Handler Reboot_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios.Reboot_Handler";
         }
@@ -1294,12 +1296,11 @@ public class Bios extends Module_base {
             Callback.CALLBACK_RunRealInt(0x10);
             CPU_Regs.reg_eax.high(0xe);
             CPU_Regs.reg_ebx.word(0);
-            /*Bitu*/
-            for (byte b : text) {
-                CPU_Regs.reg_eax.low(b);
+            for(/*Bitu*/int i = 0; i < text.length;i++) {
+                CPU_Regs.reg_eax.low(text[i]);
                 Callback.CALLBACK_RunRealInt(0x10);
             }
-            Log.getLogger().info(new String(text));
+            System.out.println(new String(text));
             double start = Pic.PIC_FullIndex();
             while((Pic.PIC_FullIndex()-start)<3000) Callback.CALLBACK_Idle();
             throw new Dos_programs.RebootException();
@@ -1312,7 +1313,7 @@ public class Bios extends Module_base {
         if(other_memsystems < 0) other_memsystems=0;
     }
 
-    private final Callback[] callback=new Callback[11];
+    private Callback[] callback=new Callback[11];
     public Bios(Section configuration) {
         super(configuration);
         for (int i=0;i<callback.length;i++)
@@ -1412,7 +1413,7 @@ public class Bios extends Module_base {
 		Memory.phys_writew(0xFFFF3,Memory.RealSeg(BIOS_DEFAULT_RESET_LOCATION()));	// segment
 
         // Compatible POST routine location: jump to the callback
-		Memory.phys_writeb(Memory.Real2Phys(BIOS_DEFAULT_RESET_LOCATION()),0xEA);				// FARJMP
+		Memory.phys_writeb(Memory.Real2Phys(BIOS_DEFAULT_RESET_LOCATION())+0,0xEA);				// FARJMP
 		Memory.phys_writew(Memory.Real2Phys(BIOS_DEFAULT_RESET_LOCATION())+1,Memory.RealOff(rptr));	// offset
 		Memory.phys_writew(Memory.Real2Phys(BIOS_DEFAULT_RESET_LOCATION())+3,Memory.RealSeg(rptr));	// segment
 
@@ -1422,8 +1423,8 @@ public class Bios extends Module_base {
         Memory.RealSetVec(0x0a,BIOS_DEFAULT_IRQ2_LOCATION());
 
         /* Some hardcoded vectors */
-        Memory.phys_writeb(Memory.Real2Phys(BIOS_DEFAULT_HANDLER_LOCATION()),0xcf);	/* bios default interrupt vector location . IRET */
-        Memory.phys_writew(Memory.Real2Phys(Memory.RealGetVec(0x12)) +0x12,0x20); //Hack for Jurresic
+        Memory.phys_writeb((int)Memory.Real2Phys(BIOS_DEFAULT_HANDLER_LOCATION()),0xcf);	/* bios default interrupt vector location . IRET */
+        Memory.phys_writew((int)Memory.Real2Phys(Memory.RealGetVec(0x12))+0x12,0x20); //Hack for Jurresic
 
         if (Dosbox.machine==MachineType.MCH_TANDY) Memory.phys_writeb(0xffffe,0xff)	;	/* Tandy model */
         else if (Dosbox.machine==MachineType.MCH_PCJR) Memory.phys_writeb(0xffffe,0xfd);	/* PCJr model */
@@ -1486,7 +1487,7 @@ public class Bios extends Module_base {
 
                 /*RealPt*/int current_irq=Memory.RealGetVec(tandy_irq_vector);
                 Memory.real_writed(0x40,0xd6,current_irq);
-                for (/*Bit16u*/int i=0; i<0x10; i++) Memory.phys_writeb(Memory.PhysMake(0xf000,0xa084+i),0x80);
+                for (/*Bit16u*/int i=0; i<0x10; i++) Memory.phys_writeb((int)Memory.PhysMake(0xf000,0xa084+i),0x80);
             } else Memory.real_writeb(0x40,0xd4,0x00);
         }
 
@@ -1553,16 +1554,16 @@ public class Bios extends Module_base {
                 config|=0x2;
         }
         switch (Dosbox.machine) {
-        case MCH_HERC:
+        case MachineType.MCH_HERC:
             //Startup monochrome
             config|=0x30;
             break;
         // EGAVGA_ARCH_CASE
-        case MCH_EGA:
-        case MCH_VGA:
-        case MCH_CGA:
-        case MCH_TANDY:
-	    case MCH_PCJR: //TANDY_ARCH_CASE:
+        case MachineType.MCH_EGA:
+        case MachineType.MCH_VGA:
+        case MachineType.MCH_CGA:
+        case MachineType.MCH_TANDY:
+	    case MachineType.MCH_PCJR: //TANDY_ARCH_CASE:
             //Startup 80x25 color
             config|=0x20;
             break;
@@ -1614,7 +1615,7 @@ public class Bios extends Module_base {
 
     // set com port data in bios data area
     // parameter: array of 4 com port base addresses, 0 = none
-    static public void BIOS_SetComPorts(/*Bit16u*/int[] baseaddr) {
+    static public void BIOS_SetComPorts(/*Bit16u*/int baseaddr[]) {
         /*Bit16u*/int portcount=0;
         /*Bit16u*/int equipmentword;
         for(/*Bitu*/int i = 0; i < 4; i++) {
@@ -1635,7 +1636,7 @@ public class Bios extends Module_base {
 
     static Bios test;
 
-    public static final Section.SectionFunction BIOS_Destroy = new Section.SectionFunction() {
+    public static Section.SectionFunction BIOS_Destroy = new Section.SectionFunction() {
         public void call(Section section) {
             test.destroy();
             test = null;
@@ -1644,7 +1645,7 @@ public class Bios extends Module_base {
         }
     };
 
-    public static final Section.SectionFunction BIOS_Init = new Section.SectionFunction() {
+    public static Section.SectionFunction BIOS_Init = new Section.SectionFunction() {
         public void call(Section section) {
             biosConfigSeg = 0;
             tandy_dac = new Tandy_dac();

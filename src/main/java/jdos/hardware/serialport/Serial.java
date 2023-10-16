@@ -2,19 +2,19 @@ package jdos.hardware.serialport;
 
 import jdos.gui.Main;
 import jdos.hardware.Pic;
-import jdos.util.Log;
 import jdos.misc.setup.CommandLine;
 import jdos.util.FileIO;
 import jdos.util.IntRef;
 import jdos.util.ShortRef;
 import jdos.util.StringHelper;
-import org.apache.logging.log4j.Level;
 
 public class Serial {
     //  DUMMY
-    public void Getchar(ShortRef data, ShortRef lsr, boolean wait_dsr, /*Bitu*/int timeout) {
+    public boolean Getchar(ShortRef data, ShortRef lsr, boolean wait_dsr, /*Bitu*/int timeout) {
+        return false;
     }
-    public void Putchar(short data, boolean wait_dtr, boolean wait_rts, /*Bitu*/int timeout) {
+    public boolean Putchar(short data, boolean wait_dtr, boolean wait_rts, /*Bitu*/int timeout) {
+        return false;
     }
     ///////////////////////////
 
@@ -85,11 +85,8 @@ public class Serial {
         /*Bit8u*/short probeByte() {
             return data[pos];
         }
-        /*Bit8u*/final short[] data;
-        /*Bitu*/final int maxsize;
-        int size;
-        int pos;
-        int used;
+        /*Bit8u*/short[] data;
+        /*Bitu*/int maxsize,size,pos,used;
     }
 
 	FileIO debugfp;
@@ -103,9 +100,7 @@ public class Serial {
             String buf = StringHelper.format(Pic.PIC_FullIndex(), 3)+" ["+StringHelper.format(Main.GetTicks(), 7)+"] ";
             buf+=format;
             if(!buf.endsWith("\n")) buf+="\r\n";
-            try {debugfp.write(buf.getBytes());} catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-            }
+            try {debugfp.write(buf.getBytes());} catch (Exception e){}
         }
     }
 
@@ -116,7 +111,6 @@ public class Serial {
             data.value = Integer.parseInt(tmpstring);
             return true;
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
         }
         return false;
     }

@@ -3,7 +3,6 @@ package jdos.win.builtin.winmm;
 import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
-import jdos.util.Log;
 import jdos.win.builtin.HandlerBase;
 import jdos.win.builtin.WinAPI;
 import jdos.win.builtin.kernel32.WinEvent;
@@ -12,7 +11,6 @@ import jdos.win.builtin.kernel32.WinThread;
 import jdos.win.kernel.WinCallback;
 import jdos.win.system.Scheduler;
 import jdos.win.system.WinSystem;
-import org.apache.logging.log4j.Level;
 
 import java.util.Hashtable;
 
@@ -31,7 +29,7 @@ public class MMTime extends WinAPI {
     static final public int TIME_CALLBACK_EVENT_PULSE = 0x0020;	/* callback is event - use PulseEvent */
     static final public int TIME_KILL_SYNCHRONOUS =     0x0100;
 
-    static private final Callback.Handler mmTimerThread = new HandlerBase() {
+    static private Callback.Handler mmTimerThread = new HandlerBase() {
         public String getName() {
             return "mmTimerThread";
         }
@@ -49,7 +47,7 @@ public class MMTime extends WinAPI {
             CPU_Regs.reg_esp.dword = esp; // protect our variables in the stack
             WinThread thread = WinThread.get(threadHandle);
             long start = System.currentTimeMillis();
-            //Log.getLogger().info("last call "+(start-lastCall)+"ms");
+            //System.out.println("last call "+(start-lastCall)+"ms");
             WinSystem.call(callback, id, 0, dwUser, 0, 0);
             //lastCall = System.currentTimeMillis();
             CPU_Regs.reg_eip = eip;
@@ -63,11 +61,11 @@ public class MMTime extends WinAPI {
     };
 
     static private class MMTimer extends Thread {
-        final int delay;
-        final int callback;
-        final int dwUser;
-        final int flags;
-        final int id;
+        int delay;
+        int callback;
+        int dwUser;
+        int flags;
+        int id;
         final WinThread thread;
         boolean bExit = false;
 
@@ -110,11 +108,7 @@ public class MMTime extends WinAPI {
 
         public void run() {
             while(!bExit) {
-                try {
-                    sleep(delay);
-                } catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                }
+                try {sleep(delay);} catch (Exception e) {}
                 if (!bExit) {
                     WinEvent event = WinEvent.get(callback);
                     if (event == null)
@@ -132,7 +126,7 @@ public class MMTime extends WinAPI {
         }
     }
 
-    static private final Hashtable<Integer, MMTimer> timers = new Hashtable<>();
+    static private Hashtable<Integer, MMTimer> timers = new Hashtable<Integer, MMTimer>();
 
     // MMRESULT timeBeginPeriod(UINT uPeriod)
     static public int timeBeginPeriod(int wPeriod) {

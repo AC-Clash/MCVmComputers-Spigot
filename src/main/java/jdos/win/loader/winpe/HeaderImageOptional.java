@@ -6,8 +6,7 @@ import jdos.win.utils.LittleEndian;
 import java.io.IOException;
 import java.io.OutputStream;
 
-// From Wine projectimport jdos.util.Log;
-import org.apache.logging.log4j.Level;
+// From Wine project
 public class HeaderImageOptional {
     public final static int SIZE = 0xE0;
          
@@ -65,7 +64,7 @@ public class HeaderImageOptional {
     public long SizeOfHeapCommit;
     public long LoaderFlags;
     public long NumberOfRvaAndSizes;
-    public final ImageDataDirectory[] DataDirectory = new ImageDataDirectory[16]; /* 0x60 */
+    public ImageDataDirectory[] DataDirectory = new ImageDataDirectory[16]; /* 0x60 */
     /* 0xE0 */
 
     public void load(OutputStream os, WinFile fis) throws IOException {

@@ -8,20 +8,24 @@ import jdos.cpu.Paging;
 import jdos.cpu.core_share.Constants;
 import jdos.hardware.Memory;
 import jdos.hardware.RAM;
-import jdos.util.Log;
 
 final public class DecodeBlock extends Op {
     public Op op;
-    public final boolean active = true;
-    public final int codeStart;
-    public final int codeLen;
+    public boolean active = true;
+    public int codeStart;
+    public int codeLen;
     public int runCount = 0;
     static public int compileThreshold = 0;
 
     public static boolean smc = false;
     private boolean compiled = false;
-    public final CacheBlockDynRec parent;
+    public CacheBlockDynRec parent;
     public Op compiledOp = null;
+
+    public boolean throwsException() {return false;}
+    public boolean accessesMemory() {return false;}
+    public boolean usesEip() {return false;}
+    public boolean setsEip() {return false;}
 
     static private byte[] getOpCode(int start, int len) {
         byte[] opCode = new byte[len];
@@ -48,7 +52,7 @@ final public class DecodeBlock extends Op {
             }
         }
     }
-    public int call() {
+    final public int call() {
         if (Compiler.ENABLED) {
             runCount++;
             if (runCount==compileThreshold && !compiled && Dosbox.allPrivileges) {
@@ -68,7 +72,7 @@ final public class DecodeBlock extends Op {
             return op.call();
         } catch (NullPointerException e) {
             if (smc) {
-                Log.getLogger().info("SMC");
+                System.out.println("SMC");
                 smc = false;
                 return Constants.BR_Jump;
             }

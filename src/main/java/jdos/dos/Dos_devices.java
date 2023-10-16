@@ -8,14 +8,13 @@ import jdos.ints.Bios;
 import jdos.ints.Bios_keyboard;
 import jdos.ints.Int10;
 import jdos.ints.Int10_char;
+import jdos.misc.Log;
 import jdos.types.LogSeverities;
-import jdos.util.Log;
-import jdos.types.LogType;
+import jdos.types.LogTypes;
 import jdos.util.IntRef;
 import jdos.util.LongRef;
 import jdos.util.ShortRef;
 import jdos.util.StringRef;
-import org.apache.logging.log4j.Level;
 
 public class Dos_devices {
     static public final int DOS_DEVICES = 10;
@@ -26,7 +25,7 @@ public class Dos_devices {
         /* should only check for the names before the dot and spacepadded */
         StringRef fullname = new StringRef(); ShortRef drive = new ShortRef();
 //	if(!name || !(*name)) return DOS_DEVICES; //important, but makename does it
-        if (Dos_files.DOS_MakeName(name, fullname, drive)) return DOS_DEVICES;
+        if (!Dos_files.DOS_MakeName(name,fullname,drive)) return DOS_DEVICES;
 
         int pos =fullname.value.lastIndexOf('\\');
         String name_part = null;
@@ -44,7 +43,7 @@ public class Dos_devices {
         final String com = "COM1";
         final String lpt = "LPT1";
         // AUX is alias for COM1 and PRN for LPT1
-        // A bit of a hack. (but less than before).
+        // A bit of a hack. (but less then before).
         // no need for casecmp as makename returns uppercase
         if (name_part.equals("AUX")) name_part = com;
         if (name_part.equals("PRN")) name_part = lpt;
@@ -69,7 +68,7 @@ public class Dos_devices {
                 return;
             }
         }
-        Log.exit("DOS:Too many devices added", Level.ERROR);
+        Log.exit("DOS:Too many devices added");
     }
 
     static public void DOS_DelDevice(DOS_Device dev) {
@@ -95,15 +94,15 @@ public class Dos_devices {
         public boolean Read(byte[] data,/*Bit16u*/IntRef size) {
             for(/*Bitu*/int i = 0; i < size.value;i++)
                 data[i]=0;
-            if (Log.level<=LogSeverities.LOG_NORMAL.getValue()) Log.specializedLog(LogType.LOG_IOCTL, Level.INFO,GetName()+":READ");
+            if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_IOCTL, LogSeverities.LOG_NORMAL,GetName()+":READ");
             return true;
         }
         public boolean Write(byte[] data,/*Bit16u*/IntRef size) {
-            if (Log.level<= LogSeverities.LOG_NORMAL.getValue()) Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,GetName()+":WRITE");
+            if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,GetName()+":WRITE");
             return true;
         }
         public boolean Seek(/*Bit32u*/LongRef pos,/*Bit32u*/int type) {
-            if (Log.level<= LogSeverities.LOG_NORMAL.getValue()) Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,GetName()+":SEEK");
+            if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,GetName()+":SEEK");
             return true;
         }
         public boolean Close() { return true; }
@@ -205,15 +204,16 @@ public class Dos_devices {
                         /* start the sequence */
                         ansi.esc=true;
                         count++;
+                        continue;
                     } else {
                         /* Some sort of "hack" now that \n doesn't set col to 0 (int10_char.cpp old chessgame) */
                         if((data[count] == '\n') && (lastwrite != '\r')) Int10_char.INT10_TeletypeOutputAttr('\r',ansi.attr,ansi.enabled);
                         /* pass attribute only if ansi is enabled */
                         Int10_char.INT10_TeletypeOutputAttr((data[count] & 0xFF),ansi.attr,ansi.enabled);
                         lastwrite = data[count++];
-                    }
-                    continue;
+                        continue;
                 }
+            }
 
             if(!ansi.sci){
 
@@ -226,7 +226,7 @@ public class Dos_devices {
                 case 'D':/* scrolling DOWN*/
                 case 'M':/* scrolling UP*/
                 default:
-                    if (Log.level<= LogSeverities.LOG_NORMAL.getValue()) Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,"ANSI: unknown char "+ (char) data[count] +" after a esc"); /*prob () */
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,"ANSI: unknown char "+String.valueOf((char)data[count])+" after a esc"); /*prob () */
                     ClearAnsi();
                     break;
                 }
@@ -263,7 +263,7 @@ public class Dos_devices {
                             ansi.attr|=0x08;
                             break;
                         case 4: /* underline */
-                            Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,"ANSI:no support for underline yet");
+                            Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,"ANSI:no support for underline yet");
                             break;
                         case 5: /* blinking */
                             ansi.attr|=0x80;
@@ -345,7 +345,7 @@ public class Dos_devices {
                 case 'H':/* Cursor Pos*/
                     if(!ansi.warned) { //Inform the debugger that ansi is used.
                         ansi.warned = true;
-                        Log.specializedLog(LogType.LOG_IOCTL,Level.WARN,"ANSI SEQUENCES USED");
+                        Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_WARN,"ANSI SEQUENCES USED");
                     }
                     /* Turn them into positions that are on the screen */
                     if(ansi.data[0] == 0) ansi.data[0] = 1;
@@ -397,7 +397,7 @@ public class Dos_devices {
                 case 'J': /*erase screen and move cursor home*/
                     if(ansi.data[0]==0) ansi.data[0]=2;
                     if(ansi.data[0]!=2) {/* every version behaves like type 2 */
-                        if (Log.level<= LogSeverities.LOG_NORMAL.getValue()) Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,"ANSI: esc["+ansi.data[0]+"J called : not supported handling as 2");
+                        if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,"ANSI: esc["+ansi.data[0]+"J called : not supported handling as 2");
                     }
                     Int10_char.INT10_ScrollWindow((short)0,(short)0,(short)255,(short)255,(byte)0,ansi.attr,page);
                     ClearAnsi();
@@ -405,7 +405,7 @@ public class Dos_devices {
                     break;
                 case 'h': /* SET   MODE (if code =7 enable linewrap) */
                 case 'I': /* RESET MODE */
-                    Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,"ANSI: set/reset mode called(not supported)");
+                    Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,"ANSI: set/reset mode called(not supported)");
                     ClearAnsi();
                     break;
                 case 'u': /* Restore Cursor Pos */
@@ -435,7 +435,7 @@ public class Dos_devices {
                 case 'p':/* reassign keys (needs strings) */
                 case 'i':/* printer stuff */
                 default:
-                    if (Log.level<= LogSeverities.LOG_NORMAL.getValue()) Log.specializedLog(LogType.LOG_IOCTL,Level.INFO,"ANSI: unhandled char "+ (char) data[count] +" in esc[");
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_IOCTL,LogSeverities.LOG_NORMAL,"ANSI: unhandled char "+String.valueOf((char)data[count])+" in esc[");
                     ClearAnsi();
                     break;
                 }
@@ -489,7 +489,7 @@ public class Dos_devices {
             boolean sci;
             boolean enabled;
             /*Bit8u*/short attr;
-            /*Bit8u*/final byte[] data=new byte[NUMBER_ANSI_DATA];
+            /*Bit8u*/byte[] data=new byte[NUMBER_ANSI_DATA];
             /*Bit8u*/short numberofarg;
             /*Bit16u*/int nrows;
             /*Bit16u*/int ncols;
@@ -497,6 +497,6 @@ public class Dos_devices {
             /*Bit8s*/byte saverow;
             boolean warned;
         }
-        private final Ansi ansi = new Ansi();
+        private Ansi ansi = new Ansi();
     }
 }

@@ -53,7 +53,6 @@ import java.util.Random;
  * @see Float
  * @version $Revision: 1.2 $
  */
-
 public class MicroDouble {
 
   /////////////////////////////////////////////////////////////////////////////
@@ -763,6 +762,7 @@ public class MicroDouble {
     int dx = x1 - x2;
     if (dx > 0) {
       m2 = BitUtils.stickyRightShift(m2, dx);
+      x2 = x1;
     } else if (dx < 0) {
       m1 = BitUtils.stickyRightShift(m1, -dx);
       x1 = x2;
@@ -1229,7 +1229,7 @@ public class MicroDouble {
   /**
    * Double-precision integer multiplication of x1 and x2.
    */
-  private static long dpMul(long x1, long x2) {
+  private static final long dpMul(long x1, long x2) {
     long v1 = (x1 >>> 32)        * (x2 >>> 32);
     long v2 = (x1 & 0xffffffffL) * (x2 >>> 32);
     long v3 = (x1 >>> 32)        * (x2 & 0xffffffffL);
@@ -1270,7 +1270,7 @@ public class MicroDouble {
     int idx = 0;
 
     // read sign
-    boolean negative;
+    boolean negative = false;
     char c = s.charAt(0);
     negative = (c == '-');
     if (negative || (c == '+')) {
@@ -1329,6 +1329,7 @@ public class MicroDouble {
       } catch (NumberFormatException e) {
         throw new NumberFormatException(s);
       }
+      idx = len;
     } else if (idx != len) {
       // check that we parsed the entire string
       throw new NumberFormatException(s);
@@ -1547,7 +1548,7 @@ public class MicroDouble {
   }
 
   private static String toString(boolean negative, int base10x, long base10m) {
-    StringBuilder sb = new StringBuilder(26);
+    StringBuffer sb = new StringBuffer(26);
     if (negative) {
       sb.append('-');
     }
@@ -1584,7 +1585,7 @@ public class MicroDouble {
     }
     if (scientific) {
       sb.append('E');
-      sb.append(base10x);
+      sb.append(Integer.toString(base10x));
     }
     return sb.toString();
   }
@@ -1809,7 +1810,7 @@ public class MicroDouble {
 
     // argument reduction
     long hi=0, lo=0;
-    int k;
+    int k=0;
     int hx = getHI(x) & 0x7fffffff;
     if (hx > 0x3fd62e42) { // if |x| > 0.5 ln2
       if (hx < 0x3ff0a2b2) { // and |x| < 1.5 ln2
@@ -1868,8 +1869,7 @@ public class MicroDouble {
     int hx = getHI(d); // high word of x
     int xsb = hx & 0x80000000; // sign bit of x
     long y;
-    if (xsb==0) {
-    }
+    if (xsb==0) y=d; else y= -d; // y = |x|
     hx &= 0x7fffffff; // high word of |x|
 
     // filter out huge and non-finite argument
@@ -1946,23 +1946,23 @@ public class MicroDouble {
           return sub(y, ONE);
         }
         t = ONE;
-        //add k to y's exponent
         if(k<20) {
           t = setHI(t, 0x3ff00000 - (0x200000>>k)); // t=1-2^-k
           y = sub(t, sub(e, d));
-        } else {
+          y = setHI(y, getHI(y) + (k << 20)); // add k to y's exponent
+       } else {
          t = setHI(t, ((0x3ff-k)<<20)); // 2^-k
          y = add(sub(d, add(e, t)), ONE);
-        }
-        y = setHI(y, getHI(y) + (k << 20)); // add k to y's exponent
+         y = setHI(y, getHI(y) + (k << 20)); //add k to y's exponent
+       }
     }
     return y;
   }
 
-  private static final long[] BP = { ONE, THREE_HALVES };
-  private static final long[] DP_HI = { ZERO, 0x3fe2b80340000000L}; // 5.84962487220764160156e-01
-  private static final long[] DP_LO = { ZERO, 0x3e4cfdeb43cfd006L}; // 1.35003920212974897128e-08
-  // poly coefs for (3/2)*(specializedLog(x)-2s-2/3*s**3
+  private static final long BP[]       = { ONE, THREE_HALVES };
+  private static final long DP_HI[]    = { ZERO, 0x3fe2b80340000000L}; // 5.84962487220764160156e-01
+  private static final long DP_LO[]    = { ZERO, 0x3e4cfdeb43cfd006L}; // 1.35003920212974897128e-08
+  // poly coefs for (3/2)*(log(x)-2s-2/3*s**3
   private static final long L1         = 0x3fe3333333333303L; // 5.99999999999994648725e-01
   private static final long L2         = 0x3fdb6db6db6fabffL; //  4.28571428578550184252e-01
   private static final long L3         = 0x3fd55555518f264dL; //  3.33333329818377432918e-01
@@ -2094,7 +2094,7 @@ public class MicroDouble {
         }
       }
       // now |1-x| is tiny <= 2**-20, suffice to compute
-      // specializedLog(x) by x-x^2/2+x^3/3-x^4/4
+      // log(x) by x-x^2/2+x^3/3-x^4/4
       long t = sub(ax, ONE); // t has 20 trailing zeros
       long w = mul(mul(t, t), sub(ONE_HALF, mul(t,
               sub(ONE_THIRD, mul(t, ONE_FOURTH)))));
@@ -2136,7 +2136,7 @@ public class MicroDouble {
       long t_l = sub(ax, sub(t_h, BP[k]));
       long s_l = mul(v, sub(sub(u, mul(s_h, t_h)), mul(
               s_h, t_l)));
-      // compute specializedLog(ax)
+      // compute log(ax)
       long s2 = mul(ss, ss);
       long r = mul(mul(s2, s2), add(L1, mul(s2, add(L2, mul(
               s2, add(L3, mul(s2, add(L4, mul(s2, add(L5, mul(
@@ -2220,14 +2220,14 @@ public class MicroDouble {
   /**
    * Returns the logarithm of a <code>double</code> value using a specified
    * base.  For most arguments, the return value is computed as:
-   * <code>specializedLog(d) / specializedLog(base)</code>.  If <code>base</code> is <code>E</code> or
-   * <code>10</code> the dedicated specializedLog function is used.  If <code>base</code>
+   * <code>log(d) / log(base)</code>.  If <code>base</code> is <code>E</code> or
+   * <code>10</code> the dedicated log function is used.  If <code>base</code>
    * is zero, infinite, <code>NaN</code>, or negative, <code>NaN</code> is
    * returned.
    *
    * @param   d   a <code>double</code> value greater than <code>0.0</code>.
    * @param   base   a <code>double</code> value greater than <code>0.0</code>.
-   * @return  the value specializedLog<sub><code>base</code></sub>&nbsp;<code>d</code>
+   * @return  the value log<sub><code>base</code></sub>&nbsp;<code>d</code>
    */
   public static long log(long d, long base) {
     if (base == E) {
@@ -2250,7 +2250,7 @@ public class MicroDouble {
    * value.
    *
    * @param   d   a <code>double</code> value greater than <code>0.0</code>.
-   * @return  the value specializedLog<sub>10</sub>&nbsp;<code>d</code>
+   * @return  the value log<sub>10</sub>&nbsp;<code>d</code>
    */
   public static long log10(long d) {
     if (isZero(d)) {
@@ -2279,7 +2279,7 @@ public class MicroDouble {
   private static final long LG7 = 0x3fc2f112df3e5244L;  // 1.479819860511658591e-01
 
   /**
-   * Mimics <a href="http://java.sun.com/j2se/1.4.2/docs/api/java/lang/Math.html#log(double)">Math.specializedLog(double)</a>.
+   * Mimics <a href="http://java.sun.com/j2se/1.4.2/docs/api/java/lang/Math.html#log(double)">Math.log(double)</a>.
    */
   public static long log(long d) {
     if (isZero(d)) {
@@ -2485,7 +2485,7 @@ public class MicroDouble {
       return NaN;
     } else {
       // argument reduction needed
-      long[] y = new long[2];
+      long y[] = new long[2];
       int n = remPio2(d,y);
       switch(n&3) {
         case 0:
@@ -2598,12 +2598,12 @@ public class MicroDouble {
     }
   }
 
-  private static final long S1 = 0xBFC5555555555549L; // -1.66666666666666324348e-01
-  private static final long S2 = 0x3F8111111110F8A6L; // 8.33333333332248946124e-03
-  private static final long S3 = 0xBF2A01A019C161D5L; // -1.98412698298579493134e-04
-  private static final long S4 = 0x3EC71DE357B1FE7DL; // 2.75573137070700676789e-06
-  private static final long S5 = 0xBE5AE5E68A2B9CEBL; // -2.50507602534068634195e-08
-  private static final long S6 = 0x3DE5D93A5ACFD57CL; // 1.58969099521155010221e-10
+  private static long S1 = 0xBFC5555555555549L; // -1.66666666666666324348e-01
+  private static long S2 = 0x3F8111111110F8A6L; // 8.33333333332248946124e-03
+  private static long S3 = 0xBF2A01A019C161D5L; // -1.98412698298579493134e-04
+  private static long S4 = 0x3EC71DE357B1FE7DL; // 2.75573137070700676789e-06
+  private static long S5 = 0xBE5AE5E68A2B9CEBL; // -2.50507602534068634195e-08
+  private static long S6 = 0x3DE5D93A5ACFD57CL; // 1.58969099521155010221e-10
 
   private static long kernelSin(long x, long y, int iy) {
     int ix = getHI(x) & 0x7fffffff; // high word of x
@@ -2653,7 +2653,7 @@ public class MicroDouble {
     return sub(a, (sub(hz, sub(mul(z, r), mul(x, y)))));
   }
 
-  private static final long[] PIO2 = {
+  private static final long PIO2[] = {
           0x3ff921fb40000000L,  // 1.57079625129699707031e+00
           0x3e74442d00000000L,  // 7.54978941586159635335e-08
           0x3cf8469880000000L,  // 5.39030252995776476554e-15
@@ -2769,7 +2769,7 @@ public class MicroDouble {
     }
     // set z = scalbn(|x|,ilogb(x)-23)
     long z = getLO(x);
-    int e0 = (ix >> 20) - 1046;
+    int e0 = (int) ((ix >> 20) - 1046);
     z = setHI(z, ix - (e0 << 20));
     long[] tx = new long[3];
     for (int i=0; i<2; i++) {
@@ -2793,8 +2793,9 @@ public class MicroDouble {
   private static int kernelRemPio2(long[] x, long[] y, int e0, int nx) {
     // initialize jk
     int jk = 4;
+    int jp = jk;
 
-      // determine jx,jv,q0, note that 3>q0
+    // determine jx,jv,q0, note that 3>q0
     int jx =  nx - 1;
     int jv = (e0-3)/24;
     if (jv < 0)  jv = 0;
@@ -2930,7 +2931,7 @@ public class MicroDouble {
     long[] fq = new long[20];
     for (int i=jz; i>=0; i--) {
       fw = ZERO;
-      for (int k = 0; (k<= jk) && (k<=(jz-i)); k++)
+      for (int k=0; (k<=jp) && (k<=(jz-i)); k++)
         fw = add(fw, mul(PIO2[k], q[i+k]));
       fq[jz-i] = fw;
     }
@@ -2972,7 +2973,7 @@ public class MicroDouble {
   /**
    * Mimics <a href="http://java.sun.com/j2se/1.4.2/docs/api/java/lang/Math.html#asin(double)">Math.asin(double)</a>.
    */
-  public static long asin(long d) {
+  public static final long asin(long d) {
     int hx = getHI(d);
     int ix = hx & 0x7fffffff;
     if (ix>= 0x3ff00000) { // |x|>= 1
@@ -3046,14 +3047,14 @@ public class MicroDouble {
     }
   }
 
-  private static final long[] atanhi = {
+  private static final long atanhi[] = {
           0x3fddac670561bb4fL,  // 4.63647609000806093515e-01 atan(0.5)hi
           0x3fe921fb54442d18L,  // 7.85398163397448278999e-01 atan(1.0)hi
           0x3fef730bd281f69bL,  // 9.82793723247329054082e-01 atan(1.5)hi
           0x3ff921fb54442d18L   // 1.57079632679489655800e+00 atan(inf)hi
   };
 
-  private static final long[] atanlo = {
+  private static final long atanlo[] = {
           0x3c7a2b7f222f65e2L,  // 2.26987774529616870924e-17 atan(0.5)lo
           0x3c81a62633145c07L,  // 3.06161699786838301793e-17 atan(1.0)lo
           0x3c7007887af0cbbdL,  // 1.39033110312309984516e-17 atan(1.5)lo
@@ -3156,10 +3157,10 @@ public class MicroDouble {
       return add(scalbn(t, -1), div(ONE_HALF, t));
     }
 
-    // |x| in [22, specializedLog(maxdouble)] return half*exp(|x|)
+    // |x| in [22, log(maxdouble)] return half*exp(|x|)
     if (ix < 0x40862E42)  return scalbn(exp(abs(d)), -1);
 
-    // |x| in [specializedLog(maxdouble), overflowthresold]
+    // |x| in [log(maxdouble), overflowthresold]
     if (abs(d) <= 0x408633CE8fb9f87dL) {
       long w = exp(scalbn(abs(d), -1));
       long t = scalbn(w, -1);
@@ -3198,10 +3199,10 @@ public class MicroDouble {
       return mul(h, add(t, div(t, add(t, ONE))));
     }
 
-    // |x| in [22, specializedLog(maxdouble)] return 0.5*exp(|x|)
+    // |x| in [22, log(maxdouble)] return 0.5*exp(|x|)
     if (ix < 0x40862E42)  return mul(h, exp(abs(d)));
 
-    // |x| in [specializedLog(maxdouble), overflowthresold]
+    // |x| in [log(maxdouble), overflowthresold]
     if (abs(d) <= 0x408633CE8fb9f87dL) {
       long w = exp(scalbn(abs(d), -1));
       long t = mul(h, w);
@@ -3535,7 +3536,7 @@ public class MicroDouble {
     int ix = hx&0x7fffffff;
     if(ix>=0x7ff00000) return mul(x, x);
     if((ix|lx)==0) return POSITIVE_INFINITY; // one/zero
-    if(ix<0x3b900000) {	// |x|<2**-70, return -specializedLog(|x|)
+    if(ix<0x3b900000) {	// |x|<2**-70, return -log(|x|)
       if(hx<0) {
         negative = true;
         x = negate(x);
@@ -3570,7 +3571,7 @@ public class MicroDouble {
     if((((ix-0x3ff00000)|lx)==0)||(((ix-0x40000000)|lx)==0)) r = ZERO;
     // for x < 2.0
     else if(ix<0x40000000) {
-      if(ix<=0x3feccccc) { // lgamma(x) = lgamma(x+1)-specializedLog(x)
+      if(ix<=0x3feccccc) { // lgamma(x) = lgamma(x+1)-log(x)
         r = negate(log(x));
         if(ix>=0x3FE76944) {
           y = sub(ONE, x);
@@ -3631,6 +3632,7 @@ public class MicroDouble {
     }
     else if(ix<0x40200000) { // x < 8.0
       i = intValue(x);
+      t = ZERO;
       y = sub(x, intToDouble(i));
       long p = mul(y, add(SB0, mul(y, add(SB1, mul(y, add(SB2,
               mul(y, add(SB3, mul(y, add(SB4, mul(y, add(SB5,
@@ -3638,7 +3640,7 @@ public class MicroDouble {
       long q = add(ONE, mul(y, add(R1, mul(y, add(R2, mul(y, add(R3,
               mul(y, add(R4, mul(y, add(R5, mul(y, R6))))))))))));
       r = add(scalbn(y, -1), div(p, q));
-      long z = ONE; // lgamma(1+s) = specializedLog(s) + lgamma(s)
+      long z = ONE; // lgamma(1+s) = log(s) + lgamma(s)
       switch(i) {
         case 7: z = mul(z, add(y, SIX)); // FALLTHRU
         case 6: z = mul(z, add(y, FIVE)); // FALLTHRU

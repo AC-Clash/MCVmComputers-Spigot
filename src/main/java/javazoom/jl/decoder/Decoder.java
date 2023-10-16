@@ -32,8 +32,8 @@ public class Decoder implements DecoderErrors
 {
 	static private final Params DEFAULT_PARAMS = new Params();
 	
-	/*
-	  The Bistream from which the MPEG audio frames are read.
+	/**
+	 * The Bistream from which the MPEG audio frames are read.
 	 */
 	//private Bitstream				stream;
 	
@@ -63,9 +63,9 @@ public class Decoder implements DecoderErrors
 	private int						outputFrequency;
 	private int						outputChannels;
 	
-	private final Equalizer				equalizer = new Equalizer();
+	private Equalizer				equalizer = new Equalizer();
 	
-	private final Params					params;
+	private Params					params;
 	
 	private boolean					initialized;
 		
@@ -263,7 +263,9 @@ public class Decoder implements DecoderErrors
 		return decoder;
 	}
 	
-	private void initialize(Header header) {
+	private void initialize(Header header)
+		throws DecoderException
+	{
 		
 		// REVIEW: allow customizable scale factor
 		float scalefactor = 32700.0f;
@@ -300,7 +302,7 @@ public class Decoder implements DecoderErrors
 	{
 		private OutputChannels	outputChannels = OutputChannels.BOTH;
 		
-		private final Equalizer		equalizer = new Equalizer();
+		private Equalizer		equalizer = new Equalizer();
 		
 		public Params()
 		{			

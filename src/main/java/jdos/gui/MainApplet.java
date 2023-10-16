@@ -1,13 +1,11 @@
 package jdos.gui;
 
 import jdos.Dosbox;
-import jdos.util.Log;
 import jdos.sdl.GUI;
 import jdos.util.FileHelper;
 import jdos.util.Progress;
 import jdos.util.StringHelper;
 import jdos.util.UnZip;
-import org.apache.logging.log4j.Level;
 
 import java.applet.Applet;
 import java.awt.*;
@@ -17,17 +15,17 @@ import java.awt.image.MemoryImageSource;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.file.Files;
 import java.util.Vector;
 
 public class MainApplet extends Applet implements GUI, KeyListener, Runnable, MouseListener, MouseMotionListener {
     final private static String base_dir = ".jdosbox";
 
-    final int[] pixels = new int[16 * 16];
-    final Image image = Toolkit.getDefaultToolkit().createImage(new MemoryImageSource(16, 16, pixels, 0, 16));
-    final Cursor transparentCursor = Toolkit.getDefaultToolkit().createCustomCursor(image, new Point(0, 0), "invisibleCursor");
+    int[] pixels = new int[16 * 16];
+    Image image = Toolkit.getDefaultToolkit().createImage(new MemoryImageSource(16, 16, pixels, 0, 16));
+    Cursor transparentCursor = Toolkit.getDefaultToolkit().createCustomCursor(image, new Point(0, 0), "invisibleCursor");
 
     private String progressMsg = null;
     private int progressPercent = 0;
@@ -110,7 +108,7 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
     }
     static Thread thread;
 
-    final Progress progressBar = new Progress() {
+    Progress progressBar = new Progress() {
         public void set(int value) {
         }
         public void status(String value) {
@@ -156,10 +154,10 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
                 size = Long.parseLong(s);
             }
             bis = new BufferedInputStream(urlc.getInputStream());
-            bos = new BufferedOutputStream(Files.newOutputStream(location.toPath()));
+            bos = new BufferedOutputStream(new FileOutputStream(location));
 
             byte[] buffer = new byte[4096];
-            int read;
+            int read = 0;
             if (size>0)
                 progressBar.initializeSpeedValue(size);
             do {
@@ -174,8 +172,8 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
             bos.close();
             bos = null;
             if (size>0 && location.length()!=size) {
-                Log.getLogger().error("FAILED to download file: "+location.getAbsolutePath());
-                Log.getLogger().error("   expected "+size+" bytes and got "+location.length()+" bytes");
+                System.out.println("FAILED to download file: "+location.getAbsolutePath());
+                System.out.println("   expected "+size+" bytes and got "+location.length()+" bytes");
                 progressMsg = "FAILED to download file: "+urlLocation;
                 progressPercent = 0;
                 repaint();
@@ -183,14 +181,10 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
             }
             return true;
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Failed to download file: ", e);
+            e.printStackTrace();
         } finally {
-            if (bis != null) try {bis.close();} catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-            }
-            if (bos != null) try {bos.close();} catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-            }
+            if (bis != null) try {bis.close();} catch (Exception e){}
+            if (bos != null) try {bos.close();} catch (Exception e){}
         }
         progressMsg = "FAILED to download file: "+urlLocation;
         progressPercent = 0;
@@ -210,14 +204,13 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
                 b = Integer.parseInt(s.substring(5, 7), 16);
                 return (new Color(r, g, b));
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
             }
         }
         return (Color.black);
     }
 
     public void run() {
-        Log.getLogger().info("About to start DosBox");
+        System.out.println("About to start DosBox");
         // Not sure why this pause helps so much or what the right value is
         // Perhaps during a page reload this gives the first copy of this applet
         // a chance to clean up
@@ -240,7 +233,8 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
                     }
                 }
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Download parameter should be the url of a .zip ", e);
+                System.out.println("download parameter should be the url of a .zip");
+                e.printStackTrace();
             }
         }
         String bg = getParameter("background-color");
@@ -259,8 +253,8 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
             }
             if (param.startsWith("-")) {
                 String[] p = StringHelper.split(param, " ");
-                for (String s : p) {
-                    params.addElement(s);
+                for (int j=0;j<p.length;j++) {
+                    params.addElement(p[j]);
                 }
             } else {
                 params.add("-c");
@@ -275,19 +269,19 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
         Main.main(this, cmds);
     }
     public void init() {
-        Log.getLogger().info("Applet.init()");
+        System.out.println("Applet.init()");
         try {
             if (MainFrame.robot == null) { 
                 MainFrame.robot = new Robot();
             }
         } catch (Throwable e) {
-            Log.getLogger().warn("Applet is not signed");
-            Log.getLogger().warn("    mouse capture will not work");
-            Log.getLogger().warn("    disabling compiler");
+            System.out.println("Applet is not signed");
+            System.out.println("    mouse capture will not work");
+            System.out.println("    disabling compiler");
             Dosbox.allPrivileges = false;
         }
         if (thread != null) {
-            Log.getLogger().warn("Applet.init force stop");
+            System.out.println("Applet.init force stop");
             i_stop();
         }
         setBackground( Color.black );
@@ -296,12 +290,14 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
         addMouseListener(this);
 
         addFocusListener(new FocusListener() {
-            private final KeyEventDispatcher altDisabler = e -> {
-                if (e.getKeyCode() == 18) {
-                    Main.addEvent(e);
-                    return true;
+            private final KeyEventDispatcher altDisabler = new KeyEventDispatcher() {
+                public boolean dispatchKeyEvent(KeyEvent e) {
+                    if (e.getKeyCode() == 18) {
+                        Main.addEvent(e);
+                        return true;
+                    }
+                    return false;
                 }
-                return false;
             };
 
             public void focusGained(FocusEvent e) {
@@ -321,9 +317,9 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
     public void start() {
         current_id++;
         id = current_id;
-        Log.getLogger().info("Applet.start");
+        System.out.println("Applet.start");
         if (thread != null) {
-            Log.getLogger().warn("Applet.start force stop");
+            System.out.println("Applet.start force stop");
             i_stop();
         }
         thread = new Thread(this);
@@ -334,25 +330,21 @@ public class MainApplet extends Applet implements GUI, KeyListener, Runnable, Mo
             i_stop();
     }
     public void i_stop() {
-        Log.getLogger().info("Applet.stop");
+        System.out.println("Applet.stop");
         synchronized (Main.pauseMutex) {
             Main.pauseMutex.notify();
         }
         Main.addEvent(null);
-        try {thread.join(5000);} catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-        }
+        try {thread.join(5000);} catch (Exception e) {}
         thread = null;
         // Without this the 2nd time you run the applet after starting a browswer
         // it might run out of memory.  Not sure why
-        try {Thread.sleep(2000);} catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-        }
+        try {Thread.sleep(2000);} catch (Exception e) {}
     }
     Graphics bufferGraphics;
     Image offscreen;
     private void drawProgress(Graphics g, int width, int height) {
-        int barHeight;
+        int barHeight = 0;
         int yOffset = 5;
 
         FontMetrics fm   = g.getFontMetrics(g.getFont());

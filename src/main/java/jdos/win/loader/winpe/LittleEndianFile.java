@@ -1,19 +1,18 @@
 package jdos.win.loader.winpe;
 
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
 
 public class LittleEndianFile {
-    private final byte[] w;
-    private final int address;
-    private final int len;
+    private byte w[];
+    private int address;
+    private int len;
     private int pos;
 
     public LittleEndianFile(int address) {
         this(address, 0xFFFFFFF);
         if (address == 0) {
-            Log.getLogger().warn("Tried to access a NULL pointer\n");
+            System.out.println("Tried to access a NULL pointer\n");
             Win.exit();
         }
     }
@@ -26,7 +25,7 @@ public class LittleEndianFile {
     }
 
     public String readCString() {
-        StringBuilder result = new StringBuilder();
+        StringBuffer result = new StringBuffer();
         while (pos+1<len) {
             char c = (char)readByte(); // :TODO: need to research converting according to 1252
             if (c == 0)
@@ -43,7 +42,7 @@ public class LittleEndianFile {
     }
 
     public String readCString(int len) {
-        StringBuilder result = new StringBuilder();
+        StringBuffer result = new StringBuffer();
         for (int i=0;i<len && pos+1<=this.len;i++) {
             char c = (char)readByte();
             result.append(c);
@@ -52,7 +51,7 @@ public class LittleEndianFile {
     }
 
     public String readCStringW() {
-        StringBuilder result = new StringBuilder();
+        StringBuffer result = new StringBuffer();
         while (true) {
             char c = (char)readShort();
             if (c == 0)
@@ -63,7 +62,7 @@ public class LittleEndianFile {
     }
 
     public String readCStringW(int len) {
-        StringBuilder result = new StringBuilder();
+        StringBuffer result = new StringBuffer();
         int i;
         for (i=0;i<len && pos+2<=this.len;i++) {
             char c = (char)readShort();
@@ -103,18 +102,19 @@ public class LittleEndianFile {
     public final long readUnsignedInt() {
         int result = Memory.mem_readd(address + pos);
         pos+=4;
-        return result & 0xFFFFFFFFL;
+        return result & 0xFFFFFFFFl;
     }
 
-    public final void read(byte[] b, int off, int len) {
+    public final int read(byte b[], int off, int len) {
         if (len>available())
             len=available();
         Memory.mem_memcpy(b, off, address + pos, len);
         pos+=len;
+        return len;
     }
 
-    public final void read(byte[] b) {
-        read(b, 0, b.length);
+    public final int read(byte b[]) {
+        return read(b, 0, b.length);
     }
 
     public final int skipBytes(int n) {

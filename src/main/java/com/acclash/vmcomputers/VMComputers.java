@@ -49,9 +49,9 @@ public final class VMComputers extends JavaPlugin {
     @Override
     public void onDisable() {
         // Plugin shutdown logic
-        for (int id : ComputerFunctions.getTaskMap().values()) {
-            Bukkit.getScheduler().cancelTask(id);
-        }
+        //for (int id : ComputerFunctions.getTaskMap().values()) {
+         //   Bukkit.getScheduler().cancelTask(id);
+       // }
         try {
             getDB().getSQLConnection().close();
         } catch (SQLException e) {

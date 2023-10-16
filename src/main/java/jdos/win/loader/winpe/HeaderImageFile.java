@@ -6,8 +6,7 @@ import jdos.win.utils.LittleEndian;
 import java.io.IOException;
 import java.io.OutputStream;
 
-// From Wine projectimport jdos.util.Log;
-import org.apache.logging.log4j.Level;
+// From Wine project
 public class HeaderImageFile {
     final static public int SIZE=20;
 

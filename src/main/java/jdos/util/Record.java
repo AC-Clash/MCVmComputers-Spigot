@@ -5,8 +5,8 @@ import jdos.cpu.CPU_Regs;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 
-import org.apache.logging.log4j.Level;
 public class Record {
     public static DataOutputStream dos;
     public static DataInputStream ios;
@@ -16,7 +16,7 @@ public class Record {
             //dos = new DataOutputStream(new FileOutputStream("good.bin"));
             ios = new DataInputStream(new FileInputStream("good.bin"));
         } catch (Exception e) {
-            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+
         }
     }
 
@@ -70,7 +70,7 @@ public class Record {
                     throw new Exception();
                 }
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+
             }
         }
         if (dos!=null) {
@@ -87,7 +87,7 @@ public class Record {
                 dos.writeInt(CPU_Regs.reg_esi.dword);
                 dos.writeInt(CPU_Regs.reg_edi.dword);
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+
             }
         }
     }

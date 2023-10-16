@@ -3,14 +3,13 @@ package jdos.cpu;
 import jdos.Dosbox;
 import jdos.hardware.Memory;
 import jdos.hardware.RAM;
-import jdos.types.LogSeverities;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Config;
 import jdos.misc.setup.Module_base;
 import jdos.misc.setup.Section;
-import jdos.types.LogType;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 import jdos.util.IntRef;
-import org.apache.logging.log4j.Level;
 
 public class Paging extends Module_base {
     public static final int MEM_PAGE_SIZE = 4096;
@@ -44,18 +43,18 @@ public class Paging extends Module_base {
 
     static public class PageHandler {
         public /*Bitu*/int readb(/*PhysPt*/int addr) {
-            Log.exit("No byte handler for read from " + Long.toString(addr, 16), Level.ERROR);
+            Log.exit("No byte handler for read from " + Long.toString(addr, 16));
             return 0;
         }
 
         public /*Bitu*/int readw(/*PhysPt*/int addr) {
-            int result = readb(addr);
+            int result = readb(addr + 0);
             result |= (readb(addr + 1) << 8);
             return result;
         }
 
         public /*Bitu*/int readd(/*PhysPt*/int addr) {
-            int result = readb(addr);
+            int result = readb(addr + 0);
             result |= (readb(addr + 1) << 8);
             result |= (readb(addr + 2) << 16);
             result |= (readb(addr + 3) << 24);
@@ -63,16 +62,16 @@ public class Paging extends Module_base {
         }
 
         public void writeb(/*PhysPt*/int addr,/*Bitu*/int val) {
-            Log.exit("No byte handler for write to " + Long.toString(addr, 16), Level.ERROR);
+            Log.exit("No byte handler for write to " + Long.toString(addr, 16));
         }
 
         public void writew(/*PhysPt*/int addr,/*Bitu*/int val) {
-            writeb(addr, (val));
+            writeb(addr + 0, (val));
             writeb(addr + 1, (val >> 8));
         }
 
         public void writed(/*PhysPt*/int addr,/*Bitu*/int val) {
-            writeb(addr, (val));
+            writeb(addr + 0, (val));
             writeb(addr + 1, (val >> 8));
             writeb(addr + 2, (val >> 16));
             writeb(addr + 3, (val >> 24));
@@ -136,7 +135,7 @@ public class Paging extends Module_base {
             block.base = (value >>> 12) & 0xFFFFF;
         }
 
-        final X86_PageEntryBlock block = new X86_PageEntryBlock();
+        X86_PageEntryBlock block = new X86_PageEntryBlock();
     }
 
     static public /*Bitu*/ int cr3;
@@ -148,7 +147,7 @@ public class Paging extends Module_base {
         public /*PhysPt*/ int addr;
     }
 
-    static public final Base base = new Base();
+    static public Base base = new Base();
 
     static final public /*HostPt*/ int[] read = new int[TLB_SIZE];
     static final public /*HostPt*/ int[] write = new int[TLB_SIZE];
@@ -159,8 +158,8 @@ public class Paging extends Module_base {
 
     static public class Links {
         public /*Bitu*/ int used;
-        public final /*Bit32u*/ boolean[] global = new boolean[PAGING_LINKS];
-        public final /*Bit32u*/ int[] entries = new int[PAGING_LINKS];
+        public /*Bit32u*/ boolean[] global = new boolean[PAGING_LINKS];
+        public /*Bit32u*/ int[] entries = new int[PAGING_LINKS];
         public void removeNonGlobal() {
             int lastUsed = -1;
             for (int i=0;i<used;i++) {
@@ -244,7 +243,7 @@ public class Paging extends Module_base {
         tlb_addr = get_tlb_read(address);
         if (tlb_addr == INVALID_ADDRESS)
             return -1;
-        return tlb_addr + address;
+        return (int) (tlb_addr + address);
     }
 
     public static /*Bit8u*/int mem_readb_inline(/*PhysPt*/int address) {
@@ -339,22 +338,22 @@ public class Paging extends Module_base {
         }
 
         /*Bitu*/ int used;
-        final PF_Entry[] entries = new PF_Entry[PF_QUEUESIZE];
+        PF_Entry[] entries = new PF_Entry[PF_QUEUESIZE];
     }
 
-    static private final Pf_queue pf_queue = new Pf_queue();
+    static private Pf_queue pf_queue = new Pf_queue();
 
-    static private final CPU.CPU_Decoder PageFaultCore = new CPU.CPU_Decoder() {
+    static private CPU.CPU_Decoder PageFaultCore = new CPU.CPU_Decoder() {
         public /*Bits*/int call() {
             CPU.CPU_CycleLeft += CPU.CPU_Cycles;
             CPU.CPU_Cycles = 1;
             /*Bits*/
             int ret = Core_full.CPU_Core_Full_Run.call();
             CPU.CPU_CycleLeft += CPU.CPU_Cycles;
-            if (ret < 0) Log.exit("Got a dosbox close machine in pagefault core?", Level.ERROR);
+            if (ret < 0) Log.exit("Got a dosbox close machine in pagefault core?");
             if (ret != 0)
                 return ret;
-            if (pf_queue.used == 0) Log.exit("PF Core without PF", Level.ERROR);
+            if (pf_queue.used == 0) Log.exit("PF Core without PF");
             PF_Entry entry = pf_queue.entries[pf_queue.used - 1];
             X86PageEntry pentry = new X86PageEntry();
             pentry.load(Memory.phys_readd(entry.page_addr));
@@ -371,7 +370,7 @@ public class Paging extends Module_base {
                     }
                     CPU.cpudecoder = old_cpudecoder;
                     old_cpudecoder = null;
-                    Log.getLogger().warn("Forcing PF exit");
+                    System.out.println("Forcing PF exit");
                     throw new PageFaultException(false);
                 }
             }
@@ -524,13 +523,13 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
     // lin_addr, page_addr: the linear and page address the fault happened at
     // prepare_only: true in case the calling core handles the fault, else the PageFaultCore does
     static void PAGING_NewPageFault(/*PhysPt*/int lin_addr, /*Bitu*/int page_addr, boolean prepare_only, /*Bitu*/int faultcode) {
-        cr2 = lin_addr;
+        cr2 = (int)lin_addr;
 
         //LOG_MSG("FAULT q%d, code %x",  pf_queue.used, faultcode);
         //PrintPageInfo("FA+",lin_addr,faultcode, prepare_only);
 
         if (pageFault) {
-            Log.exit("Double PageFault", Level.ERROR);
+            Log.exit("Double PageFault");
         }
         if (prepare_only) {
             CPU.cpu.exception.which = CPU.EXCEPTION_PF;
@@ -553,7 +552,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             }
             CPU.cpudecoder = PageFaultCore;
 
-            if (pf_queue.used >= PF_QUEUESIZE) Log.exit("PF queue overrun.", Level.ERROR);
+            if (pf_queue.used >= PF_QUEUESIZE) Log.exit("PF queue overrun.");
             PF_Entry entry = pf_queue.entries[pf_queue.used++];
             entry.cs = CPU_Regs.reg_csVal.dword;
             entry.eip = CPU_Regs.reg_eip;
@@ -570,8 +569,8 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             Core_full.popState();
 
             pf_queue.used--;
-            if (Log.level <= LogSeverities.LOG_NORMAL.getValue())
-                Log.specializedLog(LogType.LOG_PAGING, Level.INFO, "Left PageFault for " + Long.toString(lin_addr, 16) + " queue " + pf_queue.used);
+            if (Log.level <= LogSeverities.LOG_NORMAL)
+                Log.log(LogTypes.LOG_PAGING, LogSeverities.LOG_NORMAL, "Left PageFault for " + Long.toString(lin_addr, 16) + " queue " + pf_queue.used);
             Flags.copy(old_lflags);
             if (set) {
                 CPU.cpudecoder = old_cpudecoder;
@@ -597,17 +596,17 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             /*PhysPt*/
             int dirEntryAddr = GetPageDirectoryEntryAddr(addr);
             dir_entry.load(Memory.phys_readd(dirEntryAddr));
-            if (dir_entry.block.p == 0) Log.exit("Undesired situation 1 in page foiler.", Level.ERROR);
+            if (dir_entry.block.p == 0) Log.exit("Undesired situation 1 in page foiler.");
 
             /*PhysPt*/
             int tableEntryAddr = GetPageTableEntryAddr(addr, dir_entry);
             table_entry.load(Memory.phys_readd(tableEntryAddr));
             if (table_entry.block.p == 0)
-                Log.exit("Undesired situation 2 in page foiler.", Level.ERROR);
+                Log.exit("Undesired situation 2 in page foiler.");
 
             // for debugging...
             if (table_entry.block.base != ppage)
-                if (table_entry.block.p == 0) Log.exit("Undesired situation 3 in page foiler.", Level.ERROR);
+                if (table_entry.block.p == 0) Log.exit("Undesired situation 3 in page foiler.");
 
             // map the real write handler in our place
             PageHandler handler = Memory.MEM_GetPageHandler(ppage);
@@ -633,7 +632,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         }
 
         private void read() {
-            Log.exit("The page foiler shouldn't be read.", Level.ERROR);
+            Log.exit("The page foiler shouldn't be read.");
         }
 
         public PageFoilHandler() {
@@ -675,13 +674,16 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         }
     }
 
+    ;
+
     static private class ExceptionPageHandler extends PageHandler {
         private PageHandler getHandler(/*PhysPt*/int addr) {
             /*Bitu*/
             int lin_page = addr >>> 12;
             /*Bit32u*/
             int ppage = phys_page[lin_page] & PHYSPAGE_ADDR;
-            return Memory.MEM_GetPageHandler(ppage);
+            PageHandler handler = Memory.MEM_GetPageHandler(ppage);
+            return handler;
         }
 
         private boolean hack_check(/*PhysPt*/int addr) {
@@ -695,13 +697,14 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             int old_attirbs = phys_page[addr >>> 12] >> 30;
             X86PageEntry dir_entry = new X86PageEntry(), table_entry = new X86PageEntry();
 
-            dir_entry.load(Memory.phys_readd(GetPageDirectoryEntryAddr(addr)));
+            dir_entry.load((int) Memory.phys_readd(GetPageDirectoryEntryAddr(addr)));
             if (dir_entry.block.p == 0) return false;
-            table_entry.load(Memory.phys_readd(GetPageTableEntryAddr(addr, dir_entry)));
+            table_entry.load((int) Memory.phys_readd(GetPageTableEntryAddr(addr, dir_entry)));
             if (table_entry.block.p == 0) return false;
             /*Bitu*/
             int result = translate_array[((dir_entry.load() << 1) & 0xc) | ((table_entry.load() >> 1) & 0x3)];
-            return result != old_attirbs;
+            if (result != old_attirbs) return true;
+            return false;
         }
 
         void Exception(/*PhysPt*/int addr, boolean writing, boolean checked) {
@@ -712,7 +715,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             if (!checked) {
                 X86PageEntry dir_entry = new X86PageEntry();
                 dir_entry.load(Memory.phys_readd(GetPageDirectoryEntryAddr(addr)));
-                if (dir_entry.block.p == 0) Log.exit("Undesired situation 1 in exception handler.", Level.ERROR);
+                if (dir_entry.block.p == 0) Log.exit("Undesired situation 1 in exception handler.");
 
                 // page table entry
                 tableaddr = GetPageTableEntryAddr(addr, dir_entry);
@@ -731,7 +734,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             int ppage = phys_page[lin_page] & PHYSPAGE_ADDR;
             PageHandler handler = Memory.MEM_GetPageHandler(ppage);
             if ((handler.flags & PFLAG_READABLE) != 0) {
-                return RAM.readb(handler.GetHostReadPt(ppage) + (addr & 0xfff));
+                return RAM.readb(handler.GetHostReadPt(ppage) + (int) (addr & 0xfff));
             } else {
                 return handler.readb(addr);
             }
@@ -744,7 +747,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             int ppage = phys_page[lin_page] & PHYSPAGE_ADDR;
             PageHandler handler = Memory.MEM_GetPageHandler(ppage);
             if ((handler.flags & PFLAG_READABLE) != 0) {
-                return RAM.readw(handler.GetHostReadPt(ppage) + (addr & 0xfff));
+                return RAM.readw((int) (handler.GetHostReadPt(ppage) + (addr & 0xfff)));
             } else {
                 return handler.readw(addr);
             }
@@ -757,7 +760,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             int ppage = phys_page[lin_page] & PHYSPAGE_ADDR;
             PageHandler handler = Memory.MEM_GetPageHandler(ppage);
             if ((handler.flags & PFLAG_READABLE) != 0) {
-                return RAM.readd(handler.GetHostReadPt(ppage) + (addr & 0xfff));
+                return RAM.readd((int) (handler.GetHostReadPt(ppage) + (addr & 0xfff)));
             } else {
                 return handler.readd(addr);
             }
@@ -770,7 +773,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             int ppage = phys_page[lin_page] & PHYSPAGE_ADDR;
             PageHandler handler = Memory.MEM_GetPageHandler(ppage);
             if ((handler.flags & PFLAG_WRITEABLE) != 0) {
-                RAM.writeb(handler.GetHostWritePt(ppage) + (addr & 0xfff), val);
+                RAM.writeb((int) (handler.GetHostWritePt(ppage) + (addr & 0xfff)), val);
             } else {
                 handler.writeb(addr, val);
             }
@@ -783,7 +786,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             int ppage = phys_page[lin_page] & PHYSPAGE_ADDR;
             PageHandler handler = Memory.MEM_GetPageHandler(ppage);
             if ((handler.flags & PFLAG_WRITEABLE) != 0) {
-                RAM.writew(handler.GetHostWritePt(ppage) + (addr & 0xfff), val);
+                RAM.writew((int) (handler.GetHostWritePt(ppage) + (addr & 0xfff)), val);
             } else {
                 handler.writew(addr, val);
             }
@@ -798,7 +801,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             if ((handler.flags & PFLAG_WRITEABLE) != 0) {
                 RAM.writed((handler.GetHostWritePt(ppage) + (addr & 0xfff)), val);
             } else {
-                handler.writed(addr, val);
+                handler.writed(addr, (int) val);
             }
         }
 
@@ -846,7 +849,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
                 return;
             }
             if (hack_check(addr)) {
-                //Log.getLogger().info("Page attributes modified without clear");
+                //System.out.println("Page attributes modified without clear");
                 PAGING_ClearTLB();
                 Memory.mem_writew(addr, val);
                 return;
@@ -886,29 +889,29 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
 
         public void writeb(/*PhysPt*/int addr,/*Bitu*/int val) {
             InitPage(addr, true, false);
-            Memory.mem_writeb(addr, val);
+    		Memory.mem_writeb(addr, val);
         }
 
         public void writew(/*PhysPt*/int addr,/*Bitu*/int val) {
             InitPage(addr, true, false);
-            Memory.mem_writew(addr, val);
+    		Memory.mem_writew(addr, val);
         }
 
         public void writed(/*PhysPt*/int addr,/*Bitu*/int val) {
             InitPage(addr, true, false);
-            Memory.mem_writed(addr, val);
+    		Memory.mem_writed(addr, val);
         }
 
-        void InitPage(/*PhysPt*/int lin_addr, boolean writing, boolean prepare_only) {
+        boolean InitPage(/*PhysPt*/int lin_addr, boolean writing, boolean prepare_only) {
             /*Bitu*/
             int lin_page = lin_addr >>> 12;
             /*Bitu*/
             int phys_page;
             if (enabled) {
-                //initpage_retry:
+            //initpage_retry:
                 while (true) {
                     X86PageEntry dir_entry = new X86PageEntry(), table_entry = new X86PageEntry();
-                    boolean isUser = ((CPU.cpu.cpl & CPU.cpu.mpl) == 3);
+                    boolean isUser = (((CPU.cpu.cpl & CPU.cpu.mpl)==3)? true:false);
 
                     // Read the paging stuff, throw not present exceptions if needed
                     // and find out how the page should be mapped
@@ -919,7 +922,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
                         // table pointer is not present, do a page fault
                         PAGING_NewPageFault(lin_addr, dirEntryAddr, prepare_only, (writing? 2:0) | (isUser? 4:0));
 
-                        if (prepare_only) return;
+                        if (prepare_only) return true;
                         else continue; //goto initpage_retry; // TODO maybe E_Exit after a few loops
                     }
                     /*PhysPt*/int tableEntryAddr = GetPageTableEntryAddr(lin_addr, dir_entry);
@@ -936,7 +939,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
                         // physpage pointer is not present, do a page fault
                         PAGING_NewPageFault(lin_addr, tableEntryAddr, prepare_only, (writing? 2:0) | (isUser? 4:0));
 
-                        if (prepare_only) return;
+                        if (prepare_only) return true;
                         else continue; //goto initpage_retry;
                     }
                     //PrintPageInfo("INI",lin_addr,writing,prepare_only);
@@ -953,7 +956,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
                         // bit0 - protection violation, bit1 - writing, bit2 - user mode
                         PAGING_NewPageFault(lin_addr, tableEntryAddr, prepare_only, 1 | (writing? 2:0) | (isUser? 4:0));
 
-                        if (prepare_only) return;
+                        if (prepare_only) return true;
                         else continue; //goto initpage_retry; // unlikely to happen?
                     }
 
@@ -990,6 +993,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
                 else phys_page = lin_page;
                 PAGING_LinkPage(lin_page, phys_page);
             }
+            return false;
         }
     }
 
@@ -1001,10 +1005,10 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             /*Bitu*/
             int t_index = page.value & 0x3ff;
             X86PageEntry table = new X86PageEntry();
-            table.load(Memory.phys_readd((base.page << 12) + d_index * 4));
+            table.load((int) (Memory.phys_readd((base.page << 12) + d_index * 4)));
             if (table.block.p == 0) return false;
             X86PageEntry entry = new X86PageEntry();
-            entry.load(Memory.phys_readd((table.block.base << 12) + t_index * 4));
+            entry.load((int) (Memory.phys_readd((table.block.base << 12) + t_index * 4)));
             if (entry.block.p == 0) return false;
             page.value = entry.block.base;
         } else {
@@ -1014,9 +1018,9 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         return true;
     }
 
-    static final NewInitPageHandler init_page_handler = new NewInitPageHandler();
-    static final ExceptionPageHandler exception_handler = new ExceptionPageHandler();
-    static final PageFoilHandler foiling_handler = new PageFoilHandler();
+    static NewInitPageHandler init_page_handler = new NewInitPageHandler();
+    static ExceptionPageHandler exception_handler = new ExceptionPageHandler();
+    static PageFoilHandler foiling_handler = new PageFoilHandler();
 
     static public /*Bitu*/int PAGING_GetDirBase() {
         return cr3;
@@ -1030,8 +1034,8 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             writehandler[i] = init_page_handler;
         }
         ur_links.used=0;
-        krw_links.used=0;
-        kr_links.used=0;
+	    krw_links.used=0;
+	    kr_links.used=0;
         links.used = 0;
     }
 
@@ -1045,8 +1049,8 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
             writehandler[page] = init_page_handler;
         }
         ur_links.used=0;
-        krw_links.used=0;
-        kr_links.used=0;
+	    krw_links.used=0;
+	    kr_links.used=0;
         links.used = 0;
     }
 
@@ -1063,8 +1067,8 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         }
         if (!globalEnabled) {
             ur_links.used=0;
-            krw_links.used=0;
-            kr_links.used=0;
+	        krw_links.used=0;
+	        kr_links.used=0;
             links.used = 0;
         } else {
             links.removeNonGlobal();
@@ -1104,12 +1108,12 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         PageHandler handler=Memory.MEM_GetPageHandler(ppage);
         /*Bitu*/int lin_base=lin_page << 12;
 
-        //	LOG_MSG("MAPPG %s",lnm[outcome]);
+    //	LOG_MSG("MAPPG %s",lnm[outcome]);
 
         if (lin_page>=TLB_SIZE || ppage>=TLB_SIZE)
-            Log.exit("Illegal page", Level.ERROR);
+            Log.exit("Illegal page");
         if (links.used>=PAGING_LINKS) {
-            Log.specializedLog(LogType.LOG_PAGING,Level.INFO, "Not enough paging links, resetting cache");
+            Log.log(LogTypes.LOG_PAGING,LogSeverities.LOG_NORMAL, "Not enough paging links, resetting cache");
             PAGING_ClearTLB();
         }
         // re-use some of the unused bits in the phys_page variable
@@ -1119,61 +1123,61 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         // these bits are shifted off at the places phys_page is read
         phys_page[lin_page]= ppage | (linkmode<< 30) | (dirty? PHYSPAGE_DITRY:0);
         switch(outcome) {
-            case ACMAP_RW:
-                // read
-                if ((handler.flags & PFLAG_READABLE)!=0)
-                    read[lin_page] = handler.GetHostReadPt(ppage)-lin_base;
-                else
-                    read[lin_page]=INVALID_ADDRESS;
-                readhandler[lin_page]=handler;
-
-                // write
-                if (dirty) { // in case it is already dirty we don't need to check
-                    if ((handler.flags & PFLAG_WRITEABLE)!=0)
-                        write[lin_page] = handler.GetHostWritePt(ppage)-lin_base;
-                    else
-                        write[lin_page]=INVALID_ADDRESS;
-                    writehandler[lin_page]=handler;
-                } else {
-                    writehandler[lin_page]= foiling_handler;
-                    write[lin_page]=INVALID_ADDRESS;
-                }
-                break;
-            case ACMAP_RE:
-                // read
-                if ((handler.flags & PFLAG_READABLE)!=0)
-                    read[lin_page] = handler.GetHostReadPt(ppage)-lin_base;
-                else
-                    read[lin_page]=INVALID_ADDRESS;
-                readhandler[lin_page]=handler;
-                // exception
-                writehandler[lin_page]= exception_handler;
-                write[lin_page]=INVALID_ADDRESS;
-                break;
-            case ACMAP_EE:
-                readhandler[lin_page]= exception_handler;
-                writehandler[lin_page]= exception_handler;
+        case ACMAP_RW:
+            // read
+            if ((handler.flags & PFLAG_READABLE)!=0)
+                read[lin_page] = handler.GetHostReadPt(ppage)-lin_base;
+            else
                 read[lin_page]=INVALID_ADDRESS;
+            readhandler[lin_page]=handler;
+
+            // write
+            if (dirty) { // in case it is already dirty we don't need to check
+                if ((handler.flags & PFLAG_WRITEABLE)!=0)
+                    write[lin_page] = handler.GetHostWritePt(ppage)-lin_base;
+                else
+                    write[lin_page]=INVALID_ADDRESS;
+                writehandler[lin_page]=handler;
+            } else {
+                writehandler[lin_page]= foiling_handler;
                 write[lin_page]=INVALID_ADDRESS;
-                break;
+            }
+            break;
+        case ACMAP_RE:
+            // read
+            if ((handler.flags & PFLAG_READABLE)!=0)
+                read[lin_page] = handler.GetHostReadPt(ppage)-lin_base;
+            else
+                read[lin_page]=INVALID_ADDRESS;
+            readhandler[lin_page]=handler;
+            // exception
+            writehandler[lin_page]= exception_handler;
+            write[lin_page]=INVALID_ADDRESS;
+            break;
+        case ACMAP_EE:
+            readhandler[lin_page]= exception_handler;
+            writehandler[lin_page]= exception_handler;
+            read[lin_page]=INVALID_ADDRESS;
+            write[lin_page]=INVALID_ADDRESS;
+            break;
         }
 
         switch(linkmode) {
-            case ACCESS_KR:
-                kr_links.global[kr_links.used] = global;
-                kr_links.entries[kr_links.used++]=lin_page;
-                break;
-            case ACCESS_KRW:
-                krw_links.global[krw_links.used] = global;
-                krw_links.entries[krw_links.used++]=lin_page;
-                break;
-            case ACCESS_UR:
-                ur_links.global[ur_links.used] = global;
-                ur_links.entries[ur_links.used++]=lin_page;
-                break;
-            case ACCESS_URW:	// with this access right everything is possible
-                // thus no need to modify it on a us <-> sv switch
-                break;
+        case ACCESS_KR:
+            kr_links.global[kr_links.used] = global;
+            kr_links.entries[kr_links.used++]=lin_page;
+            break;
+        case ACCESS_KRW:
+            krw_links.global[krw_links.used] = global;
+            krw_links.entries[krw_links.used++]=lin_page;
+            break;
+        case ACCESS_UR:
+            ur_links.global[ur_links.used] = global;
+            ur_links.entries[ur_links.used++]=lin_page;
+            break;
+        case ACCESS_URW:	// with this access right everything is possible
+                            // thus no need to modify it on a us <-> sv switch
+            break;
         }
         links.global[links.used] = global;
         links.entries[links.used++]=lin_page; // "master table"
@@ -1184,10 +1188,10 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         /*Bitu*/
         int lin_base = lin_page << 12;
         if (lin_page >= TLB_SIZE || ppage >= TLB_SIZE)
-            Log.exit("Illegal page", Level.ERROR);
+            Log.exit("Illegal page");
 
         if (links.used >= PAGING_LINKS) {
-            Log.specializedLog(LogType.LOG_PAGING, Level.INFO, "Not enough paging links, resetting cache");
+            Log.log(LogTypes.LOG_PAGING, LogSeverities.LOG_NORMAL, "Not enough paging links, resetting cache");
             PAGING_ClearTLB();
         }
 
@@ -1205,7 +1209,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         writehandler[lin_page] = handler;
     }
 
-    // parameter is the new cpl mode
+     // parameter is the new cpl mode
     public static void PAGING_SwitchCPL(boolean isUser) {
         //	LOG_MSG("SWCPL u%d kr%d, krw%d, ur%d",
         //		isUser, kro_links.used, krw_links.used, ure_links.used);
@@ -1312,7 +1316,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
 
         base.page = cr3 >>> 12;
         base.addr=cr3 & ~0xFFF;
-//	Log.specializedLog(LogType.LOG_PAGING,Level.INFO,"CR3:%X Base %X",cr3,base.page);
+//	Log.log(LogTypes.LOG_PAGING,LogSeverities.LOG_NORMAL,"CR3:%X Base %X",cr3,base.page);
         if (enabled) {
             if (globalEnabled)
                 PAGING_ClearNonGlobalTLB();
@@ -1322,9 +1326,9 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
     }
 
     public static void PAGING_SetWP(boolean value) {
-        wp = value;
-        if (enabled)
-            PAGING_ClearTLB();
+	    wp = value;
+	    if (enabled)
+		    PAGING_ClearTLB();
     }
 
     public static void PAGING_EnableGlobal(boolean value) {
@@ -1339,7 +1343,7 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         if (enabled == value) return;
         enabled = value;
         if (enabled) {
-//		Log.specializedLog(LogType.LOG_PAGING,Level.INFO,"Enabled");
+//		Log.log(LogTypes.LOG_PAGING,LogSeverities.LOG_NORMAL,"Enabled");
             PAGING_SetDirBase(cr3);
         }
         PAGING_ClearTLB();
@@ -1364,11 +1368,13 @@ void PrintPageInfo(const char* string, PhysPt lin_addr, bool writing, bool prepa
         pf_queue.used = 0;
     }
 
-    public static final Section.SectionFunction PAGING_ShutDown = section -> {
-        //paging = null;
+    public static Section.SectionFunction PAGING_ShutDown = new Section.SectionFunction() {
+        public void call(Section section) {
+            //paging = null;
+        }
     };
 
-    public static final Section.SectionFunction PAGING_Init = new Section.SectionFunction() {
+    public static Section.SectionFunction PAGING_Init = new Section.SectionFunction() {
         public void call(Section section) {
             test = new Paging(section);
             if (section != null)

@@ -4,8 +4,7 @@ import jdos.win.builtin.kernel32.WinThread;
 import jdos.win.builtin.user32.Input;
 
 import java.util.Hashtable;
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
+
 public class Scheduler {
     private static class SchedulerItem {
         WinThread thread;
@@ -15,8 +14,8 @@ public class Scheduler {
     }
     private static SchedulerItem currentThread = null;
     private static SchedulerItem first;
-    private static final Hashtable<WinThread, SchedulerItem> threadMap = new Hashtable<>();
-    private static final long start = System.currentTimeMillis();
+    private static Hashtable<WinThread, SchedulerItem> threadMap = new Hashtable<WinThread, SchedulerItem>();
+    private static long start = System.currentTimeMillis();
 
     // DirectX surface to force to the screen
     public static int monitor;
@@ -31,11 +30,13 @@ public class Scheduler {
         } else {
             item = new SchedulerItem();
             item.thread = thread;
-            if (first != null) {
+            if (first == null) {
+                first = item;
+            } else {
                 item.next = first;
                 first.prev = item;
+                first = item;
             }
-            first = item;
             if (currentThread == null || schedule) {
                 scheduleThread(item);
             }
@@ -84,9 +85,7 @@ public class Scheduler {
                         Input.processInput();
                         if (first != null)
                             break;
-                        try {StaticData.inputQueueMutex.wait();} catch (Exception e) {
-                            Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                        }
+                        try {StaticData.inputQueueMutex.wait();} catch (Exception e){}
                     }
                 }
                 if (item == currentThread) {
@@ -114,7 +113,7 @@ public class Scheduler {
 
     // :TODO: run them in order of process to minimize page swapping
     static public void tick() {
-        if (threadMap.isEmpty()) {
+        if (threadMap.size() == 0) {
             return;
         }
         SchedulerItem next = currentThread.next;
@@ -129,15 +128,13 @@ public class Scheduler {
                 break;
             }
             if (next == start) {
-                try {Thread.sleep(10);} catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                }
+                try {Thread.sleep(10);} catch (Exception e) {}
                 tickCount = currentTickCount();
             }
             next = next.next;
         }
         if (next.thread != currentThread.thread) {
-            //Log.getLogger().info("Switching threads: "+currentThread.thread.getHandle()+"("+ Ptr.toString(CPU_Regs.reg_eip)+") -> "+next.thread.getHandle()+"("+Ptr.toString(next.thread.cpuState.eip)+")");
+            //System.out.println("Switching threads: "+currentThread.thread.getHandle()+"("+ Ptr.toString(CPU_Regs.reg_eip)+") -> "+next.thread.getHandle()+"("+Ptr.toString(next.thread.cpuState.eip)+")");
             currentThread.thread.saveCPU();
             if (currentThread.thread.getProcess() != next.thread.getProcess()) {
                 next.thread.getProcess().switchPageDirectory();

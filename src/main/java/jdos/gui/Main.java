@@ -1,28 +1,18 @@
 package jdos.gui;
 
-import com.acclash.vmcomputers.utils.MagishaMapRenderer;
 import jdos.ints.Mouse;
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
-import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.MapMeta;
-import org.bukkit.map.MapView;
 
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.*;
-import java.util.Arrays;
 
 public class Main extends MainBase {
     static public void GFX_SetCursor(Cursor cursor) {
 
     }
     static public void GFX_Events() {
-            while (!events.isEmpty()) {
+            while (events.size()>0) {
                 Object event = events.elementAt(0);
                 events.removeElementAt(0);
                 if (event == null)
@@ -37,10 +27,10 @@ public class Main extends MainBase {
         }
 
     static public class MouseEvent2 extends MouseEvent {
-            public final int rel_x;
-            public final int rel_y;
-            public final float abs_x;
-            public final float abs_y;
+            public int rel_x;
+            public int rel_y;
+            public float abs_x;
+            public float abs_y;
             public MouseEvent2(MouseEvent event, int rel_x, int rel_y, float abs_x, float abs_y, int offX, int offY) {
                 super(event.getComponent(), event.getID(), event.getWhen(), event.getModifiers(), event.getX()-offX, event.getY()-offY, event.getClickCount(), event.isPopupTrigger());
                 this.rel_x = rel_x;
@@ -78,7 +68,7 @@ public class Main extends MainBase {
             } else if (event.getID() == MouseEvent.MOUSE_PRESSED) {
                 if (mouse_requestlock && !mouse_locked) {
                     GFX_CaptureMouse();
-                    // Don't pass click to mouse handler
+                    // Dont pass klick to mouse handler
                     return;
                 }
                 if (!mouse_autoenable && mouse_autolock && event.getButton() == MouseEvent.BUTTON3) {
@@ -103,8 +93,8 @@ public class Main extends MainBase {
             }
         }
 
-    public interface KeyboardHandler {
-            void handle(KeyEvent key);
+    static public interface KeyboardHandler {
+            public void handle(KeyEvent key);
         }
         static public KeyboardHandler defaultKeyboardHandler;
 
@@ -115,9 +105,7 @@ public class Main extends MainBase {
                 if (paused) {
                     if (key.getKeyCode() == KeyEvent.VK_PAUSE && key.getID()==KeyEvent.KEY_PRESSED) {
                         synchronized (pauseMutex) {
-                            try {pauseMutex.notify();} catch (Exception e) {
-                                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                            }
+                            try {pauseMutex.notify();} catch (Exception e){}
                         }
                     }
                 } else {
@@ -127,8 +115,8 @@ public class Main extends MainBase {
             }
         }
 
-        public interface MouseHandler {
-            void handle(MouseEvent event);
+        static public interface MouseHandler {
+            public void handle(MouseEvent event);
         }
         static public MouseHandler defaultMouseHandler;
 
@@ -148,7 +136,7 @@ public class Main extends MainBase {
     static public void GFX_EndUpdate() {
             if (pitch!=0) {
                 if (startupTime != 0) {
-                    Log.getLogger().info("Startup time: "+ (System.currentTimeMillis() - startupTime) +"ms");
+                    System.out.println("Startup time: "+String.valueOf(System.currentTimeMillis()-startupTime)+"ms");
                     startupTime = 0;
                 }
                 long startTime=0;
@@ -181,16 +169,17 @@ public class Main extends MainBase {
                 gui.dopaint();
             }
         }
-        static final byte[][] byte_rawImageData2 = new byte[2][];
-        static final short[][] short_rawImageData2 = new short[2][];
-        static final int[][] int_rawImageData2 = new int[2][];
+        static byte[][] byte_rawImageData2 = new byte[2][];
+        static short[][] short_rawImageData2 = new short[2][];
+        static int[][] int_rawImageData2 = new int[2][];
         static int pitch;
 
-        static public void GFX_StartUpdate(Render.Render_t.SRC src) {
+        static public boolean GFX_StartUpdate(Render.Render_t.SRC src) {
             src.outPitch = Main.pitch;
             src.outWrite8 = byte_rawImageData2[Main.back];
             src.outWrite16 = short_rawImageData2[Main.back];
             src.outWrite32 = int_rawImageData2[Main.back];
+            return true;
         }
 
         static public void drawImage(Image image) {
@@ -204,7 +193,7 @@ public class Main extends MainBase {
         static int buffer_width;
         static int buffer_height;
         static IndexColorModel colorModel;
-        static final int[] cmap = new int[256];
+        static int[] cmap = new int[256];
 
         static {
             int i=0;
@@ -225,8 +214,8 @@ public class Main extends MainBase {
                 gray += grayIncr;
             }
         }
-        public static final BufferedImage[] buffer2 = new BufferedImage[2];
-        public static int front = 0;
+        static BufferedImage[] buffer2 = new BufferedImage[2];
+        static int front = 0;
         static int back = 1;
 
         static public /*Bitu*/void GFX_SetSize(int screenWidth, int screenHeight, int width, int height, boolean aspect, int bpp) {

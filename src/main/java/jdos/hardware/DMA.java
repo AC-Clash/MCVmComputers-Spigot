@@ -2,12 +2,11 @@ package jdos.hardware;
 
 import jdos.Dosbox;
 import jdos.cpu.Paging;
-import jdos.types.LogSeverities;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Module_base;
 import jdos.misc.setup.Section;
-import jdos.types.LogType;
-import org.apache.logging.log4j.Level;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 
 public class DMA extends Module_base {
     static public final class DMAEvent {
@@ -17,8 +16,8 @@ public class DMA extends Module_base {
         public static final int DMA_TRANSFEREND=3;
     }
 
-    public interface DMA_CallBack {
-        void call(DmaChannel chan, int event);
+    static public interface DMA_CallBack {
+        public void call(DmaChannel chan, int event);
     }
 
     static public class DmaChannel {
@@ -85,7 +84,7 @@ public class DMA extends Module_base {
         }
         public /*Bitu*/int Read(/*Bitu*/int want, /*Bit8u*/byte[] buffer, int bufferOffset) {
             /*Bitu*/int done=0;
-            curraddr &= (int) dma_wrapping;
+            curraddr &= dma_wrapping;
             while (true) {
                 /*Bitu*/int left=(currcnt+1);
                 if (want<left) {
@@ -118,7 +117,7 @@ public class DMA extends Module_base {
         }
         public /*Bitu*/int Read(/*Bitu*/int want, /*Bit8u*/short[] buffer, int bufferOffset) {
             /*Bitu*/int done=0;
-            curraddr &= (int) dma_wrapping;
+            curraddr &= dma_wrapping;
             while (true) {
                 /*Bitu*/int left=(currcnt+1);
                 if (want<left) {
@@ -149,9 +148,9 @@ public class DMA extends Module_base {
             }
             return done;
         }
-        public /*Bitu*/void Write(/*Bitu*/int want, /*Bit8u*/byte[] buffer, int offset) {
+        public /*Bitu*/int Write(/*Bitu*/int want, /*Bit8u*/byte[] buffer, int offset) {
             /*Bitu*/int done=0;
-            curraddr &= (int) dma_wrapping;
+            curraddr &= dma_wrapping;
             while (true) {
                 /*Bitu*/int left=(currcnt+1);
                 if (want<left) {
@@ -180,16 +179,17 @@ public class DMA extends Module_base {
                 }
                 break;
             }
+            return done;
         }
     }
 
     public static class DmaController {
-        private final /*Bit8u*/short ctrlnum;
+        private /*Bit8u*/short ctrlnum;
         private boolean flipflop;
-        private final DmaChannel[] DmaChannels=new DmaChannel[4];
+        private DmaChannel[] DmaChannels=new DmaChannel[4];
 
-        public final IoHandler.IO_ReadHandleObject[] DMA_ReadHandler=new IoHandler.IO_ReadHandleObject[0x11];
-        public final IoHandler.IO_WriteHandleObject[] DMA_WriteHandler=new IoHandler.IO_WriteHandleObject[0x11];
+        public IoHandler.IO_ReadHandleObject[] DMA_ReadHandler=new IoHandler.IO_ReadHandleObject[0x11];
+        public IoHandler.IO_WriteHandleObject[] DMA_WriteHandler=new IoHandler.IO_WriteHandleObject[0x11];
         public DmaController(/*Bit8u*/int num) {
             flipflop = false;
             ctrlnum = (short)num;		/* first or second DMA controller */
@@ -274,7 +274,7 @@ public class DMA extends Module_base {
                 UpdateEMSMapping();
                 for (/*Bit8u*/short ct=0;ct<4;ct++) {
                     chan=GetChannel(ct);
-                    chan.SetMask((val & 1) != 0);
+                    chan.SetMask((val & 1)!=0?true:false);
                     val>>=1;
                 }
                 break;
@@ -288,9 +288,9 @@ public class DMA extends Module_base {
                 chan=GetChannel((/*Bit8u*/short)(reg >> 1));
                 flipflop=!flipflop;
                 if (flipflop) {
-                    return chan.curraddr & 0xff;
+                    return (int)(chan.curraddr & 0xff);
                 } else {
-                    return (chan.curraddr >> 8) & 0xff;
+                    return (int)((chan.curraddr >> 8) & 0xff);
                 }
             /* read DMA transfer count (1st byte low part, 2nd byte high part) */
             case 0x1:case 0x3:case 0x5:case 0x7:
@@ -311,7 +311,7 @@ public class DMA extends Module_base {
                 }
                 return ret;
             default:
-                if (Log.level<= LogSeverities.LOG_NORMAL.getValue()) Log.specializedLog(LogType.LOG_DMACONTROL, Level.INFO,"Trying to read undefined DMA port "+Integer.toString(reg,16));
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_DMACONTROL, LogSeverities.LOG_NORMAL,"Trying to read undefined DMA port "+Integer.toString(reg,16));
                 break;
             }
             return 0xffffffff;
@@ -320,11 +320,11 @@ public class DMA extends Module_base {
 
     static private /*Bit32u*/long dma_wrapping = 0xffff;
 
-    static private final DmaController[] DmaControllers=new DmaController[2];
+    static private DmaController[] DmaControllers=new DmaController[2];
 
     static final private int EMM_PAGEFRAME4K = ((0xE000*16)/4096);
 
-    static private final /*Bit32u*/long[] ems_board_mapping=new long[Paging.LINK_START];
+    static private /*Bit32u*/long[] ems_board_mapping=new long[Paging.LINK_START];
 
     static private void UpdateEMSMapping() {
         /* if EMS is not present, this will result in a 1:1 mapping */
@@ -336,7 +336,7 @@ public class DMA extends Module_base {
 
     /* read a block from physical memory */
     static private void DMA_BlockRead(/*PhysPt*/int spage,/*PhysPt*/int offset,short[] data, int dataOffset, /*Bitu*/int size) {
-        /*Bitu*/int highpart_addr_page = spage>>12;
+        /*Bitu*/int highpart_addr_page = (int)(spage>>12);
         int dma16=1;
         size <<= dma16;
         offset <<= dma16;
@@ -344,18 +344,18 @@ public class DMA extends Module_base {
         boolean left = true;
         for ( ; size!=0 ; size--, offset++) {
             if (offset>(dma_wrapping<<dma16)) {
-			    Log.getLogger().info("DMA segbound wrapping (read): "+Long.toString(spage, 16)+":"+Integer.toString(offset,16)+" size "+Integer.toString(size, 16)+" [1] wrap "+Long.toString(dma_wrapping,16));
+			    System.out.println("DMA segbound wrapping (read): "+Long.toString(spage, 16)+":"+Integer.toString(offset,16)+" size "+Integer.toString(size, 16)+" [1] wrap "+Long.toString(dma_wrapping,16));
 		    }
-            offset &= (int) dma_wrap;
+            offset &= dma_wrap;
             /*Bitu*/int page = highpart_addr_page+(offset >>> 12);
             /* care for EMS pageframe etc. */
             if (page < EMM_PAGEFRAME4K) page = (int)Paging.firstmb[page];
             else if (page < EMM_PAGEFRAME4K+0x10) page = (int)ems_board_mapping[page];
             else if (page < Paging.LINK_START) page = (int)Paging.firstmb[page];
             if (left) {
-                data[dataOffset] = Memory.phys_readb(page*4096 + (offset & 4095));
+                data[dataOffset] = (short)Memory.phys_readb(page*4096 + (offset & 4095));
             } else {
-                data[dataOffset++] |= (short) (Memory.phys_readb(page*4096 + (offset & 4095)) << 8);
+                data[dataOffset++] |= (Memory.phys_readb(page*4096 + (offset & 4095)) << 8);
             }
             left=!left;
         }
@@ -366,9 +366,9 @@ public class DMA extends Module_base {
         /*Bit32u*/long dma_wrap = 0xffff;
         for ( ; size!=0 ; size--, offset++) {
             if (offset>(dma_wrapping)) {
-			    Log.getLogger().info("DMA segbound wrapping (read): "+Long.toString(spage, 16)+":"+Integer.toString(offset,16)+" size "+Integer.toString(size, 16)+" [0] wrap "+Long.toString(dma_wrapping,16));
+			    System.out.println("DMA segbound wrapping (read): "+Long.toString(spage, 16)+":"+Integer.toString(offset,16)+" size "+Integer.toString(size, 16)+" [0] wrap "+Long.toString(dma_wrapping,16));
 		    }
-            offset &= (int) dma_wrap;
+            offset &= dma_wrap;
             /*Bitu*/int page = highpart_addr_page+(offset >>> 12);
             /* care for EMS pageframe etc. */
             if (page < EMM_PAGEFRAME4K) page = (int)Paging.firstmb[page];
@@ -380,15 +380,15 @@ public class DMA extends Module_base {
 
     /* write a block into physical memory */
     static void DMA_BlockWrite(/*PhysPt*/int spage,/*PhysPt*/int offset,byte[] data, int data_offset, /*Bitu*/int size,/*Bit8u*/short dma16) {
-        /*Bitu*/int highpart_addr_page = spage>>12;
+        /*Bitu*/int highpart_addr_page = (int)(spage>>12);
         size <<= dma16;
         offset <<= dma16;
-        /*Bit32u*/long dma_wrap = ((0xffffL <<dma16)+dma16) | dma_wrapping;
+        /*Bit32u*/long dma_wrap = ((0xffff<<dma16)+dma16) | dma_wrapping;
         for (int i=0; size!=0 ; size--, offset++, i++) {
             if (offset>(dma_wrapping<<dma16)) {
-			    Log.getLogger().info("DMA segbound wrapping (write): "+Long.toString(spage, 16)+":"+Long.toString(offset,16)+" size "+Integer.toString(size, 16)+" ["+dma16+"] wrap "+Long.toString(dma_wrapping,16));
+			    System.out.println("DMA segbound wrapping (write): "+Long.toString(spage, 16)+":"+Long.toString(offset,16)+" size "+Integer.toString(size, 16)+" ["+dma16+"] wrap "+Long.toString(dma_wrapping,16));
 		    }
-            offset &= (int) dma_wrap;
+            offset &= dma_wrap;
             /*Bitu*/int page = highpart_addr_page+(offset >>> 12);
             /* care for EMS pageframe etc. */
             if (page < EMM_PAGEFRAME4K) page = (int)Paging.firstmb[page];
@@ -418,49 +418,52 @@ public class DMA extends Module_base {
 
     /* check availability of second DMA controller, needed for SB16 */
     public static boolean SecondDMAControllerAvailable() {
-        return DmaControllers[1] != null;
+        if (DmaControllers[1]!=null) return true;
+        else return false;
     }
 
-    /*Bitu*//*Bitu*//*Bitu*/
-    private static final IoHandler.IO_WriteHandler DMA_Write_Port = (port, val, iolen) -> {
-        if (port<0x10) {
-            /* write to the first DMA controller (channels 0-3) */
-            DmaControllers[0].WriteControllerReg(port,val,1);
-        } else if (port>=0xc0 && port <=0xdf) {
-            /* write to the second DMA controller (channels 4-7) */
-            DmaControllers[1].WriteControllerReg((port-0xc0) >> 1,val,1);
-        } else {
-            UpdateEMSMapping();
-            switch (port) {
-                /* write DMA page register */
-                case 0x81:GetDMAChannel(2).SetPage((/*Bit8u*/short)val);break;
-                case 0x82:GetDMAChannel(3).SetPage((/*Bit8u*/short)val);break;
-                case 0x83:GetDMAChannel(1).SetPage((/*Bit8u*/short)val);break;
-                case 0x89:GetDMAChannel(6).SetPage((/*Bit8u*/short)val);break;
-                case 0x8a:GetDMAChannel(7).SetPage((/*Bit8u*/short)val);break;
-                case 0x8b:GetDMAChannel(5).SetPage((/*Bit8u*/short)val);break;
+    private static IoHandler.IO_WriteHandler DMA_Write_Port = new IoHandler.IO_WriteHandler() {
+        public void call(/*Bitu*/int port, /*Bitu*/int val, /*Bitu*/int iolen) {
+            if (port<0x10) {
+                /* write to the first DMA controller (channels 0-3) */
+                DmaControllers[0].WriteControllerReg(port,val,1);
+            } else if (port>=0xc0 && port <=0xdf) {
+                /* write to the second DMA controller (channels 4-7) */
+                DmaControllers[1].WriteControllerReg((port-0xc0) >> 1,val,1);
+            } else {
+                UpdateEMSMapping();
+                switch (port) {
+                    /* write DMA page register */
+                    case 0x81:GetDMAChannel(2).SetPage((/*Bit8u*/short)val);break;
+                    case 0x82:GetDMAChannel(3).SetPage((/*Bit8u*/short)val);break;
+                    case 0x83:GetDMAChannel(1).SetPage((/*Bit8u*/short)val);break;
+                    case 0x89:GetDMAChannel(6).SetPage((/*Bit8u*/short)val);break;
+                    case 0x8a:GetDMAChannel(7).SetPage((/*Bit8u*/short)val);break;
+                    case 0x8b:GetDMAChannel(5).SetPage((/*Bit8u*/short)val);break;
+                }
             }
         }
     };
 
-    /*Bitu*//*Bitu*//*Bitu*/
-    static private final IoHandler.IO_ReadHandler DMA_Read_Port = (port, iolen) -> {
-        if (port<0x10) {
-            /* read from the first DMA controller (channels 0-3) */
-            return DmaControllers[0].ReadControllerReg(port,iolen);
-        } else if (port>=0xc0 && port <=0xdf) {
-            /* read from the second DMA controller (channels 4-7) */
-            return DmaControllers[1].ReadControllerReg((port-0xc0) >> 1,iolen);
-        } else switch (port) {
-            /* read DMA page register */
-            case 0x81:return GetDMAChannel(2).pagenum;
-            case 0x82:return GetDMAChannel(3).pagenum;
-            case 0x83:return GetDMAChannel(1).pagenum;
-            case 0x89:return GetDMAChannel(6).pagenum;
-            case 0x8a:return GetDMAChannel(7).pagenum;
-            case 0x8b:return GetDMAChannel(5).pagenum;
+    static private IoHandler.IO_ReadHandler DMA_Read_Port = new IoHandler.IO_ReadHandler() {
+        public /*Bitu*/int call(/*Bitu*/int port, /*Bitu*/int iolen) {
+            if (port<0x10) {
+                /* read from the first DMA controller (channels 0-3) */
+                return DmaControllers[0].ReadControllerReg(port,iolen);
+            } else if (port>=0xc0 && port <=0xdf) {
+                /* read from the second DMA controller (channels 4-7) */
+                return DmaControllers[1].ReadControllerReg((port-0xc0) >> 1,iolen);
+            } else switch (port) {
+                /* read DMA page register */
+                case 0x81:return GetDMAChannel(2).pagenum;
+                case 0x82:return GetDMAChannel(3).pagenum;
+                case 0x83:return GetDMAChannel(1).pagenum;
+                case 0x89:return GetDMAChannel(6).pagenum;
+                case 0x8a:return GetDMAChannel(7).pagenum;
+                case 0x8b:return GetDMAChannel(5).pagenum;
+            }
+            return 0;
         }
-        return 0;
     };
 
     static public void DMA_SetWrapping(/*Bitu*/int wrap) {
@@ -499,13 +502,13 @@ public class DMA extends Module_base {
 
     static private DMA test;
 
-    public static final Section.SectionFunction DMA_Destroy = new Section.SectionFunction() {
+    public static Section.SectionFunction DMA_Destroy = new Section.SectionFunction() {
         public void call(Section section) {
             test = null;
         }
     };
 
-    public static final Section.SectionFunction DMA_Init = new Section.SectionFunction() {
+    public static Section.SectionFunction DMA_Init = new Section.SectionFunction() {
         public void call(Section section) {
             DMA_SetWrapping(0xffff);
             test = new DMA(section);

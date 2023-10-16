@@ -1,5 +1,4 @@
 package jdos.host.router;
-import jdos.util.Log;
 
 public class ICMP extends EtherUtil {
     private void parse(byte[] buffer, int offset) {
@@ -11,7 +10,7 @@ public class ICMP extends EtherUtil {
         System.out.print("Received ICMP Packet ");
         parse(buffer, offset);
         if (type == 0) {
-            Log.getLogger().info(" PING");
+            System.out.println(" PING");
         } else {
             String strType = null;
 
@@ -65,7 +64,7 @@ public class ICMP extends EtherUtil {
             System.out.print(" type="+type);
             if (strType != null)
                 System.out.print("("+strType+")");
-            Log.getLogger().info(" code="+code);
+            System.out.println(" code="+code);
         }
     }
 

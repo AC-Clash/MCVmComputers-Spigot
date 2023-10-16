@@ -325,13 +325,14 @@ public class WinDialog extends WinAPI {
             result.exStyle = readd(p);
             p += 4;
             result.style = readd(p);
+            p += 4;
         } else {
             result.style = readd(p - 4);
             result.dialogEx = false;
             result.helpId = 0;
             result.exStyle = readd(p);
+            p += 4;
         }
-        p += 4;
         result.nbItems = readw(p);
         p += 2;
         result.x = readw(p);
@@ -402,7 +403,7 @@ public class WinDialog extends WinAPI {
                  * to convert from pixel size to point size (which can be
                  * imprecise).
                  */
-                // specializedLog(" FONT: Using message box font\n");
+                // log(" FONT: Using message box font\n");
             } else {
                 if (result.dialogEx) {
                     result.weight = readw(p);
@@ -459,13 +460,14 @@ public class WinDialog extends WinAPI {
             info.exStyle = readd(p);
             p += 4;
             info.style = readd(p);
+            p += 4;
         } else {
             info.helpId = 0;
             info.style = readd(p);
             p += 4;
             info.exStyle = readd(p);
+            p += 4;
         }
-        p += 4;
         info.x = readw(p);
         p += 2;
         info.y = readw(p);

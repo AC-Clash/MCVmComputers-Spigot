@@ -1,17 +1,7 @@
 package jdos.types;
 
-public enum LogSeverities {
-   LOG_NORMAL(0),
-	LOG_WARN(1),
-	LOG_ERROR(2);
-
-	private final int value;
-
-	LogSeverities(int value) {
-		this.value = value;
-	}
-
-	public int getValue() {
-		return value;
-	}
+public class LogSeverities {
+    public static final int LOG_NORMAL = 0;
+	public static final int LOG_WARN = 1;
+	public static final int LOG_ERROR = 2;
 }

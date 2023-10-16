@@ -59,7 +59,7 @@ public class OutputChannels
 	public static final OutputChannels DOWNMIX = new OutputChannels(DOWNMIX_CHANNELS);
 				
 	
-	private final /*final*/ int	outputChannels;
+	private /*final*/ int	outputChannels;
 			
 	/**
 	 * Creates an <code>OutputChannels</code> instance

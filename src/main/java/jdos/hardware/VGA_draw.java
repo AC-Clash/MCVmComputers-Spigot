@@ -2,27 +2,27 @@ package jdos.hardware;
 
 import jdos.Dosbox;
 import jdos.gui.Render;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Config;
-import jdos.types.LogType;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 import jdos.types.MachineType;
 import jdos.types.SVGACards;
 import jdos.util.IntPtr;
 import jdos.util.StringHelper;
-import org.apache.logging.log4j.Level;
 
 public class VGA_draw {
     static private final int VGA_PARTS = 4;
 
-    private interface VGA_Line_Handler {
-        int call(/*Bitu*/int vidstart, /*Bitu*/int line);
+    static private interface VGA_Line_Handler {
+        public int call(/*Bitu*/int vidstart, /*Bitu*/int line);
     }
 
     static private VGA_Line_Handler VGA_DrawLine;
     static public final int TEMPLINE_SIZE = 1920 * 4;
     static public int TempLine;
 
-    private static final VGA_Line_Handler VGA_Draw_1BPP_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_1BPP_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             int base = VGA.vga.tandy.draw_base + ((line & VGA.vga.tandy.line_mask) << VGA.vga.tandy.line_shift);
             int draw = TempLine;
@@ -37,7 +37,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_Draw_2BPP_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_2BPP_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             int base = VGA.vga.tandy.draw_base + ((line & VGA.vga.tandy.line_mask) << VGA.vga.tandy.line_shift);
             int draw = TempLine;
@@ -51,7 +51,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_Draw_2BPPHiRes_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_2BPPHiRes_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             int base = VGA.vga.tandy.draw_base + ((line & VGA.vga.tandy.line_mask) << VGA.vga.tandy.line_shift);
             int draw = TempLine;
@@ -69,11 +69,11 @@ public class VGA_draw {
         }
     };
 
-    private static final /*Bitu*/int[] temp = new int[643];
+    private static /*Bitu*/int[] temp = new int[643];
 
     private static int CGA16_READER(int base, int vidstart, int OFF) { return RAM.readb(base+((vidstart +(OFF))& (8*1024 -1)));}
 
-    private static final VGA_Line_Handler VGA_Draw_CGA16_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_CGA16_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             int base = VGA.vga.tandy.draw_base + ((line & VGA.vga.tandy.line_mask) << VGA.vga.tandy.line_shift);
             int draw = TempLine;
@@ -118,7 +118,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_Draw_4BPP_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_4BPP_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             int base = VGA.vga.tandy.draw_base + ((line & VGA.vga.tandy.line_mask) << VGA.vga.tandy.line_shift);
             int draw=TempLine;
@@ -134,7 +134,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_Draw_4BPP_Line_Double = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_4BPP_Line_Double = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             int base = VGA.vga.tandy.draw_base + ((line & VGA.vga.tandy.line_mask) << VGA.vga.tandy.line_shift);
             int draw=TempLine;
@@ -154,7 +154,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_Draw_Linear_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_Linear_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             /*Bitu*/int offset = vidstart & VGA.vga.draw.linear_mask;
 
@@ -175,6 +175,7 @@ public class VGA_draw {
                 RAM.memcpy(TempLine, ret, unwrapped_len);
                 // wrapped chunk: from base of memory block
                 RAM.memcpy(TempLine+unwrapped_len, VGA.vga.draw.linear_base,  wrapped_len);
+                ret = TempLine;
             }
 
             if (VGA.vga.draw.linear_mask-offset < VGA.vga.draw.line_length)
@@ -183,7 +184,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_Draw_Xlat16_Linear_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_Xlat16_Linear_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             int ret = VGA.vga.draw.linear_base + (vidstart & VGA.vga.draw.linear_mask);
             int temps = TempLine;
@@ -205,7 +206,7 @@ public class VGA_draw {
         return TempLine;
     } */
 
-    private static final VGA_Line_Handler VGA_Draw_VGA_Line_HWMouse = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_VGA_Line_HWMouse = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             if (VGA.svga.hardware_cursor_active==null || !VGA.svga.hardware_cursor_active.call())
                 // HW Mouse not enabled, use the tried and true call
@@ -264,7 +265,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_Draw_LIN16_Line_HWMouse = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_LIN16_Line_HWMouse = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             if (VGA.svga.hardware_cursor_active==null || !VGA.svga.hardware_cursor_active.call())
                 return VGA.vga.mem.linear + vidstart;
@@ -277,7 +278,7 @@ public class VGA_draw {
             } else {
                 RAM.memcpy(TempLine, VGA.vga.mem.linear + vidstart, VGA.vga.draw.width*2);
                 /*Bitu*/int sourceStartBit = ((lineat - VGA.vga.s3.hgc.originy) + VGA.vga.s3.hgc.posy)*64 + VGA.vga.s3.hgc.posx;
-                /*Bitu*/int cursorMemStart = ((sourceStartBit >> 2)& ~1) + (VGA.vga.s3.hgc.startaddr << 10);
+                /*Bitu*/int cursorMemStart = ((sourceStartBit >> 2)& ~1) + (((int)VGA.vga.s3.hgc.startaddr) << 10);
                 /*Bitu*/int cursorStartBit = sourceStartBit & 0x7;
                 if ((cursorMemStart & 0x2)!=0) cursorMemStart--;
                 /*Bitu*/int cursorMemEnd = cursorMemStart + ((64-VGA.vga.s3.hgc.posx) >> 2);
@@ -310,7 +311,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_Draw_LIN32_Line_HWMouse = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_Draw_LIN32_Line_HWMouse = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             if (VGA.svga.hardware_cursor_active==null || !VGA.svga.hardware_cursor_active.call())
                 return VGA.vga.mem.linear+vidstart;
@@ -323,7 +324,7 @@ public class VGA_draw {
             } else {
                 RAM.memcpy(TempLine, VGA.vga.mem.linear+vidstart, VGA.vga.draw.width*4);
                 /*Bitu*/int sourceStartBit = ((lineat - VGA.vga.s3.hgc.originy) + VGA.vga.s3.hgc.posy)*64 + VGA.vga.s3.hgc.posx;
-                /*Bitu*/int cursorMemStart = ((sourceStartBit >> 2)& ~1) + (VGA.vga.s3.hgc.startaddr << 10);
+                /*Bitu*/int cursorMemStart = ((sourceStartBit >> 2)& ~1) + (((int)VGA.vga.s3.hgc.startaddr) << 10);
                 /*Bitu*/int cursorStartBit = sourceStartBit & 0x7;
                 if ((cursorMemStart & 0x2)!=0) cursorMemStart--;
                 /*Bitu*/int cursorMemEnd = cursorMemStart + ((64-VGA.vga.s3.hgc.posx) >> 2);
@@ -368,8 +369,8 @@ public class VGA_draw {
         } else return VGA.vga.tandy.draw_base+vidstart;
     }
 
-    private static final /*Bit32u*/int[] FontMask={0xffffffff,0x0};
-    private static final VGA_Line_Handler VGA_TEXT_Draw_Line = new VGA_Line_Handler() {
+    private static /*Bit32u*/int[] FontMask={0xffffffff,0x0};
+    private static VGA_Line_Handler VGA_TEXT_Draw_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             /*Bits*/int font_addr;
             int draw=TempLine;
@@ -389,14 +390,14 @@ public class VGA_draw {
             }
             if (VGA.vga.draw.cursor.enabled && (VGA.vga.draw.cursor.count&0x8)!=0) {
                 font_addr = (VGA.vga.draw.cursor.address-vidstart) >> 1;
-                /*Bits*/
-                if (font_addr>=0 && font_addr< VGA.vga.draw.blocks) {
+                if (font_addr>=0 && font_addr<(/*Bits*/int)VGA.vga.draw.blocks) {
                     if (line>=VGA.vga.draw.cursor.sline && line<=VGA.vga.draw.cursor.eline) {
                         draw=TempLine+font_addr*8;
                         /*Bit32u*/int att=VGA.TXT_FG_Table[RAM.readb(VGA.vga.tandy.draw_base+VGA.vga.draw.cursor.address+1)&0xf];
                         RAM.writed(draw,att);
                         draw+=4;
                         RAM.writed(draw,att);
+                        draw+=4;
                     }
                 }
             }
@@ -405,7 +406,7 @@ public class VGA_draw {
         }
     };
 
-    private static final VGA_Line_Handler VGA_TEXT_Herc_Draw_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_TEXT_Herc_Draw_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             /*Bits*/int font_addr;
             int draw=TempLine;
@@ -419,6 +420,7 @@ public class VGA_draw {
                     RAM.writed(draw, 0);
                     draw+=4;
                     RAM.writed(draw, 0);
+                    draw+=4;
                 } else {
                     /*Bit32u*/int bg, fg;
                     boolean underline=false;
@@ -427,8 +429,7 @@ public class VGA_draw {
                         if ((attrib&0x8)!=0) fg = VGA.TXT_FG_Table[0xf];
                         else fg = VGA.TXT_FG_Table[0x0];
                     } else {
-                        /*Bitu*/
-                        if (((VGA.vga.crtc.underline_location&0x1f) ==line) && ((attrib&0x77)==0x1)) underline=true;
+                        if (((/*Bitu*/int)(VGA.vga.crtc.underline_location&0x1f)==line) && ((attrib&0x77)==0x1)) underline=true;
                         bg = VGA.TXT_BG_Table[0x0];
                         if ((attrib&0x8)!=0) fg = VGA.TXT_FG_Table[0xf];
                         else fg = VGA.TXT_FG_Table[0x7];
@@ -443,13 +444,12 @@ public class VGA_draw {
                     RAM.writed(draw, (fg&mask1) | (bg&~mask1));
                     draw+=4;
                     RAM.writed(draw, (fg&mask2) | (bg&~mask2));
+                    draw+=4;
                 }
-                draw+=4;
             }
             if (VGA.vga.draw.cursor.enabled && (VGA.vga.draw.cursor.count&0x8)==0) {
                 font_addr = (VGA.vga.draw.cursor.address-vidstart) >> 1;
-                /*Bits*/
-                if (font_addr>=0 && font_addr< VGA.vga.draw.blocks) {
+                if (font_addr>=0 && font_addr<(/*Bits*/int)VGA.vga.draw.blocks) {
                     if (line>=VGA.vga.draw.cursor.sline && line<=VGA.vga.draw.cursor.eline) {
                         draw=TempLine+font_addr*8;
                         /*Bit8u*/int attr = RAM.readb(VGA.vga.tandy.draw_base+VGA.vga.draw.cursor.address+1);
@@ -464,6 +464,7 @@ public class VGA_draw {
                         RAM.writed(draw, cg);
                         draw+=4;
                         RAM.writed(draw, cg);
+                        draw+=4;
                     }
                 }
             }
@@ -473,7 +474,7 @@ public class VGA_draw {
     };
 
     // combined 8/9-dot wide text mode 16bpp line drawing function
-    private static final VGA_Line_Handler VGA_TEXT_Xlat16_Draw_Line = new VGA_Line_Handler() {
+    private static VGA_Line_Handler VGA_TEXT_Xlat16_Draw_Line = new VGA_Line_Handler() {
         public int call(/*Bitu*/int vidstart, /*Bitu*/int line) {
             // keep it aligned:
             int draw=TempLine + 16-VGA.vga.draw.panning;
@@ -540,7 +541,7 @@ public class VGA_draw {
             /*Bitu*/long total = 4 + end - VGA.vga.changes.start;
             /*Bit32u*/int clearMask = VGA.vga.changes.clearMask;
             total >>= 2;
-            IntPtr clear = new IntPtr(VGA.vga.changes.map, VGA.vga.changes.start & ~3);
+            IntPtr clear = new IntPtr(VGA.vga.changes.map, (int)(VGA.vga.changes.start & ~3 ));
             while ( total-- !=0 ) {
                 clear.setInc(clear.get() & clearMask);
             }
@@ -566,15 +567,15 @@ public class VGA_draw {
 
     private static int bg_color_index = 0; // screen-off black index
 
-    private static final Pic.PIC_EventHandler VGA_DrawSingleLine = new Pic.PIC_EventHandler() {
+    private static Pic.PIC_EventHandler VGA_DrawSingleLine = new Pic.PIC_EventHandler() {
         public void call(/*Bitu*/int val) {
             if (VGA.vga.attr.disabled!=0) {
                 switch(Dosbox.machine) {
-                    case MCH_PCJR:
+                    case MachineType.MCH_PCJR:
                         // Displays the border color when screen is disabled
                         bg_color_index = VGA.vga.tandy.border_color;
                         break;
-                    case MCH_TANDY:
+                    case MachineType.MCH_TANDY:
                         // Either the PCJr way or the CGA way
                         if ((VGA.vga.tandy.gfx_control & 0x4)!=0) {
                             bg_color_index = VGA.vga.tandy.border_color;
@@ -582,12 +583,12 @@ public class VGA_draw {
                             bg_color_index = VGA.vga.attr.palette[0];
                         else bg_color_index = 0;
                         break;
-                    case MCH_CGA:
+                    case MachineType.MCH_CGA:
                         // the background color
                         bg_color_index = VGA.vga.attr.overscan_color;
                         break;
-                    case MCH_EGA:
-                    case MCH_VGA:
+                    case MachineType.MCH_EGA:
+                    case MachineType.MCH_VGA:
                         // DoWhackaDo, Alien Carnage, TV sports Football
                         // when disabled by attribute index bit 5:
                         //  ET3000, ET4000, Paradise display the border color
@@ -641,7 +642,7 @@ public class VGA_draw {
         }
     };
 
-    private static final Pic.PIC_EventHandler VGA_DrawEGASingleLine = new Pic.PIC_EventHandler() {
+    private static Pic.PIC_EventHandler VGA_DrawEGASingleLine = new Pic.PIC_EventHandler() {
         public void call(/*Bitu*/int val) {
             if (VGA.vga.attr.disabled!=0) {
                 RAM.zeroset(TempLine, TEMPLINE_SIZE);
@@ -669,7 +670,7 @@ public class VGA_draw {
         }
     };
 
-    private static final Pic.PIC_EventHandler VGA_DrawPart = new Pic.PIC_EventHandler() {
+    private static Pic.PIC_EventHandler VGA_DrawPart = new Pic.PIC_EventHandler() {
         public void call(/*Bitu*/int val) {
             int address_add;
             if (VBE.vbeLineOffset!=0)
@@ -710,7 +711,7 @@ public class VGA_draw {
 
     public static void VGA_SetBlinking(/*Bitu*/int enabled) {
         /*Bitu*/int b;
-        Log.specializedLog(LogType.LOG_VGA, Level.INFO,"Blinking "+enabled);
+        if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGA, LogSeverities.LOG_NORMAL,"Blinking "+enabled);
         if (enabled!=0) {
             b=0;VGA.vga.draw.blinking=true; //used to -1 but blinking is unsigned
             VGA.vga.attr.mode_control|=0x08;
@@ -723,7 +724,7 @@ public class VGA_draw {
         for (/*Bitu*/int i=0;i<8;i++) VGA.TXT_BG_Table[i+8]=(b+i) | ((b+i) << 8)| ((b+i) <<16) | ((b+i) << 24);
     }
 
-    private static final Pic.PIC_EventHandler VGA_VertInterrupt = new Pic.PIC_EventHandler() {
+    private static Pic.PIC_EventHandler VGA_VertInterrupt = new Pic.PIC_EventHandler() {
         public void call(/*Bitu*/int val) {
             if ((!VGA.vga.draw.vret_triggered) && ((VGA.vga.crtc.vertical_retrace_end&0x30)==0x10)) {
                 VGA.vga.draw.vret_triggered=true;
@@ -735,7 +736,7 @@ public class VGA_draw {
         }
     };
 
-    private static final Pic.PIC_EventHandler VGA_Other_VertInterrupt = new Pic.PIC_EventHandler() {
+    private static Pic.PIC_EventHandler VGA_Other_VertInterrupt = new Pic.PIC_EventHandler() {
         public void call(/*Bitu*/int val) {
             if (val!=0) Pic.PIC_ActivateIRQ(5);
             else Pic.PIC_DeActivateIRQ(5);
@@ -745,7 +746,7 @@ public class VGA_draw {
         }
     };
 
-    private static final Pic.PIC_EventHandler VGA_DisplayStartLatch = new Pic.PIC_EventHandler() {
+    private static Pic.PIC_EventHandler VGA_DisplayStartLatch = new Pic.PIC_EventHandler() {
         public void call(/*Bitu*/int val) {
             VGA.vga.config.real_start=VGA.vga.config.display_start & (VGA.vga.vmemwrap-1);
             VGA.vga.draw.bytes_skip = VGA.vga.config.bytes_skip;
@@ -755,7 +756,7 @@ public class VGA_draw {
         }
     };
 
-    private static final Pic.PIC_EventHandler VGA_PanningLatch = new Pic.PIC_EventHandler() {
+    private static Pic.PIC_EventHandler VGA_PanningLatch = new Pic.PIC_EventHandler() {
         public void call(/*Bitu*/int val) {
             VGA.vga.draw.panning = VGA.vga.config.pel_panning;
         }
@@ -764,7 +765,7 @@ public class VGA_draw {
         }
     };
 
-    static private final Pic.PIC_EventHandler VGA_VerticalTimer = new Pic.PIC_EventHandler() {
+    static private Pic.PIC_EventHandler VGA_VerticalTimer = new Pic.PIC_EventHandler() {
         public String toString() {
             return "VGA_VerticalTimer";
         }
@@ -773,20 +774,20 @@ public class VGA_draw {
             Pic.PIC_AddEvent( VGA_VerticalTimer, (float)VGA.vga.draw.delay.vtotal );
 
             switch(Dosbox.machine) {
-            case MCH_PCJR:
-            case MCH_TANDY:
+            case MachineType.MCH_PCJR:
+            case MachineType.MCH_TANDY:
                 // PCJr: Vsync is directly connected to the IRQ controller
                 // Some earlier Tandy models are said to have a vsync interrupt too
                 Pic.PIC_AddEvent(VGA_Other_VertInterrupt, (float)VGA.vga.draw.delay.vrstart, 1);
                 Pic.PIC_AddEvent(VGA_Other_VertInterrupt, (float)VGA.vga.draw.delay.vrend, 0);
                 // fall-through
-            case MCH_CGA:
-            case MCH_HERC:
+            case MachineType.MCH_CGA:
+            case MachineType.MCH_HERC:
                 // MC6845-powered graphics: Loading the display start latch happens somewhere
                 // after vsync off and before first visible scanline, so probably here
                 VGA_DisplayStartLatch.call(0);
                 break;
-            case MCH_VGA:
+            case MachineType.MCH_VGA:
                 Pic.PIC_AddEvent(VGA_DisplayStartLatch, (float)VGA.vga.draw.delay.vrstart);
                 Pic.PIC_AddEvent(VGA_PanningLatch, (float)VGA.vga.draw.delay.vrend);
                 // EGA: 82c435 datasheet: interrupt happens at display end
@@ -794,22 +795,21 @@ public class VGA_draw {
                 // add a little amount of time to make sure the last drawpart has already fired
                 Pic.PIC_AddEvent(VGA_VertInterrupt,(float)(VGA.vga.draw.delay.vdend + 0.005));
                 break;
-            case MCH_EGA:
+            case MachineType.MCH_EGA:
                 Pic.PIC_AddEvent(VGA_DisplayStartLatch, (float)VGA.vga.draw.delay.vrend);
 		        Pic.PIC_AddEvent(VGA_VertInterrupt,(float)(VGA.vga.draw.delay.vdend + 0.005));
 		        break;
             default:
-                Log.exit("This new machine needs implementation in VGA_VerticalTimer too.", Level.ERROR);
+                Log.exit("This new machine needs implementation in VGA_VerticalTimer too.");
                 break;
             }
             //Check if we can actually render, else skip the rest (frameskip)
-            if (VGA.vga.draw.vga_override || Render.RENDER_StartUpdate())
+            if (VGA.vga.draw.vga_override || !Render.RENDER_StartUpdate())
                 return;
 
             VGA.vga.draw.address_line = VGA.vga.config.hlines_skip;
             if (Dosbox.IS_EGAVGA_ARCH()) {
-                /*Bitu*/
-                VGA.vga.draw.split_line = (VGA.vga.config.line_compare+1)/VGA.vga.draw.lines_scaled;
+                VGA.vga.draw.split_line = (/*Bitu*/int)((VGA.vga.config.line_compare+1)/VGA.vga.draw.lines_scaled);
                 if ((Dosbox.svgaCard== SVGACards.SVGA_S3Trio) && (VGA.vga.config.line_compare==0)) VGA.vga.draw.split_line=0;
                 VGA.vga.draw.split_line -= VGA.vga.draw.vblank_skip;
             } else {
@@ -837,7 +837,8 @@ public class VGA_draw {
                 VGA.vga.draw.address *= VGA.vga.draw.byte_panning_shift;
                 if (Dosbox.machine!=MachineType.MCH_EGA) VGA.vga.draw.address += VGA.vga.draw.panning;
         //#ifdef VGA_KEEP_CHANGES
-                //#endif
+                startaddr_changed=true;
+        //#endif
                 break;
             case VGA.M_VGA:
                 if (VGA.vga.config.compatible_chain4 && (VGA.vga.crtc.underline_location & 0x40)!=0) {
@@ -856,7 +857,8 @@ public class VGA_draw {
                 VGA.vga.draw.address *= VGA.vga.draw.byte_panning_shift;
                 VGA.vga.draw.address += VGA.vga.draw.panning;
         //#ifdef VGA_KEEP_CHANGES
-                //#endif
+                startaddr_changed=true;
+        //#endif
                 break;
             case VGA.M_TEXT:
                 VGA.vga.draw.byte_panning_shift = 2;
@@ -901,7 +903,7 @@ public class VGA_draw {
             switch (VGA.vga.draw.mode) {
             case VGA.Drawmode.PART:
                 if (VGA.vga.draw.parts_left!=0) {
-                    Log.specializedLog(LogType.LOG_VGAMISC,Level.INFO, "Parts left: "+VGA.vga.draw.parts_left );
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGAMISC,LogSeverities.LOG_NORMAL, "Parts left: "+VGA.vga.draw.parts_left );
                     Pic.PIC_RemoveEvents(VGA_DrawPart);
                     Render.RENDER_EndUpdate(true);
                 }
@@ -912,7 +914,7 @@ public class VGA_draw {
             case VGA.Drawmode.LINE:
             case VGA.Drawmode.EGALINE:
                 if (VGA.vga.draw.lines_done < VGA.vga.draw.lines_total) {
-                    Log.specializedLog(LogType.LOG_VGAMISC, Level.INFO, "Lines left: %d"+(VGA.vga.draw.lines_total-VGA.vga.draw.lines_done));
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGAMISC,LogSeverities.LOG_NORMAL, "Lines left: %d"+(VGA.vga.draw.lines_total-VGA.vga.draw.lines_done));
                     if (VGA.vga.draw.mode==VGA.Drawmode.EGALINE) Pic.PIC_RemoveEvents(VGA_DrawEGASingleLine);
 			        else Pic.PIC_RemoveEvents(VGA_DrawSingleLine);
                     Render.RENDER_EndUpdate(true);
@@ -994,7 +996,7 @@ public class VGA_draw {
         }
     }
 
-    public static final Pic.PIC_EventHandler VGA_SetupDrawing = new Pic.PIC_EventHandler() {
+    public static Pic.PIC_EventHandler VGA_SetupDrawing = new Pic.PIC_EventHandler() {
         public String toString() {
             return "VGA_SetupDrawing";
         }
@@ -1007,16 +1009,16 @@ public class VGA_draw {
             }
             // set the drawing mode
             switch (Dosbox.machine) {
-            case MCH_CGA:
-            case MCH_PCJR:
-            case MCH_TANDY:
+            case MachineType.MCH_CGA:
+            case MachineType.MCH_PCJR:
+            case MachineType.MCH_TANDY:
                 VGA.vga.draw.mode = VGA.Drawmode.LINE;
                 break;
-            case MCH_EGA:
+            case MachineType.MCH_EGA:
 		        // Note: The Paradise SVGA uses the same panning mechanism as EGA
 		        VGA.vga.draw.mode = VGA.Drawmode.EGALINE;
 		        break;
-            case MCH_VGA:
+            case MachineType.MCH_VGA:
                 if (Dosbox.svgaCard==SVGACards.SVGA_None) {
                     VGA.vga.draw.mode = VGA.Drawmode.LINE;
                     break;
@@ -1145,12 +1147,12 @@ public class VGA_draw {
                 vbend = vtotal;
                 VGA.vga.draw.double_scan=false;
                 switch (Dosbox.machine) {
-                case MCH_CGA:
-                case MCH_TANDY:
-                case MCH_PCJR: //TANDY_ARCH_CASE:
+                case MachineType.MCH_CGA:
+                case MachineType.MCH_TANDY:
+                case MachineType.MCH_PCJR: //TANDY_ARCH_CASE:
                     clock=((VGA.vga.tandy.mode_control & 1)!=0 ? 14318180 : (14318180/2))/8;
                     break;
-                case MCH_HERC:
+                case MachineType.MCH_HERC:
                     if ((VGA.vga.herc.mode_control & 0x2)!=0) clock=16000000/16;
                     else clock=16000000/8;
                     break;
@@ -1161,8 +1163,8 @@ public class VGA_draw {
                 VGA.vga.draw.delay.hdend = hdend*1000.0/clock; //in milliseconds
             }
             if (Config.C_DEBUG) {
-                Log.specializedLog(LogType.LOG_VGA,Level.INFO,"h total "+htotal+" end "+hdend+" blank ("+hbstart+"/"+hbend+") retrace ("+hrstart+"/"+hrend+")");
-                Log.specializedLog(LogType.LOG_VGA,Level.INFO,"v total "+vtotal+" end "+vdend+" blank ("+vbstart+"/"+vbend+") retrace ("+vrstart+"/"+vrend+")");
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_NORMAL,"h total "+htotal+" end "+hdend+" blank ("+hbstart+"/"+hbend+") retrace ("+hrstart+"/"+hrend+")");
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_NORMAL,"v total "+vtotal+" end "+vdend+" blank ("+vbstart+"/"+vbend+") retrace ("+vrstart+"/"+vrend+")");
             }
             if (htotal==0) return;
             if (vtotal==0) return;
@@ -1200,15 +1202,15 @@ public class VGA_draw {
                         if (vbstart < vdend) {
                             vdend = vbstart;
                         }
-                    Log.specializedLog(LogType.LOG_VGA,Level.WARN,"Blanking wrap to line "+vblank_skip);
+                    if (Log.level<=LogSeverities.LOG_WARN) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_WARN,"Blanking wrap to line "+vblank_skip);
                     } else if (vbstart<=1) {
                         // blanking is used to cut lines at the start of the screen
                         vblank_skip = vbend;
-                    Log.specializedLog(LogType.LOG_VGA,Level.WARN,"Upper "+vblank_skip+" lines of the screen blanked");
+                    if (Log.level<=LogSeverities.LOG_WARN) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_WARN,"Upper "+vblank_skip+" lines of the screen blanked");
                     } else if (vbstart < vdend) {
                         if (vbend < vdend) {
                             // the game wants a black bar somewhere on the screen
-                        Log.specializedLog(LogType.LOG_VGA,Level.WARN,"Unsupported blanking: line "+vbstart+"-"+vbend);
+                        if (Log.level<=LogSeverities.LOG_WARN) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_WARN,"Unsupported blanking: line "+vbstart+"-"+vbend);
                         } else {
                             // blanking is used to cut off some lines from the bottom
                             vdend = vbstart;
@@ -1255,7 +1257,7 @@ public class VGA_draw {
                 break;
             case 3:		//480 line mode, filled with 525 total
             default:
-                pheight = (525.0 / vtotal);
+                pheight = (480.0 / 480.0) * ( 525.0 / vtotal );
                 break;
             }
 
@@ -1422,10 +1424,11 @@ public class VGA_draw {
                     if (( Dosbox.machine==MachineType.MCH_TANDY ) && ( VGA.vga.tandy.mode_control & 0x10 )!=0) {
                         doublewidth = false;
                         VGA.vga.draw.blocks*=2;
+                        width=VGA.vga.draw.blocks*2;
                     } else {
                         doublewidth = true;
+                        width=VGA.vga.draw.blocks*2;
                     }
-                    width=VGA.vga.draw.blocks*2;
                     VGA_DrawLine=VGA_Draw_4BPP_Line;
                 } else {
                     doublewidth=true;
@@ -1448,12 +1451,13 @@ public class VGA_draw {
                 VGA_DrawLine=VGA_TEXT_Herc_Draw_Line;
                 break;
             default:
-                Log.specializedLog(LogType.LOG_VGA,Level.ERROR,"Unhandled VGA mode "+VGA.vga.mode+" while checking for resolution");
+                if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_ERROR,"Unhandled VGA mode "+VGA.vga.mode+" while checking for resolution");
                 break;
             }
             VGA_CheckScanLength();
             if (VGA.vga.draw.double_scan) {
                 if (Dosbox.IS_VGA_ARCH()) {
+                    VGA.vga.draw.vblank_skip /= 2;
                     height/=2;
                 }
                 doubleheight=true;
@@ -1499,14 +1503,14 @@ public class VGA_draw {
             }
 
             if (Config.C_DEBUG) {
-                Log.specializedLog(LogType.LOG_VGA,Level.INFO, StringHelper.sprintf("h total %2.5f (%3.2fkHz) blank(%02.5f/%02.5f) retrace(%02.5f/%02.5f)",
-                    new Object[] {(float) VGA.vga.draw.delay.htotal, (float) (1.0 / VGA.vga.draw.delay.htotal),
-                            (float) VGA.vga.draw.delay.hblkstart, (float) VGA.vga.draw.delay.hblkend,
-                            (float) VGA.vga.draw.delay.hrstart, (float) VGA.vga.draw.delay.hrend}));
-                Log.specializedLog(LogType.LOG_VGA,Level.INFO, StringHelper.sprintf("v total %2.5f (%3.2fHz) blank(%02.5f/%02.5f) retrace(%02.5f/%02.5f)",
-                    new Object[] {(float) VGA.vga.draw.delay.vtotal, (float) (1000.0 / VGA.vga.draw.delay.vtotal),
-                            (float) VGA.vga.draw.delay.vblkstart, (float) VGA.vga.draw.delay.vblkend,
-                            (float) VGA.vga.draw.delay.vrstart, (float) VGA.vga.draw.delay.vrend}));
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_NORMAL, StringHelper.sprintf("h total %2.5f (%3.2fkHz) blank(%02.5f/%02.5f) retrace(%02.5f/%02.5f)",
+                    new Object[] {new Float(VGA.vga.draw.delay.htotal),new Float(1.0/VGA.vga.draw.delay.htotal),
+                    new Float(VGA.vga.draw.delay.hblkstart),new Float(VGA.vga.draw.delay.hblkend),
+                    new Float(VGA.vga.draw.delay.hrstart),new Float(VGA.vga.draw.delay.hrend)}));
+                if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_NORMAL, StringHelper.sprintf("v total %2.5f (%3.2fHz) blank(%02.5f/%02.5f) retrace(%02.5f/%02.5f)",
+                    new Object[] {new Float(VGA.vga.draw.delay.vtotal),new Float((1000.0/VGA.vga.draw.delay.vtotal)),
+                    new Float(VGA.vga.draw.delay.vblkstart),new Float(VGA.vga.draw.delay.vblkend),
+                    new Float(VGA.vga.draw.delay.vrstart),new Float(VGA.vga.draw.delay.vrend)}));
             }
 
             // need to resize the output window?
@@ -1528,8 +1532,8 @@ public class VGA_draw {
                 if (doubleheight) VGA.vga.draw.lines_scaled=2;
                 else VGA.vga.draw.lines_scaled=1;
                 if (Config.C_DEBUG) {
-                    Log.specializedLog(LogType.LOG_VGA,Level.INFO,"Width "+width+", Height "+height+", fps "+fps);
-                    Log.specializedLog(LogType.LOG_VGA,Level.INFO,(doublewidth ? "double":"normal")+" width, "+(doubleheight ? "double":"normal")+" height aspect "+aspect_ratio);
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_NORMAL,"Width "+width+", Height "+height+", fps "+fps);
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_VGA,LogSeverities.LOG_NORMAL,(doublewidth ? "double":"normal")+" width, "+(doubleheight ? "double":"normal")+" height aspect "+aspect_ratio);
                 }
                 if (!VGA.vga.draw.vga_override)
                     Render.RENDER_SetSize(width,height,bpp,(float)fps,aspect_ratio,doublewidth,doubleheight);

@@ -2,12 +2,10 @@ package jdos.win.builtin.directx.ddraw;
 
 import jdos.cpu.CPU;
 import jdos.cpu.Callback;
-import jdos.util.Log;
-import jdos.win.Win;
 import jdos.win.builtin.HandlerBase;
 
 public class IDirectDraw7 extends IUnknown {
-    private static void createVTable() {
+    private static int createVTable() {
         int address = allocateVTable("IDirectDraw7", IDirectDraw.VTABLE_SIZE+7);
         int result = address;
         address = IDirectDraw.addIDirectDraw(address, true);
@@ -22,6 +20,7 @@ public class IDirectDraw7 extends IUnknown {
         /* added in v7 */
         address = add(address, StartModeTest);
         address = add(address, EvaluateMode);
+        return result;
     }
 
     public static int create() {
@@ -33,7 +32,7 @@ public class IDirectDraw7 extends IUnknown {
 
     /* added in v2 */
     // HRESULT GetAvailableVidMem(this, LPDDSCAPS2 lpDDCaps, LPDWORD lpdwTotal, LPDWORD lpdwFree)
-    static private final Callback.Handler GetAvailableVidMem = new HandlerBase() {
+    static private Callback.Handler GetAvailableVidMem = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDraw7.GetAvailableVidMem";
         }
@@ -42,14 +41,13 @@ public class IDirectDraw7 extends IUnknown {
             int lpDDCaps = CPU.CPU_Pop32();
             int lpdwTotal = CPU.CPU_Pop32();
             int lpdwFree = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     /* added in v4 */
     // HRESULT GetSurfaceFromDC(this HDC hdc, LPDIRECTDRAWSURFACE7 *pSurf)
-    static private final Callback.Handler GetSurfaceFromDC = new HandlerBase() {
+    static private Callback.Handler GetSurfaceFromDC = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDraw7.GetSurfaceFromDC";
         }
@@ -57,36 +55,33 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int hdc = CPU.CPU_Pop32();
             int pSurf = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT RestoreAllSurfaces(this)
-    static private final Callback.Handler RestoreAllSurfaces = new HandlerBase() {
+    static private Callback.Handler RestoreAllSurfaces = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDraw7.RestoreAllSurfaces";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT TestCooperativeLevel(this)
-    static private final Callback.Handler TestCooperativeLevel = new HandlerBase() {
+    static private Callback.Handler TestCooperativeLevel = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDraw7.TestCooperativeLevel";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
     // HRESULT GetDeviceIdentifier(this, LPDDDEVICEIDENTIFIER2 pDDDI, DWORD dwFlags)
-    static private final Callback.Handler GetDeviceIdentifier = new HandlerBase() {
+    static private Callback.Handler GetDeviceIdentifier = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDraw7.GetDeviceIdentifier";
         }
@@ -94,14 +89,13 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int pDDDI = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     /* added in v7 */
     // HRESULT StartModeTest(this, LPSIZE pModes, DWORD dwNumModes, DWORD dwFlags)
-    static private final Callback.Handler StartModeTest = new HandlerBase() {
+    static private Callback.Handler StartModeTest = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDraw7.StartModeTest";
         }
@@ -110,13 +104,12 @@ Win.exit();
             int pModes = CPU.CPU_Pop32();
             int dwNumModes = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT EvaluateMode(this, DWORD dwFlags, DWORD  *pTimeout)
-    static private final Callback.Handler EvaluateMode = new HandlerBase() {
+    static private Callback.Handler EvaluateMode = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDraw7.EvaluateMode";
         }
@@ -124,8 +117,7 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
             int pTimeout = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 }

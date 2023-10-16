@@ -1,8 +1,6 @@
 package jdos.misc.setup;
 
-import jdos.util.Log;
 import jdos.util.StringHelper;
-import org.apache.logging.log4j.Level;
 
 /*
  * Multitype storage container that is aware of the currently stored type in it.
@@ -11,7 +9,6 @@ import org.apache.logging.log4j.Level;
  * st = 12 //Exception
  * in = 12 //works
  */
-
 public class Value {
     private Hex _hex = new Hex();
     private boolean _bool;
@@ -19,7 +16,7 @@ public class Value {
     private String _string;
     private double _double;
 
-    public static class WrongType extends RuntimeException {}
+    public class WrongType extends RuntimeException {}
     public static final class Etype {
         static final int V_NONE = 0;
         static final int V_HEX = 1;
@@ -38,10 +35,7 @@ public class Value {
     public Value(double in) {_double = in; type = Etype.V_DOUBLE; }
     public Value(String in) {_string = in; type = Etype.V_STRING; }
     public Value(Value in) {plaincopy(in);}
-    public Value(String in, int _t) { type = Etype.V_NONE; try {SetValue(in, _t);} catch (WrongType e) {
-        Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-    }
-    }
+    public Value(String in, int _t) { type = Etype.V_NONE; try {SetValue(in, _t);} catch (WrongType e){}}
 
     public void set(Hex in) throws WrongType {copy(new Value(in));}
     public void set(int in) throws WrongType {copy(new Value(in));}
@@ -118,8 +112,7 @@ public class Value {
         else if (type == Etype.V_DOUBLE)
             return StringHelper.format(_double, 2);
         else
-            Log.getLogger().error("toString() is possibly messed up ");
-        return null;
+            throw new RuntimeException("ToString messed up ?");
     }
 
     private void copy(Value in) throws WrongType {
@@ -156,7 +149,7 @@ public class Value {
                 return _double == other._double;
             if (type == Etype.V_STRING)
                 return _string.equals(other._string);
-            Log.getLogger().error("Comparing stuff that doesn't make sense");
+            throw new RuntimeException("comparing stuff that doesn't make sense");
         }
         return false;
     }

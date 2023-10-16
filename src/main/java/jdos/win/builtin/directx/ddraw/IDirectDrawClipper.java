@@ -4,8 +4,6 @@ import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
 import jdos.hardware.Memory;
-import jdos.util.Log;
-import jdos.win.Win;
 import jdos.win.builtin.HandlerBase;
 import jdos.win.utils.Error;
 
@@ -19,7 +17,8 @@ public class IDirectDrawClipper extends IUnknown {
         int vtable = getVTable("IDirectDrawClipper");
         if (vtable == 0)
             vtable = createVTable();
-        return allocate(vtable, DATA_SIZE, 0);
+        int result = allocate(vtable, DATA_SIZE, 0);
+        return result;
     }
 
     static private int createVTable() {
@@ -37,7 +36,7 @@ public class IDirectDrawClipper extends IUnknown {
     }
     
     // HRESULT GetClipList(this, LPRECT lpRect, LPRGNDATA lpClipList, LPDWORD lpdwSize)
-    static private final Callback.Handler GetClipList = new HandlerBase() {
+    static private Callback.Handler GetClipList = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawClipper.GetClipList";
         }
@@ -46,13 +45,12 @@ public class IDirectDrawClipper extends IUnknown {
             int lpRect = CPU.CPU_Pop32();
             int lpClipList = CPU.CPU_Pop32();
             int lpdwSize = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetHWnd(this, HWND *lphWnd)
-    static private final Callback.Handler GetHWnd = new HandlerBase() {
+    static private Callback.Handler GetHWnd = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawClipper.GetHWnd";
         }
@@ -69,7 +67,7 @@ Win.exit();
     };
 
     // HRESULT Initialize(this, LPDIRECTDRAW lpDD, DWORD dwFlags)
-    static private final Callback.Handler Initialize = new HandlerBase() {
+    static private Callback.Handler Initialize = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawClipper.Initialize";
         }
@@ -77,26 +75,24 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int lpDD = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT IsClipListChanged(this, BOOL *lpbChanged)
-    static private final Callback.Handler IsClipListChanged = new HandlerBase() {
+    static private Callback.Handler IsClipListChanged = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawClipper.IsClipListChanged";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int lpbChanged = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetClipList(this, LPRGNDATA lpClipList, DWORD dwFlags)
-    static private final Callback.Handler SetClipList = new HandlerBase() {
+    static private Callback.Handler SetClipList = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawClipper.SetClipList";
         }
@@ -104,13 +100,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int lpClipList = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetHWnd(this, DWORD dwFlags, HWND hWnd)
-    static private final Callback.Handler SetHWnd = new HandlerBase() {
+    static private Callback.Handler SetHWnd = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectDrawClipper.SetHWnd";
         }

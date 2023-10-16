@@ -4,7 +4,6 @@ import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
 import jdos.win.builtin.HandlerBase;
 import jdos.win.system.WinSystem;
@@ -91,7 +90,7 @@ public class IDirectDrawPalette extends IUnknown {
     }
 
     // HRESULT GetCaps(this, LPDWORD lpdwCaps)
-    static private final Callback.Handler GetCaps = new HandlerBase() {
+    static private Callback.Handler GetCaps = new HandlerBase() {
         public String getName() {
             return "IDirectDrawPalette.GetCaps";
         }
@@ -108,7 +107,7 @@ public class IDirectDrawPalette extends IUnknown {
     };
 
     // HRESULT GetEntries(this, DWORD dwFlags, DWORD dwBase, DWORD dwNumEntries, LPPALETTEENTRY lpEntries)
-    static private final Callback.Handler GetEntries = new HandlerBase() {
+    static private Callback.Handler GetEntries = new HandlerBase() {
         public String getName() {
             return "IDirectDrawPalette.GetEntries";
         }
@@ -126,7 +125,7 @@ public class IDirectDrawPalette extends IUnknown {
     };
 
     // HRESULT Initialize(this, LPDIRECTDRAW lpDD, DWORD dwFlags, LPPALETTEENTRY lpDDColorTable)
-    static private final Callback.Handler Initialize = new HandlerBase() {
+    static private Callback.Handler Initialize = new HandlerBase() {
         public String getName() {
             return "IDirectDrawPalette.Initialize";
         }
@@ -135,13 +134,12 @@ public class IDirectDrawPalette extends IUnknown {
             int lpDD = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
             int lpDDColorTable = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetEntries(this, DWORD dwFlags, DWORD dwStartingEntry, DWORD dwCount, LPPALETTEENTRY lpEntries)
-    static private final Callback.Handler SetEntries = new HandlerBase() {
+    static private Callback.Handler SetEntries = new HandlerBase() {
         public String getName() {
             return "IDirectDrawPalette.SetEntries";
         }
@@ -156,7 +154,7 @@ Win.exit();
 //                if (WinAPI.LOG) {
 //                    int oldColor = getData(This, OFFSET_COLOR_DATA+(dwStartingEntry+i)*4);
 //                    if (color != oldColor) {
-//                        Log.getLogger().info(i+". 0x"+ Ptr.toString(oldColor)+" -> 0x"+Ptr.toString(color));
+//                        System.out.println(i+". 0x"+ Ptr.toString(oldColor)+" -> 0x"+Ptr.toString(color));
 //                    }
 //                }
                 setData(This, OFFSET_COLOR_DATA+(i+dwStartingEntry)*4, color);

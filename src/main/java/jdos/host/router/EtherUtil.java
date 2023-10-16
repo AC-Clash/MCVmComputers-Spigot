@@ -1,6 +1,5 @@
 package jdos.host.router;
 
-import jdos.util.Log;
 import jdos.util.StringHelper;
 
 import java.util.LinkedList;
@@ -40,7 +39,7 @@ public class EtherUtil {
         while (length > 1) {
           data = (((buffer[i+offset] << 8) & 0xFF00) | ((buffer[i + 1 + offset]) & 0xFF));
           sum += data;
-          if ((sum & 0xFFFF0000L) > 0) {
+          if ((sum & 0xFFFF0000) > 0) {
             sum = sum & 0xFFFF;
             sum += 1;
           }
@@ -50,7 +49,7 @@ public class EtherUtil {
 
         if (length > 0) {
           sum += (buffer[i+offset] << 8 & 0xFF00);
-          if ((sum & 0xFFFF0000L) > 0) {
+          if ((sum & 0xFFFF0000) > 0) {
             sum = sum & 0xFFFF;
             sum += 1;
           }
@@ -80,11 +79,11 @@ public class EtherUtil {
             System.out.print(StringHelper.sprintf(" %02x", new Object[] {(buffer[i] & 0xFF)}));
             col++;
             if (col==8) {
-                Log.getLogger().info(" ........");
+                System.out.println(" ........");
                 row++;
                 col = 0;
             }
         }
-        //
+        System.out.println();
     }
 }

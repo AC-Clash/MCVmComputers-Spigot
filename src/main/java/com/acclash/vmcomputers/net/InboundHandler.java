@@ -8,13 +8,11 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import org.bukkit.NamespacedKey;
-import org.bukkit.craftbukkit.v1_20_R1.entity.CraftPlayer;
+import org.bukkit.craftbukkit.v1_20_R2.entity.CraftPlayer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 
-import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -58,7 +56,7 @@ public class InboundHandler extends ChannelInboundHandlerAdapter {
                 if (vehicle.getPersistentDataContainer().has(new NamespacedKey(VMComputers.getPlugin(), "isEChair"), PersistentDataType.STRING)) {
                     long time = System.currentTimeMillis();
                     if (time > lastAttack + cooldownTime) {
-                        ComputerFunctions.sendSpaceInput(player);
+                        // send input
                         lastAttack = time;
                     }
                 }

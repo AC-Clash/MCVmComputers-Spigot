@@ -23,13 +23,13 @@ public class Int10_pal {
 
     static public void INT10_SetSinglePaletteRegister(/*Bit8u*/short reg,/*Bit8u*/short val) {
         switch (Dosbox.machine) {
-        case MCH_PCJR:
+        case MachineType.MCH_PCJR:
             reg&=0xf;
             IoHandler.IO_Read(Int10.VGAREG_TDY_RESET);
             WriteTandyACTL((short)(reg+0x10),val);
             IoHandler.IO_Write(0x3da,0x0); // palette back on
             break;
-        case MCH_TANDY:
+        case MachineType.MCH_TANDY:
             // TODO waits for vertical retrace
             switch(VGA.vga.mode) {
             case VGA.M_TANDY2:
@@ -63,8 +63,8 @@ public class Int10_pal {
             IoHandler.IO_Write(0x3da, 0x0); // palette back on
             break;
         // EGAVGA_ARCH_CASE
-        case MCH_EGA:
-        case MCH_VGA:
+        case MachineType.MCH_EGA:
+        case MachineType.MCH_VGA:
             if (!Dosbox.IS_VGA_ARCH()) reg&=0x1f;
             if(reg<=ACTL_MAX_REG) {
                 ResetACTL();
@@ -79,14 +79,14 @@ public class Int10_pal {
 
     public static void INT10_SetOverscanBorderColor(/*Bit8u*/short val) {
         switch (Dosbox.machine) {
-        case MCH_TANDY:
-        case MCH_PCJR: //TANDY_ARCH_CASE:
+        case MachineType.MCH_TANDY:
+        case MachineType.MCH_PCJR: //TANDY_ARCH_CASE:
             IoHandler.IO_Read(Int10.VGAREG_TDY_RESET);
             WriteTandyACTL((short)0x02,val);
             break;
         // EGAVGA_ARCH_CASE
-        case MCH_EGA:
-        case MCH_VGA:
+        case MachineType.MCH_EGA:
+        case MachineType.MCH_VGA:
             ResetACTL();
             IoHandler.IO_Write(Int10.VGAREG_ACTL_ADDRESS,(byte)0x11);
             IoHandler.IO_Write(Int10.VGAREG_ACTL_WRITE_DATA,(byte)val);
@@ -97,8 +97,8 @@ public class Int10_pal {
 
     public static void INT10_SetAllPaletteRegisters(/*PhysPt*/int data) {
         switch (Dosbox.machine) {
-        case MCH_TANDY:
-        case MCH_PCJR: //TANDY_ARCH_CASE:
+        case MachineType.MCH_TANDY:
+        case MachineType.MCH_PCJR: //TANDY_ARCH_CASE:
             IoHandler.IO_Read(Int10.VGAREG_TDY_RESET);
             // First the colors
             for(/*Bit8u*/short i=0;i<0x10;i++) {
@@ -109,8 +109,8 @@ public class Int10_pal {
             WriteTandyACTL((short)0x02,(short)Memory.mem_readb(data));
             break;
         // EGAVGA_ARCH_CASE
-        case MCH_EGA:
-        case MCH_VGA:
+        case MachineType.MCH_EGA:
+        case MachineType.MCH_VGA:
             ResetACTL();
             // First the colors
             for(/*Bit8u*/short i=0;i<0x10;i++) {
@@ -137,7 +137,7 @@ public class Int10_pal {
             value=IoHandler.IO_Read(Int10.VGAREG_ACTL_READ_DATA);
             if (state<=1) {
                 value&=0xf7;
-                value|= (short) (state<<3);
+                value|=state<<3;
             }
 
             ResetACTL();

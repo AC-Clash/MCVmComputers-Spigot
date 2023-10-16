@@ -1,12 +1,13 @@
 package jdos.hardware;
 
-import jdos.gui.Midi;
-import jdos.util.Log;
 import jdos.misc.setup.Module_base;
 import jdos.misc.setup.Section;
 import jdos.misc.setup.Section_prop;
-import jdos.types.LogType;
-import org.apache.logging.log4j.Level;
+import jdos.misc.Log;
+import jdos.types.LogTypes;
+import jdos.types.LogSeverities;
+import jdos.gui.Midi;
+import jdos.cpu.CPU;
 
 public class MPU401 extends Module_base {
     static final private int MPU401_VERSION = 0x15;
@@ -44,11 +45,11 @@ public class MPU401 extends Module_base {
         public boolean intelligent;
         public int mode;
         /*Bitu*/int irq;
-        /*Bit8u*/final short[] queue = new short[MPU401_QUEUE];
+        /*Bit8u*/short[] queue = new short[MPU401_QUEUE];
         /*Bitu*/int queue_pos,queue_used;
         public static class track {
             /*Bits*/int counter;
-            /*Bit8u*/final short[] value = new short[8];
+            /*Bit8u*/short[] value = new short[8];
             short sys_val;
             /*Bit8u*/short vlength,length;
             /*MpuDataType*/ int type;
@@ -96,7 +97,7 @@ public class MPU401 extends Module_base {
             if (pos>=MPU401_QUEUE) pos-=MPU401_QUEUE;
             mpu.queue_used++;
             mpu.queue[pos]=(short)data;
-        } else Log.specializedLog(LogType.LOG_MISC, Level.INFO,"MPU401:Data queue full");
+        } else Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_NORMAL,"MPU401:Data queue full");
     }
 
     private static void ClrQueue() {
@@ -104,12 +105,13 @@ public class MPU401 extends Module_base {
         mpu.queue_pos=0;
     }
 
-    /*Bitu*//*Bitu*//*Bitu*/
-    private static final IoHandler.IO_ReadHandler MPU401_ReadStatus = (port, iolen) -> {
-        /*Bit8u*/short ret=0x3f;	/* Bits 6 and 7 clear */
-        if (mpu.state.cmd_pending!=0) ret|=0x40;
-        if (mpu.queue_used==0) ret|=0x80;
-        return ret;
+    private static final IoHandler.IO_ReadHandler MPU401_ReadStatus = new IoHandler.IO_ReadHandler() {
+        public /*Bitu*/int call(/*Bitu*/int port, /*Bitu*/int iolen) {
+            /*Bit8u*/short ret=0x3f;	/* Bits 6 and 7 clear */
+            if (mpu.state.cmd_pending!=0) ret|=0x40;
+            if (mpu.queue_used==0) ret|=0x80;
+            return ret;
+        }
     };
 
     private static final IoHandler.IO_WriteHandler MPU401_WriteCommand = new IoHandler.IO_WriteHandler() {
@@ -121,7 +123,7 @@ public class MPU401 extends Module_base {
                     case 2: {Midi.MIDI_RawOutByte(0xfa);break;}
                     case 3: {Midi.MIDI_RawOutByte(0xfb);break;}
                 }
-                if ((val&0x20)!=0)  Log.specializedLog(LogType.LOG_MISC, Level.ERROR,"MPU-401:Unhandled Recording Command "+Integer.toString(val,16));
+                if ((val&0x20)!=0) if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_ERROR,"MPU-401:Unhandled Recording Command "+Integer.toString(val,16));
                 switch (val&0xc) {
                     case  0x4:	/* Stop */
                         Pic.PIC_RemoveEvents(MPU401_Event);
@@ -133,7 +135,7 @@ public class MPU401 extends Module_base {
                         }
                         break;
                     case 0x8:	/* Play */
-                        Log.specializedLog(LogType.LOG_MISC, Level.INFO,"MPU-401:Intelligent mode playback started");
+                        Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_NORMAL,"MPU-401:Intelligent mode playback started");
                         mpu.state.playing=true;
                         Pic.PIC_RemoveEvents(MPU401_Event);
                         Pic.PIC_AddEvent(MPU401_Event,MPU401_TIMECONSTANT/(mpu.clock.tempo*mpu.clock.timebase));
@@ -235,18 +237,18 @@ public class MPU401 extends Module_base {
                     mpu.state.irq_pending=true;
                     break;
                 case 0xff:	/* Reset MPU-401 */
-                    Log.specializedLog(LogType.LOG_MISC, Level.INFO,"MPU-401:Reset "+Integer.toString(val,16));
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_NORMAL,"MPU-401:Reset "+Integer.toString(val,16));
                     Pic.PIC_AddEvent(MPU401_ResetDone,MPU401_RESETBUSY);
 			        mpu.state.reset=true;
                     MPU401_Reset();
                     if (mpu.mode==M_UART) return;//do not send ack in UART mode
                     break;
                 case 0x3f:	/* UART mode */
-                    Log.specializedLog(LogType.LOG_MISC, Level.INFO,"MPU-401:Set UART mode "+Integer.toString(val,16));
+                    if (Log.level<=LogSeverities.LOG_NORMAL) Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_NORMAL,"MPU-401:Set UART mode "+Integer.toString(val,16));
                     mpu.mode=M_UART;
                     break;
                 default:
-                    //Log.specializedLog(LogType.LOG_MISC, LogSeverity.LOG_NORMALS,"MPU-401:Unhandled command %X",val);
+                    //Log.log(LogType.LOG_MISC, LogSeverity.LOG_NORMALS,"MPU-401:Unhandled command %X",val);
             }
             QueueByte(MSG_MPU_ACK);
         }
@@ -301,7 +303,7 @@ public class MPU401 extends Module_base {
                 case 0xe1:	/* Set relative tempo */
                     mpu.state.command_byte=0;
                     if (val!=0x40) //default value
-                         Log.specializedLog(LogType.LOG_MISC, Level.ERROR,"MPU-401:Relative tempo change not implemented");
+                        Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_ERROR,"MPU-401:Relative tempo change not implemented");
                     return;
                 case 0xe7:	/* Set internal clock to host interval */
                     mpu.state.command_byte=0;
@@ -323,8 +325,7 @@ public class MPU401 extends Module_base {
                 case 0xef: /* Set 9-16 MIDI channel mask */
                     mpu.state.command_byte=0;
                     mpu.state.midi_mask&=0x00ff;
-                    /*Bit16u*/
-                    mpu.state.midi_mask|= val <<8;
+                    mpu.state.midi_mask|=((/*Bit16u*/int)val)<<8;
                     return;
                 //case 0xe2:	/* Set graduation for relative tempo */
                 //case 0xe4:	/* Set metronome */
@@ -347,7 +348,7 @@ public class MPU401 extends Module_base {
                                 length=3;
                                 break;
                             case 0xf0:
-                                 Log.specializedLog(LogType.LOG_MISC, Level.ERROR,"MPU-401:Illegal WSD byte");
+                                Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_ERROR,"MPU-401:Illegal WSD byte");
                                 mpu.state.wsd=false;
                                 mpu.state.channel=mpu.state.old_chan;
                                 return;
@@ -393,7 +394,8 @@ public class MPU401 extends Module_base {
                             MPU401_EOIHandlerDispatch();
                             return;
                         }
-                        mpu.state.send_now= val == 0;
+                        if (val==0) mpu.state.send_now=true;
+                        else mpu.state.send_now=false;
                         mpu.condbuf.counter=val;
                         break;
                     case  1: /* Command byte #1 */
@@ -422,7 +424,8 @@ public class MPU401 extends Module_base {
                         MPU401_EOIHandlerDispatch();
                         return;
                     }
-                    mpu.state.send_now= val == 0;
+                    if (val==0) mpu.state.send_now=true;
+                    else mpu.state.send_now=false;
                     mpu.playbuf[mpu.state.channel].counter=val;
                     break;
                 case    1: /* MIDI */
@@ -433,12 +436,14 @@ public class MPU401 extends Module_base {
                             case 0xf0: /* System message or mark */
                                 if (val>0xf7) {
                                     mpu.playbuf[mpu.state.channel].type=T_MARK;
+                                    mpu.playbuf[mpu.state.channel].sys_val=(short)val;
+                                    length=1;
                                 } else {
-                                     Log.specializedLog(LogType.LOG_MISC, Level.ERROR,"MPU-401:Illegal message");
+                                    Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_ERROR,"MPU-401:Illegal message");
                                     mpu.playbuf[mpu.state.channel].type=T_MIDI_SYS;
+                                    mpu.playbuf[mpu.state.channel].sys_val=(short)val;
+                                    length=1;
                                 }
-                                mpu.playbuf[mpu.state.channel].sys_val=(short)val;
-                                length=1;
                                 break;
                             case 0xc0: case 0xd0: /* MIDI Message */
                                 mpu.playbuf[mpu.state.channel].type=T_MIDI_NORM;
@@ -471,7 +476,7 @@ public class MPU401 extends Module_base {
                 val=mpu.playbuf[chan].sys_val;
                 if (val==0xfc) {
                     Midi.MIDI_RawOutByte(val);
-                    mpu.state.amask&= (short) ~(1<<chan);
+                    mpu.state.amask&=~(1<<chan);
                     mpu.state.req_mask&=~(1<<chan);
                 }
                 break;
@@ -547,33 +552,35 @@ public class MPU401 extends Module_base {
         else if (!mpu.state.eoi_scheduled) MPU401_EOIHandler.call(0);
     }
 
-    /*Bitu*/
     //Updates counters and requests new data on "End of Input"
-    static private final Pic.PIC_EventHandler MPU401_EOIHandler = val -> {
-        mpu.state.eoi_scheduled=false;
-        if (mpu.state.send_now) {
-            mpu.state.send_now=false;
-            if (mpu.state.cond_req) UpdateConductor();
-            else UpdateTrack(mpu.state.channel);
-        }
-        mpu.state.irq_pending=false;
-        if (!mpu.state.playing || mpu.state.req_mask==0) return;
-        /*Bitu*/int i=0;
-        do {
-            if ((mpu.state.req_mask & (1<<i))!=0) {
-                QueueByte(0xf0+i);
-                mpu.state.req_mask&=~(1<<i);
-                break;
+    static private final Pic.PIC_EventHandler MPU401_EOIHandler = new Pic.PIC_EventHandler() {
+        public void call(/*Bitu*/int val) {
+            mpu.state.eoi_scheduled=false;
+            if (mpu.state.send_now) {
+                mpu.state.send_now=false;
+                if (mpu.state.cond_req) UpdateConductor();
+                else UpdateTrack(mpu.state.channel);
             }
-        } while ((i++)<16);
+            mpu.state.irq_pending=false;
+            if (!mpu.state.playing || mpu.state.req_mask==0) return;
+            /*Bitu*/int i=0;
+            do {
+                if ((mpu.state.req_mask & (1<<i))!=0) {
+                    QueueByte(0xf0+i);
+                    mpu.state.req_mask&=~(1<<i);
+                    break;
+                }
+            } while ((i++)<16);
+        }
     };
 
-    /*Bitu*/
-    static private final Pic.PIC_EventHandler MPU401_ResetDone = val -> {
-        mpu.state.reset=false;
-        if (mpu.state.cmd_pending!=0) {
-            MPU401_WriteCommand.call(0x331,mpu.state.cmd_pending-1,1);
-            mpu.state.cmd_pending=0;
+    static private final Pic.PIC_EventHandler MPU401_ResetDone = new Pic.PIC_EventHandler() {
+        public void call(/*Bitu*/int val) {
+            mpu.state.reset=false;
+            if (mpu.state.cmd_pending!=0) {
+                MPU401_WriteCommand.call(0x331,mpu.state.cmd_pending-1,1);
+                mpu.state.cmd_pending=0;
+            }
         }
     };
 
@@ -610,8 +617,8 @@ public class MPU401 extends Module_base {
         for (/*Bitu*/int i=0;i<8;i++) {mpu.playbuf[i].type=T_OVERFLOW;mpu.playbuf[i].counter=0;}
     }
 
-    private final IoHandler.IO_ReadHandleObject[] ReadHandler=new IoHandler.IO_ReadHandleObject[2];
-    private final IoHandler.IO_WriteHandleObject[] WriteHandler=new IoHandler.IO_WriteHandleObject[2];
+    private IoHandler.IO_ReadHandleObject[] ReadHandler=new IoHandler.IO_ReadHandleObject[2];
+    private IoHandler.IO_WriteHandleObject[] WriteHandler=new IoHandler.IO_WriteHandleObject[2];
     private boolean installed; /*as it can fail to install by 2 ways (config and no midi)*/
 
     public MPU401(Section configuration) {
@@ -622,7 +629,7 @@ public class MPU401 extends Module_base {
         if(s_mpu.equalsIgnoreCase("none")) return;
         if(s_mpu.equalsIgnoreCase("off")) return;
         if(s_mpu.equalsIgnoreCase("false")) return;
-        if (Midi.MIDI_Available()) return;
+        if (!Midi.MIDI_Available()) return;
         /*Enabled and there is a Midi */
         installed = true;
 
@@ -640,8 +647,10 @@ public class MPU401 extends Module_base {
         mpu.queue_used=0;
         mpu.queue_pos=0;
         mpu.mode=M_UART;
-        mpu.irq=9;	/* Princess Maker 2 wants it on irq 9 *///Default is on
-        mpu.intelligent = !s_mpu.equalsIgnoreCase("uart");
+        mpu.irq=9;	/* Princess Maker 2 wants it on irq 9 */
+
+        mpu.intelligent = true;	//Default is on
+        if(s_mpu.equalsIgnoreCase("uart")) mpu.intelligent = false;
         if (!mpu.intelligent) return;
         /*Set IRQ and unmask it(for timequest/princess maker 2) */
         Pic.PIC_SetIRQMask(mpu.irq,false);
@@ -650,7 +659,7 @@ public class MPU401 extends Module_base {
 
     static private MPU401 test;
 
-    public static final Section.SectionFunction MPU401_Destroy = new Section.SectionFunction() {
+    public static Section.SectionFunction MPU401_Destroy = new Section.SectionFunction() {
         public void call(Section section) {
             if(!test.installed) return;
             Section_prop sec_prop=(Section_prop)section;
@@ -658,7 +667,7 @@ public class MPU401 extends Module_base {
             Pic.PIC_SetIRQMask(mpu.irq,true);
         }
     };
-    public static final Section.SectionFunction MPU401_Init = new Section.SectionFunction() {
+    public static Section.SectionFunction MPU401_Init = new Section.SectionFunction() {
         public void call(Section section) {
             test = new MPU401(section);
             section.AddDestroyFunction(MPU401_Destroy,true);

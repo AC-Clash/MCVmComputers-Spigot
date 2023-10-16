@@ -3,7 +3,6 @@ package jdos.win.builtin;
 import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
-import jdos.util.Log;
 import jdos.win.builtin.user32.WinWindow;
 import jdos.win.loader.BuiltinModule;
 import jdos.win.loader.Loader;
@@ -16,7 +15,7 @@ public class Imm32 extends BuiltinModule {
     }
 
     // HIMC ImmAssociateContext(HWND hWnd, HIMC hIMC)
-    private final Callback.Handler ImmAssociateContext = new HandlerBase() {
+    private Callback.Handler ImmAssociateContext = new HandlerBase() {
         public java.lang.String getName() {
             return "Imm32.ImmAssociateContext";
         }
@@ -28,7 +27,7 @@ public class Imm32 extends BuiltinModule {
                 CPU_Regs.reg_eax.dword = WinAPI.FALSE;
                 Scheduler.getCurrentThread().setLastError(jdos.win.utils.Error.ERROR_INVALID_WINDOW_HANDLE);
             } else {
-                Log.getLogger().warn(getName()+" faked");
+                System.out.println(getName()+" faked");
                 CPU_Regs.reg_eax.dword = WinAPI.TRUE;
             }
         }

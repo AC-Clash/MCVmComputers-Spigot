@@ -2,15 +2,13 @@ package jdos.win.builtin.directx.dinput;
 
 import jdos.cpu.CPU;
 import jdos.cpu.Callback;
-import jdos.util.Log;
-import jdos.win.Win;
 import jdos.win.builtin.HandlerBase;
 import jdos.win.builtin.directx.ddraw.IUnknown;
 
 public class IDirectInputDeviceA extends IUnknown {
     static final int VTABLE_SIZE = 15;
 
-    static final int OFFSET_FLAGS = 0;
+    static int OFFSET_FLAGS = 0;
     static final int DATA_SIZE = 4;
 
 
@@ -20,7 +18,7 @@ public class IDirectInputDeviceA extends IUnknown {
         return address;
     }
 
-    static void addIDirectSound(int address) {
+    static int addIDirectSound(int address) {
         address = addIUnknown(address);
         address = add(address, GetCapabilities);
         address = add(address, EnumObjects);
@@ -37,6 +35,7 @@ public class IDirectInputDeviceA extends IUnknown {
         address = add(address, GetDeviceInfo);
         address = add(address, RunControlPanel);
         address = add(address, Initialize);
+        return address;
     }
 
     public static int create() {
@@ -53,20 +52,19 @@ public class IDirectInputDeviceA extends IUnknown {
     }
 
     // HRESULT GetCapabilities(this, LPDIDEVCAPS lpDIDevCaps)
-    static private final Callback.Handler GetCapabilities = new HandlerBase() {
+    static private Callback.Handler GetCapabilities = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.GetCapabilities";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int lpDIDevCaps = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT EnumObjects(this, LPDIENUMDEVICEOBJECTSCALLBACKA lpCallback, LPVOID pvRef, DWORD dwFlags)
-    static private final Callback.Handler EnumObjects = new HandlerBase() {
+    static private Callback.Handler EnumObjects = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.EnumObjects";
         }
@@ -75,13 +73,12 @@ Win.exit();
             int lpCallback = CPU.CPU_Pop32();
             int pvRef = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetProperty(this, REFGUID rguidProp, LPDIPROPHEADER pdiph)
-    static private final Callback.Handler GetProperty = new HandlerBase() {
+    static private Callback.Handler GetProperty = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.GetProperty";
         }
@@ -89,13 +86,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int rguidProp = CPU.CPU_Pop32();
             int pdiph = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetProperty(this, REFGUID rguidProp, LPCDIPROPHEADER pdiph)
-    static private final Callback.Handler SetProperty = new HandlerBase() {
+    static private Callback.Handler SetProperty = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.SetProperty";
         }
@@ -103,37 +99,34 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int rguidProp = CPU.CPU_Pop32();
             int pdiph = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT Acquire(this)
-    static private final Callback.Handler Acquire = new HandlerBase() {
+    static private Callback.Handler Acquire = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.Acquire";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT Unacquire(this)
-    static private final Callback.Handler Unacquire = new HandlerBase() {
+    static private Callback.Handler Unacquire = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.Unacquire";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetDeviceState(this, DWORD cbData, LPVOID lpvData)
-    static private final Callback.Handler GetDeviceState = new HandlerBase() {
+    static private Callback.Handler GetDeviceState = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.GetDeviceState";
         }
@@ -141,13 +134,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int cbData = CPU.CPU_Pop32();
             int lpvData = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetDeviceData(this, DWORD cbObjectData, LPDIDEVICEOBJECTDATA rgdod, LPDWORD pdwInOut, DWORD dwFlags)
-    static private final Callback.Handler GetDeviceData = new HandlerBase() {
+    static private Callback.Handler GetDeviceData = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.GetDeviceData";
         }
@@ -157,39 +149,36 @@ Win.exit();
             int rgdod = CPU.CPU_Pop32();
             int pdwInOut = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetDataFormat(this, LPCDIDATAFORMAT lpdf)
-    static private final Callback.Handler SetDataFormat = new HandlerBase() {
+    static private Callback.Handler SetDataFormat = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.SetDataFormat";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int lpdf = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetEventNotification(this, HANDLE hEvent)
-    static private final Callback.Handler SetEventNotification = new HandlerBase() {
+    static private Callback.Handler SetEventNotification = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.SetEventNotification";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int hEvent = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetCooperativeLevel(this, HWND hwnd, DWORD dwFlags)
-    static private final Callback.Handler SetCooperativeLevel = new HandlerBase() {
+    static private Callback.Handler SetCooperativeLevel = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.SetCooperativeLevel";
         }
@@ -197,13 +186,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int hwnd = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetObjectInfo(this, LPDIDEVICEOBJECTINSTANCEA pdidoi, DWORD dwObj, DWORD dwHow)
-    static private final Callback.Handler GetObjectInfo = new HandlerBase() {
+    static private Callback.Handler GetObjectInfo = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.GetObjectInfo";
         }
@@ -212,26 +200,24 @@ Win.exit();
             int pdidoi = CPU.CPU_Pop32();
             int dwObj = CPU.CPU_Pop32();
             int dwHow = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetDeviceInfo(this, LPDIDEVICEINSTANCEA pdidi)
-    static private final Callback.Handler GetDeviceInfo = new HandlerBase() {
+    static private Callback.Handler GetDeviceInfo = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.GetDeviceInfo";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int pdidi = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT RunControlPanel(this, HWND hwndOwner, DWORD dwFlags)
-    static private final Callback.Handler RunControlPanel = new HandlerBase() {
+    static private Callback.Handler RunControlPanel = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.RunControlPanel";
         }
@@ -239,13 +225,12 @@ Win.exit();
             int This = CPU.CPU_Pop32();
             int hwndOwner = CPU.CPU_Pop32();
             int dwFlags = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT Initialize(this, HINSTANCE hinst, DWORD dwVersion, REFGUID rguid)
-    static private final Callback.Handler Initialize = new HandlerBase() {
+    static private Callback.Handler Initialize = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectInputDeviceA.Initialize";
         }
@@ -254,8 +239,7 @@ Win.exit();
             int hinst = CPU.CPU_Pop32();
             int dwVersion = CPU.CPU_Pop32();
             int rguid = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 }

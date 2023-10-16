@@ -118,7 +118,7 @@ public class JavaLayerUtils
 		
 		Object obj = deserialize(in);
 		
-		Class<? extends Object> cls = obj.getClass();
+		Class cls = obj.getClass();
 		
 		
 		if (!cls.isArray())
@@ -190,7 +190,7 @@ public class JavaLayerUtils
 	 */
 	static synchronized public InputStream getResourceAsStream(String name)
 	{
-		InputStream is;
+		InputStream is = null;
 		
 		if (hook!=null)
 		{
@@ -198,7 +198,7 @@ public class JavaLayerUtils
 		}
 		else
 		{
-			Class<JavaLayerUtils> cls = JavaLayerUtils.class;
+			Class cls = JavaLayerUtils.class;
 			is = cls.getResourceAsStream(name);
 		}
 		

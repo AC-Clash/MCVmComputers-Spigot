@@ -2,7 +2,6 @@ package jdos.win.system;
 
 import jdos.cpu.Paging;
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
 import jdos.win.builtin.WinAPI;
 import jdos.win.builtin.kernel32.WinProcess;
@@ -93,7 +92,7 @@ public class JavaBitmap {
             colorKey = palette[colorKey];
         if (colorKey != cachedColorKey) {
             if (bpp<=8) {
-                int[] p = palette.clone();
+                int[] p = (int[])palette.clone();
                 for (int i=0;i<p.length;i++) {
                     if ((p[i] & 0xFFFFFF) == (colorKey & 0xFFFFFF))
                         p[i]&=0xFFFFFF;
@@ -124,7 +123,7 @@ public class JavaBitmap {
 
     static private class PageHandler8 extends Paging.PageHandler {
         byte[] data;
-        final int address;
+        int address;
 
         public PageHandler8(int address) {
             this.address = address;
@@ -167,7 +166,7 @@ public class JavaBitmap {
 
     static private class PageHandler16 extends Paging.PageHandler {
         short[] data;
-        final int address;
+        int address;
 
         public PageHandler16(int address) {
             this.address = address;
@@ -277,7 +276,7 @@ public class JavaBitmap {
             Paging.writehandler[frame++] = handler;
         }
         if (WinAPI.LOG) {
-            Log.getLogger().info("JavaBitmap.map address=0x"+Long.toString(address & 0xFFFFFFFFL, 16)+" size="+size+" frames="+frameStart+"-"+frame+" handler="+handler+" this="+this);
+            System.out.println("JavaBitmap.map address=0x"+Long.toString(address & 0xFFFFFFFFl, 16)+" size="+size+" frames="+frameStart+"-"+frame+" handler="+handler+" this="+this);
         }
         return address;
     }
@@ -293,7 +292,7 @@ public class JavaBitmap {
         }
         WinSystem.getCurrentProcess().addressSpace.free(address);
         if (WinAPI.LOG) {
-            Log.getLogger().info("JavaBitmap.unmap address=0x"+Long.toString(address & 0xFFFFFFFFL, 16));
+            System.out.println("JavaBitmap.unmap address=0x"+Long.toString(address & 0xFFFFFFFFl, 16));
         }
         address = 0;
         if (bpp == 8) {

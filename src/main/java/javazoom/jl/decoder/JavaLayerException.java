@@ -20,9 +20,6 @@
 
 package javazoom.jl.decoder;
 
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
-
 import java.io.PrintStream;
 
 
@@ -75,7 +72,7 @@ public class JavaLayerException extends Exception
 		}
 		else
 		{
-			Log.getLogger().log(Level.ERROR, "JavaLayerException: ", exception);
+			exception.printStackTrace();
 		}
 	}
 	

@@ -1,14 +1,12 @@
 package jdos.win.builtin.winmm;
 
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
 import jdos.win.builtin.WinAPI;
 import jdos.win.builtin.kernel32.KResource;
 import jdos.win.system.WinSystem;
 import jdos.win.utils.FilePath;
 import jdos.win.utils.StringUtil;
-import org.apache.logging.log4j.Level;
 
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -29,7 +27,7 @@ public class PlaySound extends WinAPI {
         Vector playSound = WinSystem.getCurrentProcess().playSound;
 
         /* SND_NOWAIT is ignored in w95/2k/xp. */
-        if ((fdwSound & SND_NOSTOP)!=0 && !playSound.isEmpty())
+        if ((fdwSound & SND_NOSTOP)!=0 && playSound.size()!=0)
             return FALSE;
 
         /* alloc internal structure, if we need to play something */
@@ -37,8 +35,8 @@ public class PlaySound extends WinAPI {
             ps = new ActivePlaySound(pszSound, hmod, fdwSound, bUnicode);
         }
 
-        for (Object o : playSound) {
-            ((ActivePlaySound) o).stop();
+        for (int i=0;i<playSound.size();i++) {
+            ((ActivePlaySound)playSound.get(i)).stop();
         }
 
         if (ps==null)
@@ -53,10 +51,10 @@ public class PlaySound extends WinAPI {
             this.flags = flags;
             this.unicode = unicode;
         }
-        public final int pszSound;
-        public final int hmod;
+        public int pszSound;
+        public int hmod;
         public int flags;
-        public final boolean unicode;
+        public boolean unicode;
         public boolean loop = false;
         private Thread thread = null;
         byte[] data = null;
@@ -70,9 +68,7 @@ public class PlaySound extends WinAPI {
             if (clip != null)
                 clip.stop();
             if (thread != null) {
-                try {thread.join();} catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
-                }
+                try {thread.join();} catch (Exception e) {}
             }
         }
 
@@ -86,13 +82,14 @@ public class PlaySound extends WinAPI {
                 playSound.add(this);
                 thread = new Thread(this);
                 thread.start();
+                return TRUE;
             } else {
                 Win.panic("synchronous play sound not supported yet");
                 // :TODO: start play thread
                 // :TODO: put current thread to sleep and return so that other threads can run
                 // :TODO: when done playing, wake up the calling
+                return TRUE;
             }
-            return TRUE;
         }
 
         public void run() {
@@ -113,7 +110,7 @@ public class PlaySound extends WinAPI {
                 clip.close();
                 clip = null;
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+
             }
             playSound.remove(this);
             thread = null;
@@ -148,22 +145,22 @@ public class PlaySound extends WinAPI {
                 if ((flags & SND_ALIAS_ID) == SND_ALIAS_ID) {
                     flags &= ~(SND_ALIAS_ID ^ SND_ALIAS);
                     String sound;
-                    if (pszSound == SND_ALIAS_SYSTEMASTERISK) {
-                    }
-                    else if (pszSound == SND_ALIAS_SYSTEMDEFAULT) {
-                    }
-                    else if (pszSound == SND_ALIAS_SYSTEMEXCLAMATION) {
-                    }
-                    else if (pszSound == SND_ALIAS_SYSTEMEXIT) {
-                    }
-                    else if (pszSound == SND_ALIAS_SYSTEMHAND) {
-                    }
-                    else if (pszSound == SND_ALIAS_SYSTEMQUESTION) {
-                    }
-                    else if (pszSound == SND_ALIAS_SYSTEMSTART) {
-                    }
-                    else if (pszSound == SND_ALIAS_SYSTEMWELCOME) {
-                    }
+                    if (pszSound == SND_ALIAS_SYSTEMASTERISK)
+                        sound = "SystemAsterisk";
+                    else if (pszSound == SND_ALIAS_SYSTEMDEFAULT)
+                        sound = "SystemDefault";
+                    else if (pszSound == SND_ALIAS_SYSTEMEXCLAMATION)
+                        sound = "SystemExclamation";
+                    else if (pszSound == SND_ALIAS_SYSTEMEXIT)
+                        sound = "SystemExit";
+                    else if (pszSound == SND_ALIAS_SYSTEMHAND)
+                        sound = "SystemHand";
+                    else if (pszSound == SND_ALIAS_SYSTEMQUESTION)
+                        sound = "SystemQuestion";
+                    else if (pszSound == SND_ALIAS_SYSTEMSTART)
+                        sound = "SystemStart";
+                    else if (pszSound == SND_ALIAS_SYSTEMWELCOME)
+                        sound = "SystemWelcome";
                     else
                         return FALSE;
                 }

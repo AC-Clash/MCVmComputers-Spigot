@@ -3,7 +3,6 @@ package jdos.win.builtin.directx.dsound;
 import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
-import jdos.util.Log;
 import jdos.win.Win;
 import jdos.win.builtin.HandlerBase;
 import jdos.win.builtin.directx.ddraw.IUnknown;
@@ -12,7 +11,7 @@ import jdos.win.utils.Error;
 public class IDirectSound extends IUnknown {
     static final int VTABLE_SIZE = 8;
 
-    static final int OFFSET_FLAGS = 0;
+    static int OFFSET_FLAGS = 0;
     static final int DATA_SIZE = 4;
 
 
@@ -22,7 +21,7 @@ public class IDirectSound extends IUnknown {
         return address;
     }
 
-    static void addIDirectSound(int address) {
+    static int addIDirectSound(int address) {
         address = addIUnknown(address);
         address = add(address, CreateSoundBuffer);
         address = add(address, GetCaps);
@@ -32,6 +31,7 @@ public class IDirectSound extends IUnknown {
         address = add(address, GetSpeakerConfig);
         address = add(address, SetSpeakerConfig);
         address = add(address, Initialize);
+        return address;
     }
 
     public static int create() {
@@ -48,7 +48,7 @@ public class IDirectSound extends IUnknown {
     }
 
     // HRESULT CreateSoundBuffer(this, LPCDSBUFFERDESC lpcDSBufferDesc, LPLPDIRECTSOUNDBUFFER lplpDirectSoundBuffer, IUnknown *pUnkOuter)
-    static private final Callback.Handler CreateSoundBuffer = new HandlerBase() {
+    static private Callback.Handler CreateSoundBuffer = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectSound.CreateSoundBuffer";
         }
@@ -62,7 +62,7 @@ public class IDirectSound extends IUnknown {
     };
 
     // HRESULT GetCaps(this, LPDSCAPS lpDSCaps)
-    static private final Callback.Handler GetCaps = new HandlerBase() {
+    static private Callback.Handler GetCaps = new HandlerBase() {
         static final int DSCAPS_PRIMARYMONO =       0x00000001;
         static final int DSCAPS_PRIMARYSTEREO =     0x00000002;
         static final int DSCAPS_PRIMARY8BIT =       0x00000004;
@@ -111,7 +111,7 @@ public class IDirectSound extends IUnknown {
     };
 
     // HRESULT DuplicateSoundBuffer(this, LPDIRECTSOUNDBUFFER lpDsbOriginal, LPLPDIRECTSOUNDBUFFER lplpDsbDuplicate)
-    static private final Callback.Handler DuplicateSoundBuffer = new HandlerBase() {
+    static private Callback.Handler DuplicateSoundBuffer = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectSound.DuplicateSoundBuffer";
         }
@@ -124,7 +124,7 @@ public class IDirectSound extends IUnknown {
     };
 
     // HRESULT SetCooperativeLevel(this, HWND hwnd, DWORD dwLevel)
-    static private final Callback.Handler SetCooperativeLevel = new HandlerBase() {
+    static private Callback.Handler SetCooperativeLevel = new HandlerBase() {
         static final public int DSSCL_NORMAL =      1;
         static final public int DSSCL_PRIORITY =    2;
         static final public int DSSCL_EXCLUSIVE =   3;
@@ -137,59 +137,55 @@ public class IDirectSound extends IUnknown {
             int This = CPU.CPU_Pop32();
             int hwnd = CPU.CPU_Pop32();
             int dwLevel = CPU.CPU_Pop32();
-            Log.getLogger().info(getName()+" called with priority "+dwLevel);
+            System.out.println(getName()+" called with priority "+dwLevel);
             CPU_Regs.reg_eax.dword = Error.S_OK;
         }
     };
 
     // HRESULT Compact(this)
-    static private final Callback.Handler Compact = new HandlerBase() {
+    static private Callback.Handler Compact = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectSound.Compact";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT GetSpeakerConfig(this, LPDWORD lpdwSpeakerConfig)
-    static private final Callback.Handler GetSpeakerConfig = new HandlerBase() {
+    static private Callback.Handler GetSpeakerConfig = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectSound.GetSpeakerConfig";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int lpdwSpeakerConfig = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT SetSpeakerConfig(this, DWORD dwSpeakerConfig)
-    static private final Callback.Handler SetSpeakerConfig = new HandlerBase() {
+    static private Callback.Handler SetSpeakerConfig = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectSound.SetSpeakerConfig";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int dwSpeakerConfig = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 
     // HRESULT Initialize(this, LPCGUID lpcGuid)
-    static private final Callback.Handler Initialize = new HandlerBase() {
+    static private Callback.Handler Initialize = new HandlerBase() {
         public java.lang.String getName() {
             return "IDirectSound.Initialize";
         }
         public void onCall() {
             int This = CPU.CPU_Pop32();
             int lpcGuid = CPU.CPU_Pop32();
-            Log.getLogger().error(getName() + " not implemented yet");
-Win.exit();
+            notImplemented();
         }
     };
 }

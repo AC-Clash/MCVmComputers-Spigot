@@ -1,8 +1,6 @@
 package jdos.hardware.mame;
 
 import jdos.Dosbox;
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
 
 import java.io.DataInputStream;
 import java.io.InputStream;
@@ -30,7 +28,7 @@ public class RasterizerCompilerCommon {
                     VoodooCommon.voodoo.add_rasterizer(info);
                 }
             } catch (Throwable e) {
-                Log.getLogger().log(Level.ERROR, "Could not rasterizer index: ", e);
+                e.printStackTrace();
             }
         }
     }

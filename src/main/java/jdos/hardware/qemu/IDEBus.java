@@ -1,7 +1,6 @@
 package jdos.hardware.qemu;
 
 import jdos.hardware.IoHandler;
-import jdos.util.Log;
 import jdos.misc.setup.Module_base;
 import jdos.misc.setup.Section;
 import jdos.misc.setup.Section_prop;
@@ -28,27 +27,27 @@ public class IDEBus extends Module_base {
             0x36E    /* quaternary */
     };
 
-    public final IoHandler.IO_ReadHandleObject[] ReadHandler = new IoHandler.IO_ReadHandleObject[8];
-    public final IoHandler.IO_ReadHandleObject[] ReadHandlerW = new IoHandler.IO_ReadHandleObject[2];
-    public final IoHandler.IO_ReadHandleObject[] ReadHandlerD = new IoHandler.IO_ReadHandleObject[4];
-    public final IoHandler.IO_ReadHandleObject ReadHandlerAlt = new IoHandler.IO_ReadHandleObject();
+    public IoHandler.IO_ReadHandleObject[] ReadHandler = new IoHandler.IO_ReadHandleObject[8];
+    public IoHandler.IO_ReadHandleObject[] ReadHandlerW = new IoHandler.IO_ReadHandleObject[2];
+    public IoHandler.IO_ReadHandleObject[] ReadHandlerD = new IoHandler.IO_ReadHandleObject[4];
+    public IoHandler.IO_ReadHandleObject ReadHandlerAlt = new IoHandler.IO_ReadHandleObject();
 
-    public final IoHandler.IO_WriteHandleObject[] WriteHandler = new IoHandler.IO_WriteHandleObject[8];
-    public final IoHandler.IO_WriteHandleObject[] WriteHandlerW = new IoHandler.IO_WriteHandleObject[2];
-    public final IoHandler.IO_WriteHandleObject[] WriteHandlerD = new IoHandler.IO_WriteHandleObject[4];
-    public final IoHandler.IO_WriteHandleObject WriteHandlerAlt = new IoHandler.IO_WriteHandleObject();
+    public IoHandler.IO_WriteHandleObject[] WriteHandler = new IoHandler.IO_WriteHandleObject[8];
+    public IoHandler.IO_WriteHandleObject[] WriteHandlerW = new IoHandler.IO_WriteHandleObject[2];
+    public IoHandler.IO_WriteHandleObject[] WriteHandlerD = new IoHandler.IO_WriteHandleObject[4];
+    public IoHandler.IO_WriteHandleObject WriteHandlerAlt = new IoHandler.IO_WriteHandleObject();
 
     //BusState qbus;
-    final Internal.IDEDevice master = new Internal.IDEDevice();
-    final Internal.IDEDevice slave = new Internal.IDEDevice();
-    final Internal.IDEState[] ifs = new Internal.IDEState[2];
+    Internal.IDEDevice master = new Internal.IDEDevice();
+    Internal.IDEDevice slave = new Internal.IDEDevice();
+    Internal.IDEState[] ifs = new Internal.IDEState[2];
     int bus_id;
     Internal.IDEDMA dma = new Internal.IDEDMA();
     int unit;
     int cmd;
     int irq;
-    int base_io;
-    int alt_io;
+    int base_io = 0;
+    int alt_io = 0;
 
     int error_status;
 
@@ -72,7 +71,7 @@ public class IDEBus extends Module_base {
 
     public void initIO() {
         if (base_io != 0 || alt_io != 0 || irq >= 0)
-            Log.getLogger().info("IDE: Adding IDE controller to port 0x" + Integer.toHexString(base_io) + "/%03x IRQ " + alt_io);
+            System.out.println("IDE: Adding IDE controller to port 0x" + Integer.toHexString(base_io) + "/%03x IRQ " + alt_io);
 
         for (int i = 0; i < WriteHandler.length; i++)
             WriteHandler[i] = new IoHandler.IO_WriteHandleObject();

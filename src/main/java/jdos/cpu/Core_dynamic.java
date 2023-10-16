@@ -5,9 +5,8 @@ import jdos.cpu.core_share.Constants;
 import jdos.cpu.core_share.Data;
 import jdos.debug.Debug;
 import jdos.hardware.RAM;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.Config;
-import org.apache.logging.log4j.Level;
 
 public class Core_dynamic {
     static public final int CACHE_MAXSIZE = 4096*2;
@@ -56,7 +55,7 @@ public class Core_dynamic {
     };
 
     private static CacheBlockDynRec LinkBlocks(CacheBlockDynRec running, /*BlockReturn*/int ret) {
-        CacheBlockDynRec block;
+        CacheBlockDynRec block=null;
         // the last instruction was a control flow modifying instruction
         /*Bitu*/int temp_ip=CPU_Regs.reg_csPhys.dword+CPU_Regs.reg_eip;
         Paging.PageHandler handler = Paging.get_tlb_readhandler(temp_ip);
@@ -64,7 +63,7 @@ public class Core_dynamic {
             CodePageHandlerDynRec temp_handler=(CodePageHandlerDynRec)handler;
             if ((temp_handler.flags & Paging.PFLAG_HASCODE)!=0) {
                 // see if the target is an already translated block
-                block=temp_handler.FindCacheBlock(temp_ip & 4095);
+                block=temp_handler.FindCacheBlock((int)(temp_ip & 4095));
                 if (block==null) return null;
 
                 // found it, link the current block to
@@ -90,7 +89,7 @@ public class Core_dynamic {
                 CodePageHandlerDynRec chandler=null;
                 int page_ip_point = ip_point & 4095;
 
-                if (handler instanceof CodePageHandlerDynRec)
+                if (handler != null && handler instanceof CodePageHandlerDynRec)
                     chandler = (CodePageHandlerDynRec)handler;
                 if (chandler == null) {
                     // see if the current page is present and contains code
@@ -128,7 +127,7 @@ public class Core_dynamic {
                         int offset = Paging.getDirectIndexRO(CPU_Regs.reg_csPhys.dword+ CPU_Regs.reg_eip);
                         for (int i=0;i<block.originalByteCode.length;i++) {
                             if (block.originalByteCode[i]!= RAM.readbs(i + offset)) {
-                                Log.exit("Dynamic core cache has been modified without its knowledge:\n    cs:ip="+Integer.toString(CPU_Regs.reg_csPhys.dword,16) + ":" + Integer.toString(CPU_Regs.reg_eip,16)+"\n    index="+i+"\n    "+Integer.toString(block.originalByteCode[i] & 0xFF,16)+" cached value\n    "+Integer.toString(RAM.readb(offset),16)+" memory value @ "+offset+"\n    block="+block, Level.ERROR);
+                                Log.exit("Dynamic core cache has been modified without its knowledge:\n    cs:ip="+Integer.toString(CPU_Regs.reg_csPhys.dword,16) + ":" + Integer.toString(CPU_Regs.reg_eip,16)+"\n    index="+i+"\n    "+Integer.toString(block.originalByteCode[i] & 0xFF,16)+" cached value\n    "+Integer.toString(RAM.readb(offset),16)+" memory value @ "+offset+"\n    block="+block);
                             }
                         }
                     }
@@ -180,7 +179,7 @@ public class Core_dynamic {
                         Core.base_val_ds= CPU_Regs.ds;
                         break;
                     default:
-                        Log.exit("Invalid return code", Level.ERROR);
+                        Log.exit("Invalid return code");
                     }
                     break;
                 }

@@ -1,7 +1,6 @@
 package jdos.win.builtin.user32;
 
 import jdos.hardware.Memory;
-import jdos.util.Log;
 import jdos.win.Win;
 import jdos.win.builtin.WinAPI;
 import jdos.win.builtin.gdi32.WinBitmap;
@@ -11,7 +10,6 @@ import jdos.win.system.WinSystem;
 import jdos.win.utils.Ptr;
 import jdos.win.utils.StreamHelper;
 import jdos.win.utils.StringUtil;
-import org.apache.logging.log4j.Level;
 
 import java.io.InputStream;
 
@@ -40,8 +38,10 @@ public class Resource extends WinAPI {
                 }
             } else {
                 String res = null;
-                if (lpszName == OBM_CHECKBOXES) {
-                    res = "obm_checkboxes.bmp";
+                switch (lpszName) {
+                    case OBM_CHECKBOXES:
+                        res = "obm_checkboxes.bmp";
+                        break;
                 }
                 if (res == null)
                     Win.panic("LoadImage currently does not support builtin image: "+lpszName);
@@ -53,12 +53,12 @@ public class Resource extends WinAPI {
                     Memory.mem_memcpy(address, data, 14, data.length-14);
                     return WinBitmap.create(address, true).handle;
                 } catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "LoadImage could not find" +res, e);
-                    Win.exit();
+                    e.printStackTrace();
+                    Win.panic("LoadImage could not find "+res);
                 }
             }
         } else {
-            Log.getLogger().warn("LoadImage type=" + uType + " faked");
+            System.out.println("LoadImage type=" + uType + " faked");
         }
         return 0;
     }

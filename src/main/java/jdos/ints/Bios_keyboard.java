@@ -1,15 +1,17 @@
 package jdos.ints;
 
 import jdos.Dosbox;
+import jdos.cpu.CPU;
 import jdos.cpu.CPU_Regs;
 import jdos.cpu.Callback;
 import jdos.hardware.IoHandler;
 import jdos.hardware.Memory;
-import jdos.util.Log;
-import jdos.types.LogType;
+import jdos.misc.Log;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 import jdos.types.MachineType;
 import jdos.util.IntRef;
-import org.apache.logging.log4j.Level;
+
 public class Bios_keyboard {
     static private /*Bitu*/int call_int16,call_irq1,call_irq6;
 
@@ -22,12 +24,12 @@ public class Bios_keyboard {
             this.control = control;
             this.alt = alt;
         }
-        /*Bit16u*/final int normal;
-        /*Bit16u*/final int shift;
-        /*Bit16u*/final int control;
-        /*Bit16u*/final int alt;
+        /*Bit16u*/int normal;
+        /*Bit16u*/int shift;
+        /*Bit16u*/int control;
+        /*Bit16u*/int alt;
     }
-    static private final Scan[] scan_to_scanascii = {
+    static private Scan[] scan_to_scanascii = {
           new Scan(   none,   none,   none,   none ),
           new Scan( 0x011b, 0x011b, 0x011b, 0x01f0 ), /* escape */
           new Scan( 0x0231, 0x0221,   none, 0x7800 ), /* 1! */
@@ -219,7 +221,7 @@ public class Bios_keyboard {
         */
 
 
-    static private final Callback.Handler IRQ1_Handler = new Callback.Handler() {
+    static private Callback.Handler IRQ1_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios_keyboard.IRQ1_Handler";
         }
@@ -329,13 +331,14 @@ public class Bios_keyboard {
             case 0xc6:flags1 ^=0x10;flags2 &=~0x10;leds ^=0x01;break;
         //	case 0x52:flags2|=128;break;//See numpad					/* Insert */
             case 0xd2:
-                //goto irq1_end;/*Normal release*/
                 if((flags3&0x02)!=0) { /* Maybe honour the insert on keypad as well */
                     flags1^=0x80;
                     flags2&=~0x80;
+                    break;
+                } else {
+                    break;//goto irq1_end;/*Normal release*/
                 }
-                break;
-                case 0x47:		/* Numpad */
+            case 0x47:		/* Numpad */
             case 0x48:
             case 0x49:
             case 0x4b:
@@ -445,20 +448,20 @@ public class Bios_keyboard {
                 key.value=(key.value&0xff)|0x3500;
             }
             /* both key are not considered enhanced key */
-            return true;
+            return false;
         } else if (((key.value>>8)>0x84) || (((key.value&0xff)==0xf0) && (key.value>>8)!=0)) {
             /* key is enhanced key (either scancode part>0x84 or
                specially-marked keyboard combination, low part==0xf0) */
-            return false;
+            return true;
         }
         /* convert key.value if necessary (extended key.values) */
         if ((key.value>>8)!=0 && ((key.value&0xff)==0xe0))  {
             key.value&=0xff00;
         }
-        return true;
+        return false;
     }
 
-    static private final Callback.Handler INT16_Handler = new Callback.Handler() {
+    static private Callback.Handler INT16_Handler = new Callback.Handler() {
         public String getName() {
             return "Bios_keyboard.INT16_Handler";
         }
@@ -466,7 +469,7 @@ public class Bios_keyboard {
             /*Bit16u*/IntRef temp=new IntRef(0);
             switch (CPU_Regs.reg_eax.high()) {
             case 0x00: /* GET KEYSTROKE */
-                if ((get_key(temp)) && (IsEnhancedKey(temp))) {
+                if ((get_key(temp)) && (!IsEnhancedKey(temp))) {
                     /* normal key found, return translated key in ax */
                     CPU_Regs.reg_eax.word(temp.value);
                 } else {
@@ -491,7 +494,7 @@ public class Bios_keyboard {
                 Memory.mem_writew(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+4,(Memory.mem_readw(CPU_Regs.reg_ssPhys.dword+CPU_Regs.reg_esp.word()+4) | CPU_Regs.IF));
                 for (;;) {
                     if (check_key(temp)) {
-                        if (IsEnhancedKey(temp)) {
+                        if (!IsEnhancedKey(temp)) {
                             /* normal key, return translated key in ax */
                             Callback.CALLBACK_SZF(false);
                             CPU_Regs.reg_eax.word(temp.value);
@@ -531,7 +534,7 @@ public class Bios_keyboard {
                     IoHandler.IO_Write(0x60,0xf3);
                     IoHandler.IO_Write(0x60,(CPU_Regs.reg_ebx.high()&3)<<5|(CPU_Regs.reg_ebx.low()&0x1f));
                 } else {
-                    Log.specializedLog(LogType.LOG_BIOS, Level.ERROR,"INT16:Unhandled Typematic Rate Call "+Integer.toString(CPU_Regs.reg_eax.low(), 16)+" BX="+Integer.toString(CPU_Regs.reg_ebx.word(),16));
+                    if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_BIOS, LogSeverities.LOG_ERROR,"INT16:Unhandled Typematic Rate Call "+Integer.toString(CPU_Regs.reg_eax.low(), 16)+" BX="+Integer.toString(CPU_Regs.reg_ebx.word(),16));
                 }
                 break;
             case 0x05:	/* STORE KEYSTROKE IN KEYBOARD BUFFER */
@@ -546,10 +549,10 @@ public class Bios_keyboard {
                 break;
             case 0x55:
                 /* Weird call used by some dos apps */
-                Log.specializedLog(LogType.LOG_BIOS,Level.INFO,"INT16:55:Word TSR compatible call");
+                Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_NORMAL,"INT16:55:Word TSR compatible call");
                 break;
             default:
-                Log.specializedLog(LogType.LOG_BIOS,Level.ERROR,"INT16:Unhandled call "+Integer.toString(CPU_Regs.reg_eax.high(),16));
+                if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_BIOS,LogSeverities.LOG_ERROR,"INT16:Unhandled call "+Integer.toString(CPU_Regs.reg_eax.high(),16));
                 break;
 
             }

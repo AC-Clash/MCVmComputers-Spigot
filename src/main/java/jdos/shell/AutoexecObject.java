@@ -1,15 +1,13 @@
 package jdos.shell;
 
 import jdos.dos.drives.Drive_virtual;
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
+import jdos.misc.Log;
 
 import java.util.Vector;
 
 /* Object to manage lines in the autoexec.bat The lines get removed from
  * the file if the object gets destroyed. The environment is updated
- * as well if the line set a variable */
-
+ * as well if the line set a a variable */
 public class AutoexecObject {
     private static Vector autoexec_strings = new Vector();
     private boolean installed = false;
@@ -20,7 +18,7 @@ public class AutoexecObject {
     }
 
     public void Install(String in) {
-        if(installed) Log.exit("autoexec: already created "+buf, Level.ERROR);
+        if(installed) Log.exit("autoexec: already created "+buf);
         installed = true;
         buf = in;
         autoexec_strings.add(buf);
@@ -45,7 +43,7 @@ public class AutoexecObject {
     }
 
     public void InstallBefore(String in) {
-        if(installed) Log.exit("autoexec: already created "+buf, Level.ERROR);
+        if(installed) Log.exit("autoexec: already created "+buf);
         installed = true;
         buf = in;
         autoexec_strings.add(buf);

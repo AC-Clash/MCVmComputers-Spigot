@@ -15,9 +15,9 @@ public class Wsprintf {
     static public String format(String format, boolean wide, int argIndex) {
         int pos = format.indexOf('%');
         if (pos>=0) {
-            StringBuilder buffer = new StringBuilder();
+            StringBuffer buffer = new StringBuffer();
             while (pos>=0) {
-                buffer.append(format, 0, pos);
+                buffer.append(format.substring(0, pos));
                 if (pos+1<format.length()) {
                     char c = format.charAt(++pos);
                     if (c == '%') {
@@ -57,17 +57,21 @@ public class Wsprintf {
                         }
 
                         // width
-                        StringBuilder w = new StringBuilder();
-                        while (c >= '0' && c <= '9') {
-                            w.append(c);
-                            if (pos + 1 < format.length()) {
+                        String w = "";
+                        while (true) {
+                            if (c>='0' && c<='9') {
+                                w+=c;
+                            } else {
+                                break;
+                            }
+                            if (pos+1<format.length()) {
                                 c = format.charAt(++pos);
                             } else {
                                 return buffer.toString();
                             }
                         }
-                        if (!w.isEmpty()) {
-                            width = Integer.parseInt(w.toString());
+                        if (w.length()>0) {
+                            width = Integer.parseInt(w);
                         }
 
                         // precision
@@ -78,17 +82,21 @@ public class Wsprintf {
                                 return buffer.toString();
                             }
 
-                            StringBuilder p = new StringBuilder();
-                            while (c >= '0' && c <= '9') {
-                                p.append(c);
-                                if (pos + 1 < format.length()) {
+                            String p = "";
+                            while (true) {
+                                if (c>='0' && c<='9') {
+                                    p+=c;
+                                } else {
+                                    break;
+                                }
+                                if (pos+1<format.length()) {
                                     c = format.charAt(++pos);
                                 } else {
                                     return buffer.toString();
                                 }
                             }
-                            if (!p.isEmpty()) {
-                                precision = Integer.parseInt(p.toString());
+                            if (p.length()>0) {
+                                precision = Integer.parseInt(p);
                             }
                         }
 
@@ -116,144 +124,144 @@ public class Wsprintf {
                             }
                         }
 
-                        StringBuilder value = new StringBuilder();
-                        StringBuilder strPrfix = new StringBuilder();
+                        String value = "";
+                        String strPrfix = "";
                         boolean negnumber = false;
                         if (c == 'c') {
                             if (shortValue || wide || longValue)
-                                value = new StringBuilder(Character.toString((char) (CPU.CPU_Peek32(argIndex) & 0xFFFF)));
+                                value = new Character((char) (CPU.CPU_Peek32(argIndex) & 0xFFFF) ).toString();
                             else
-                                value = new StringBuilder(Character.toString((char) (CPU.CPU_Peek32(argIndex) & 0xFF)));
+                                value = new Character((char) (CPU.CPU_Peek32(argIndex) & 0xFF) ).toString();
                         } else if (c == 's') {
                             if (longValue || wide)
-                                value = new StringBuilder(new LittleEndianFile(CPU.CPU_Peek32(argIndex)).readCStringW());
+                                value = new LittleEndianFile(CPU.CPU_Peek32(argIndex)).readCStringW();
                             else
-                                value = new StringBuilder(new LittleEndianFile(CPU.CPU_Peek32(argIndex)).readCString());
+                                value = new LittleEndianFile(CPU.CPU_Peek32(argIndex)).readCString();
 
                             if (precision>0 && value.length()>precision) {
-                                value = new StringBuilder(value.substring(0, precision));
+                                value = value.substring(0,precision);
                             }
                         } else if (c == 'S') {
                             if (longValue || !wide)
-                                value = new StringBuilder(new LittleEndianFile(CPU.CPU_Peek32(argIndex)).readCStringW());
+                                value = new LittleEndianFile(CPU.CPU_Peek32(argIndex)).readCStringW();
                             else
-                                value = new StringBuilder(new LittleEndianFile(CPU.CPU_Peek32(argIndex)).readCString());
+                                value = new LittleEndianFile(CPU.CPU_Peek32(argIndex)).readCString();
                             if (precision>0 && value.length()>precision) {
-                                value = new StringBuilder(value.substring(0, precision));
+                                value = value.substring(0,precision);
                             }
                         } else if (c == 'x') {
                             if (longValue) {
-                                long l = (CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFL) | (long) CPU.CPU_Peek32(argIndex + 1);
+                                long l = (CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFl) | CPU.CPU_Peek32(argIndex+1) << 32l;
                                 argIndex++;
-                                value = new StringBuilder(Long.toString(l, 16));
+                                value = Long.toString(l, 16);
                             } else {
-                                value = new StringBuilder(Long.toString(CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFL, 16));
+                                value = Long.toString(CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFl, 16);
                             }
-                            negnumber = value.toString().startsWith("-");
+                            negnumber = value.startsWith("-");
                             if (negnumber)
-                                value = new StringBuilder(value.substring(1));
-                            if (precision==0 && value.toString().equals("0")) {
+                                value = value.substring(1);
+                            if (precision==0 && value.equals("0")) {
                                 format = format.substring(pos);
                                 continue;
                             }
                             if (prefix) {
-                                strPrfix.append("0x").append(value);
+                                strPrfix += "0x"+value;
                             }
                         } else if (c == 'X') {
                             if (longValue) {
-                                long l = (CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFL) | (long) CPU.CPU_Peek32(argIndex + 1);
+                                long l = (CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFl) | CPU.CPU_Peek32(argIndex+1) << 32l;
                                 argIndex++;
-                                value = new StringBuilder(Long.toString(l, 16));
+                                value = Long.toString(l, 16);
                             } else {
-                                value = new StringBuilder(Long.toString(CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFL, 16));
+                                value = Long.toString(CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFl, 16);
                             }
-                            negnumber = value.toString().startsWith("-");
+                            negnumber = value.startsWith("-");
                             if (negnumber)
-                                value = new StringBuilder(value.substring(1));
-                            if (precision==0 && value.toString().equals("0")) {
+                                value = value.substring(1);
+                            if (precision==0 && value.equals("0")) {
                                 format = format.substring(pos);
                                 continue;
                             }
                             if (precision>0) {
                                 while (value.length()<precision) {
-                                    value.insert(0, "0");
+                                    value = "0"+value;
                                 }
                             }
-                            value = new StringBuilder(value.toString().toUpperCase());
+                            value = value.toUpperCase();
                             if (prefix) {
-                                strPrfix.append("0X").append(value);
+                                strPrfix += "0X"+value;
                             }
                         } else if (c == 'd') {
                             if (longValue) {
-                                long l = (CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFL) | (long) CPU.CPU_Peek32(argIndex + 1);
+                                long l = (CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFl) | CPU.CPU_Peek32(argIndex+1) << 32l;
                                 argIndex++;
-                                value = new StringBuilder(Long.toString(l, 10));
+                                value = Long.toString(l, 10);
                             } else {
-                                value = new StringBuilder(Integer.toString(CPU.CPU_Peek32(argIndex), 10));
+                                value = Integer.toString(CPU.CPU_Peek32(argIndex), 10);
                             }
-                            negnumber = value.toString().startsWith("-");
+                            negnumber = value.startsWith("-");
                             if (negnumber)
-                                value = new StringBuilder(value.substring(1));
-                            if (precision==0 && value.toString().equals("0")) {
+                                value = value.substring(1);
+                            if (precision==0 && value.equals("0")) {
                                 format = format.substring(pos);
                                 continue;
                             }
                             if (precision>0) {
                                 while (value.length()<precision) {
-                                    value.insert(0, "0");
+                                    value = "0"+value;
                                 }
                             }
                         } else if (c == 'u') {
                             if (longValue) {  // :TODO: not truly 64-bit unsigned
-                                long l = CPU.CPU_Peek32(argIndex) | (long) CPU.CPU_Peek32(argIndex + 1);
+                                long l = CPU.CPU_Peek32(argIndex) | CPU.CPU_Peek32(argIndex+1) << 32l;
                                 argIndex++;
-                                value = new StringBuilder(Long.toString(l, 10));
+                                value = Long.toString(l, 10);
                             } else {
-                                value = new StringBuilder(Long.toString(CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFL, 10));
+                                value = Long.toString(CPU.CPU_Peek32(argIndex) & 0xFFFFFFFFl, 10);
                             }
-                            negnumber = value.toString().startsWith("-");
+                            negnumber = value.startsWith("-");
                             if (negnumber)
-                                value = new StringBuilder(value.substring(1));
-                            if (precision==0 && value.toString().equals("0")) {
+                                value = value.substring(1);
+                            if (precision==0 && value.equals("0")) {
                                 format = format.substring(pos);
                                 continue;
                             }
                             if (precision>0) {
                                 while (value.length()<precision) {
-                                    value.insert(0, "0");
+                                    value = "0"+value;
                                 }
                             }
                         }else if (c == 'f') {
-                            value = new StringBuilder(Float.toString(Float.intBitsToFloat(CPU.CPU_Peek32(argIndex))));
-                            negnumber = value.toString().startsWith("-");
+                            value = Float.toString(Float.intBitsToFloat(CPU.CPU_Peek32(argIndex)));
+                            negnumber = value.startsWith("-");
                             if (negnumber)
-                                value = new StringBuilder(value.substring(1));
-                            int dec = value.toString().indexOf('.');
+                                value = value.substring(1);
+                            int dec = value.indexOf('.');
                             if (dec>=0) {
                                 if (precision==0) {
-                                    value = new StringBuilder(value.substring(0, dec));
+                                    value = value.substring(0, dec);
                                 } else if (value.length()>dec+1+precision) {
-                                    value = new StringBuilder(value.substring(0, dec + 1 + precision));
+                                    value = value.substring(0, dec+1+precision);
                                 }
                             }
                         }
 
                         if (negnumber) {
-                            strPrfix = new StringBuilder("-");
+                            strPrfix = "-";
                         } else {
                             if (showPlus) {
-                                strPrfix.insert(0, "+");
+                                strPrfix = "+"+strPrfix;
                             } else if (spaceSign) {
-                                strPrfix.insert(0, " ");
+                                strPrfix = " "+strPrfix;
                             }
                         }
                         while (width>strPrfix.length()+value.length()) {
                             if (leftPadZero) {
-                                strPrfix.append("0");
+                                strPrfix+="0";
                             } else if (leftJustify) {
-                                value.append(" ");
+                                value=value+" ";
                             } else {
-                                strPrfix.insert(0, " ");
+                                strPrfix=" "+strPrfix;
                             }
                         }
                         buffer.append(strPrfix);

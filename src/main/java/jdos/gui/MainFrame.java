@@ -1,13 +1,8 @@
 package jdos.gui;
 
-import com.acclash.vmcomputers.VMComputers;
-import com.acclash.vmcomputers.utils.ComputerFunctions;
 import jdos.Dosbox;
 import jdos.ints.Mouse;
 import jdos.sdl.GUI;
-import jdos.util.Log;
-import org.apache.logging.log4j.Level;
-import org.bukkit.Bukkit;
 
 import javax.swing.*;
 import java.awt.*;
@@ -15,13 +10,14 @@ import java.awt.event.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.MemoryImageSource;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Method;
 
 public class MainFrame implements GUI {
-    final int[] pixels = new int[16 * 16];
-    final Image image = Toolkit.getDefaultToolkit().createImage(new MemoryImageSource(16, 16, pixels, 0, 16));
-
-    final Cursor transparentCursor = Toolkit.getDefaultToolkit().createCustomCursor(image, new Point(0, 0), "invisibleCursor");
+    int[] pixels = new int[16 * 16];
+    Image image = Toolkit.getDefaultToolkit().createImage(new MemoryImageSource(16, 16, pixels, 0, 16));
+    Cursor transparentCursor = Toolkit.getDefaultToolkit().createCustomCursor(image, new Point(0, 0), "invisibleCursor");
 
     static Robot robot;
     static private boolean eatNextMouseMove = false;
@@ -29,13 +25,13 @@ public class MainFrame implements GUI {
     static private int last_y;
 
     public void showProgress(String msg, int percent) {
-        
+
     }
 
     static public void robotMouse(MouseEvent e, Point rel, int offX, int offY) {
         if (eatNextMouseMove) {
-            last_x = e.getX()-offX;
-            last_y = e.getY()-offY;
+            last_x = e.getX() - offX;
+            last_y = e.getY() - offY;
             eatNextMouseMove = false;
             return;
         }
@@ -44,15 +40,16 @@ public class MainFrame implements GUI {
         else {
             int rel_x = e.getX() - last_x - offX;
             int rel_y = e.getY() - last_y - offY;
-            float abs_x = (Mouse.mouse.x+rel_x* Main.mouse_sensitivity/100.0f)/(Mouse.mouse.max_x);
-            float abs_y = (Mouse.mouse.y+rel_y* Main.mouse_sensitivity/100.0f)/(Mouse.mouse.max_y);
+            float abs_x = (Mouse.mouse.x + rel_x * Main.mouse_sensitivity / 100.0f) / (Mouse.mouse.max_x);
+            float abs_y = (Mouse.mouse.y + rel_y * Main.mouse_sensitivity / 100.0f) / (Mouse.mouse.max_y);
             Main.addMouseEvent(new Main.MouseEvent2(e, rel_x, rel_y, abs_x, abs_y, offX, offY));
             robotCenter(rel);
         }
     }
+
     static public void robotCenter(Point rel) {
         eatNextMouseMove = true;
-        robot.mouseMove(rel.x+200, rel.y+200);
+        robot.mouseMove(rel.x + 200, rel.y + 200);
     }
 
     public void captureMouse(boolean on) {
@@ -60,12 +57,14 @@ public class MainFrame implements GUI {
             robotCenter(panel.getLocationOnScreen());
         }
     }
+
     public void showCursor(boolean on) {
         if (on)
             frame.setCursor(Cursor.getDefaultCursor());
         else
             frame.setCursor(transparentCursor);
     }
+
     public void setCursor(Cursor cursor) {
         if (cursor == null)
             cursor = transparentCursor;
@@ -96,9 +95,9 @@ public class MainFrame implements GUI {
             frame.setExtendedState(Frame.MAXIMIZED_BOTH);
             setSize(fullscreen_cx, fullscreen_cy);
             fullscreen_cx_offset = 0;
-            if ((float)fullscreen_cx/fullscreen_cy > 4.0/3.0) {
-                int new_fullscreen_cx = fullscreen_cy*4/3;
-                fullscreen_cx_offset = (fullscreen_cx - new_fullscreen_cx)/2;
+            if ((float) fullscreen_cx / fullscreen_cy > 4.0 / 3.0) {
+                int new_fullscreen_cx = fullscreen_cy * 4 / 3;
+                fullscreen_cx_offset = (fullscreen_cx - new_fullscreen_cx) / 2;
                 fullscreen_cx = new_fullscreen_cx;
             }
             fullscreen = true;
@@ -113,12 +112,14 @@ public class MainFrame implements GUI {
         panel.setPreferredSize(new Dimension(width, height));
         frame.getContentPane().doLayout();
         frame.pack();
-        if (/*!*/frame.isVisible())
-            frame.setVisible(/*true*/false);
+        if (!frame.isVisible())
+            frame.setVisible(true);
     }
+
     public void dopaint() {
         panel.repaint();
     }
+
     public void setTitle(String title) {
         if (frame != null)
             frame.setTitle(title);
@@ -130,7 +131,7 @@ public class MainFrame implements GUI {
         return gd.getDefaultConfiguration();
     }
 
-    public static BufferedImage tmpImage;
+    static BufferedImage tmpImage;
 
     public static BufferedImage resizeImage(BufferedImage source, int destWidth, int destHeight, Object interpolation) {
         if (source == null)
@@ -171,14 +172,21 @@ public class MainFrame implements GUI {
     }
 
     public static void main(final String[] args) {
-        if (args.length>1 && args[0].equalsIgnoreCase("-pcap")) {
+        if (args.length == 1 && args[0].equalsIgnoreCase("-noconsole")) {
+            PrintStream dummyStream = new PrintStream(new OutputStream() {
+                public void write(int b) {
+                    // NO-OP
+                }
+            });
+
+            System.setOut(dummyStream);
+        } else if (args.length > 1 && args[0].equalsIgnoreCase("-pcap")) {
             String nic = args[1];
             int port = 15654;
-            if (args.length>3 && args[2].equalsIgnoreCase("-pcapport")) {
+            if (args.length > 3 && args[2].equalsIgnoreCase("-pcapport")) {
                 try {
                     port = Integer.parseInt(args[3]);
-                } catch (Exception e) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e);
+                } catch (Exception ignored) {
                 }
             }
             try {
@@ -186,69 +194,68 @@ public class MainFrame implements GUI {
                 Method method = c.getDeclaredMethod("startServer", String.class, Integer.TYPE);
                 method.invoke(null, nic, port);
             } catch (Exception e) {
-                Log.getLogger().log(Level.ERROR, "Could not get class FowardPcapEthernet: ", e);
+                e.printStackTrace();
             }
             return;
         }
-        try {robot = new Robot();} catch (Throwable e) {
-            Log.getLogger().warn("Applet is not signed, mouse capture will not work");}
+        try {
+            robot = new Robot();
+        } catch (Throwable e) {
+            System.out.println("Applet is not signed, mouse capture will not work");
+        }
 
         frame = new MyFrame();
         frame.setFocusTraversalKeysEnabled(false);
         frame.addFocusListener(new FocusListener() {
-                private final KeyEventDispatcher altDisabler = e -> {
-                    if (e.getKeyCode() == 18) {
-                        Main.addEvent(e);
-                        return true;
-                    }
-                    return false;
-                };
-
-                public void focusGained(FocusEvent e) {
-                    KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(altDisabler);
+            private final KeyEventDispatcher altDisabler = e -> {
+                if (e.getKeyCode() == 18) {
+                    Main.addEvent(e);
+                    return true;
                 }
+                return false;
+            };
 
-                public void focusLost(FocusEvent e) {
-                    KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(altDisabler);
-                }
-            });
+            public void focusGained(FocusEvent e) {
+                KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(altDisabler);
+            }
+
+            public void focusLost(FocusEvent e) {
+                KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(altDisabler);
+            }
+        });
 
         panel = new JPanel() {
             public void paint(Graphics g) {
                 if (Main.buffer2[Main.front] != null) {
                     synchronized (Main.paintMutex) {
                         if (fullscreen) {
-                            g.drawImage(Main.buffer2[Main.front], fullscreen_cx_offset, 0, fullscreen_cx+fullscreen_cx_offset,  fullscreen_cy, 0, 0, Main.buffer_width, Main.buffer_height, null);
+                            g.drawImage(Main.buffer2[Main.front], fullscreen_cx_offset, 0, fullscreen_cx + fullscreen_cx_offset, fullscreen_cy, 0, 0, Main.buffer_width, Main.buffer_height, null);
                         } else {
-                            if (Render.render.aspect && (Main.screen_height % Main.buffer_height)!=0) {
-                                BufferedImage resized = resizeImage(Main.buffer2[Main.front], Main.screen_width, Main.screen_height,RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-                                g.drawImage(resized, 0, 0, Main.screen_width,  Main.screen_height, 0, 0, Main.screen_width, Main.screen_height, null);
-                                ComputerFunctions.refreshImage(Integer.parseInt(args[0]), resized);
+                            if (Render.render.aspect && (Main.screen_height % Main.buffer_height) != 0) {
+                                BufferedImage resized = resizeImage(Main.buffer2[Main.front], Main.screen_width, Main.screen_height, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                                g.drawImage(resized, 0, 0, Main.screen_width, Main.screen_height, 0, 0, Main.screen_width, Main.screen_height, null);
                             } else {
-                                g.drawImage(Main.buffer2[Main.front], 0, 0, Main.screen_width,  Main.screen_height, 0, 0, Main.buffer_width, Main.buffer_height, null);
-                                ComputerFunctions.refreshImage(Integer.parseInt(args[0]), Main.buffer2[Main.front]);
+                                g.drawImage(Main.buffer2[Main.front], 0, 0, Main.screen_width, Main.screen_height, 0, 0, Main.buffer_width, Main.buffer_height, null);
                             }
                         }
                     }
-
                 }
             }
         };
-        panel.addMouseMotionListener((MyFrame)frame);
-        panel.addMouseListener((MyFrame)frame);
+        panel.addMouseMotionListener((MyFrame) frame);
+        panel.addMouseListener((MyFrame) frame);
         frame.addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) {
                 synchronized (Main.pauseMutex) {
                     Main.pauseMutex.notify();
                 }
                 Main.addEvent(null);
-                try {mainThread.join(5000);} catch (Exception e1) {
-                    Log.getLogger().log(Level.ERROR, "Runtime error: ", e1);
+                try {
+                    mainThread.join(5000);
+                } catch (Exception ignored) {
                 }
                 if (!Dosbox.applet) {
-                   //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+                    System.exit(0);
                 }
             }
         });
@@ -257,16 +264,14 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
         frame.getContentPane().add(panel, BorderLayout.PAGE_START);
         mainThread = new Thread(() -> {
             Main.main(new MainFrame(), args);
-           //System.exit(0);
-VMComputers.getPlugin().getLogger().severe("The emulator has crashed. VMComputers is shutting down...");
-Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
+            System.exit(0);
         });
         mainThread.start();
     }
 
     private static Thread mainThread;
-    public static JFrame frame;
-    public static JPanel panel;
+    private static JFrame frame;
+    private static JPanel panel;
 
     private static class MyFrame extends JFrame implements KeyListener, WindowFocusListener, WindowListener, MouseListener, MouseMotionListener {
         public MyFrame() {
@@ -274,16 +279,21 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
             addWindowFocusListener(this);
             addWindowListener(this);
         }
+
         public void keyTyped(KeyEvent e) {
 
         }
 
-        /** Handle the key pressed event from the text field. */
+        /**
+         * Handle the key pressed event from the text field.
+         */
         public void keyPressed(KeyEvent e) {
             Main.addKeyEvent(e);
         }
 
-        /** Handle the key released event from the text field. */
+        /**
+         * Handle the key released event from the text field.
+         */
         public void keyReleased(KeyEvent e) {
             Main.addKeyEvent(e);
         }
@@ -337,7 +347,7 @@ Bukkit.getPluginManager().disablePlugin(VMComputers.getPlugin());
         }
 
         public void mouseClicked(MouseEvent e) {
-            if (e.getClickCount()==2 && e.getButton() == MouseEvent.BUTTON3) {
+            if (e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON3) {
                 Main.GFX_CaptureMouse();
             }
         }

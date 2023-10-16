@@ -1,14 +1,4 @@
 name: VMComputers
-version: '${version}'
+version: '${project.version}'
 main: com.acclash.vmcomputers.VMComputers
-api-version: 1.20
-authors: [Anston_Sorensen]
-description: The part of project magisha that handles the computers
-website: www.accclash.com
-commands:
-  computer:
-    description: Manages various actions with computers.
-  test:
-    description: Tests the decompressing of the image files.
-  resetdb:
-    description: l
+api-version: '1.20'

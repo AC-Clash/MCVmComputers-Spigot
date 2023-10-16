@@ -96,7 +96,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsw32 extends Op {
@@ -114,7 +117,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsw16r extends Op {
@@ -149,20 +155,23 @@ public class Strings extends Core {
                         len = src_len;
                     if (len>dst_len)
                         len = dst_len;
-                    int ediCount;
-                    int esiCount;
                     if (add_index<0) {
-                        ediCount = reg_edi.word() + 1;
-                        esiCount = reg_esi.word() + 1;
+                        int ediCount = reg_edi.word()+1;
+                        int esiCount = reg_esi.word()+1;
+                        if (len>ediCount)
+                            len = ediCount;
+                        if (len>esiCount)
+                            len = esiCount;
+                        len = len & ~1;
                     } else {
-                        ediCount = 0x10000 - reg_edi.word();
-                        esiCount = 0x10000 - reg_esi.word();
+                        int ediCount = 0x10000 - reg_edi.word();
+                        int esiCount = 0x10000 - reg_esi.word();
+                        if (len>ediCount)
+                            len = ediCount;
+                        if (len>esiCount)
+                            len = esiCount;
+                        len = len & ~1;
                     }
-                    if (len>ediCount)
-                        len = ediCount;
-                    if (len>esiCount)
-                        len = esiCount;
-                    len = len & ~1;
                     if (len<=0) {
                         // Part of the read or write crosses a boundary
                         Memory.mem_writew(di_base + reg_edi.word(), Memory.mem_readw(si_base + reg_esi.word()));
@@ -211,7 +220,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsw16 extends Op {
@@ -230,7 +242,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsd32r extends Op {
@@ -314,7 +329,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsd32 extends Op {
@@ -332,7 +350,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsd16r extends Op {
@@ -367,20 +388,23 @@ public class Strings extends Core {
                         len = src_len;
                     if (len>dst_len)
                         len = dst_len;
-                    int ediCount;
-                    int esiCount;
                     if (add_index<0) {
-                        ediCount = reg_edi.word() + 1;
-                        esiCount = reg_esi.word() + 1;
+                        int ediCount = reg_edi.word()+1;
+                        int esiCount = reg_esi.word()+1;
+                        if (len>ediCount)
+                            len = ediCount;
+                        if (len>esiCount)
+                            len = esiCount;
+                        len = len & ~3;
                     } else {
-                        ediCount = 0x10000 - reg_edi.word();
-                        esiCount = 0x10000 - reg_esi.word();
+                        int ediCount = 0x10000 - reg_edi.word();
+                        int esiCount = 0x10000 - reg_esi.word();
+                        if (len>ediCount)
+                            len = ediCount;
+                        if (len>esiCount)
+                            len = esiCount;
+                        len = len & ~3;
                     }
-                    if (len>ediCount)
-                        len = ediCount;
-                    if (len>esiCount)
-                        len = esiCount;
-                    len = len & ~3;
                     if (len<=0) {
                         // Part of the read or write crosses a boundary
                         Memory.mem_writed(di_base + reg_edi.word(), Memory.mem_readd(si_base + reg_esi.word()));
@@ -429,7 +453,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsd16 extends Op {
@@ -448,7 +475,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsb32r extends Op {
@@ -521,7 +551,10 @@ public class Strings extends Core {
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
 
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsb32 extends Op {
@@ -539,8 +572,10 @@ public class Strings extends Core {
             doString();
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
-
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsb16r extends Op {
@@ -575,19 +610,21 @@ public class Strings extends Core {
                         len = src_len;
                     if (len>dst_len)
                         len = dst_len;
-                    int ediCount;
-                    int esiCount;
                     if (add_index<0) {
-                        ediCount = reg_edi.word() + 1;
-                        esiCount = reg_esi.word() + 1;
+                        int ediCount = reg_edi.word()+1;
+                        int esiCount = reg_esi.word()+1;
+                        if (len>ediCount)
+                            len = ediCount;
+                        if (len>esiCount)
+                            len = esiCount;
                     } else {
-                        ediCount = 0x10000 - reg_edi.word();
-                        esiCount = 0x10000 - reg_esi.word();
+                        int ediCount = 0x10000 - reg_edi.word();
+                        int esiCount = 0x10000 - reg_esi.word();
+                        if (len>ediCount)
+                            len = ediCount;
+                        if (len>esiCount)
+                            len = esiCount;
                     }
-                    if (len>ediCount)
-                        len = ediCount;
-                    if (len>esiCount)
-                        len = esiCount;
                     if (Math.abs(src_index-dst_index)<len) {
                         // Overlapping read/write
                         for (int i=0;i<len;i++) {
@@ -625,8 +662,10 @@ public class Strings extends Core {
             doString();
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
-
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 
     final static public class Movsb16 extends Op {
@@ -644,7 +683,9 @@ public class Strings extends Core {
             doString();
             CPU_Regs.reg_eip+=eip_count;return next.call();
         }
-
+        public boolean throwsException() {return false;}
         public boolean accessesMemory() {return true;}
+        public boolean usesEip() {return false;}
+        public boolean setsEip() {return false;}
     }
 }

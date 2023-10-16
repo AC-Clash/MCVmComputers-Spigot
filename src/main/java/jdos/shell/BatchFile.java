@@ -1,14 +1,14 @@
 package jdos.shell;
 
 import jdos.dos.Dos_files;
-import jdos.util.Log;
+import jdos.misc.Log;
 import jdos.misc.setup.CommandLine;
-import jdos.types.LogType;
+import jdos.types.LogSeverities;
+import jdos.types.LogTypes;
 import jdos.util.IntRef;
 import jdos.util.LongRef;
 import jdos.util.StringHelper;
 import jdos.util.StringRef;
-import org.apache.logging.log4j.Level;
 
 public class BatchFile {
     BatchFile(Dos_shell host,String resolved_name,String entered_name, String cmd_line) {
@@ -24,7 +24,7 @@ public class BatchFile {
         //Test if file is openable
         if (!Dos_files.DOS_OpenFile(totalname.value,128, file_handle)) {
             //TODO Come up with something better
-            Log.exit("SHELL: Can't open BatchFile "+totalname.value, Level.ERROR);
+            Log.exit("SHELL:Can't open BatchFile "+totalname.value);
         }
         Dos_files.DOS_CloseFile(file_handle.value);
     }
@@ -37,16 +37,16 @@ public class BatchFile {
     String ReadLine() {
         //Open the batchfile and seek to stored postion
         if (!Dos_files.DOS_OpenFile(filename,128,file_handle)) {
-             Log.specializedLog(LogType.LOG_MISC, Level.ERROR,"ReadLine Can't open BatchFile "+filename);
+            if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_ERROR,"ReadLine Can't open BatchFile "+filename);
             close();
             return null;
         }
         Dos_files.DOS_SeekFile(file_handle.value, location, Dos_files.DOS_SEEK_SET);
 
         /*Bit8u*/byte[] c=new byte[1];IntRef n=new IntRef(1);
-        StringBuilder l;
+        StringBuffer l;
         do {
-            l=new StringBuilder();
+            l=new StringBuffer();
             do {
                 n.value=1;
                 Dos_files.DOS_ReadFile(file_handle.value,c,n);
@@ -59,19 +59,19 @@ public class BatchFile {
                         l.append((char)c[0]);
                 }
             } while (c[0]!='\n' && n.value!=0);
-            if (n.value==0 && l.isEmpty()) {
+            if (n.value==0 && l.length()==0) {
                 //Close file and delete bat file
                 Dos_files.DOS_CloseFile(file_handle.value);
                 close();
                 return null;
             }
-        } while (l.isEmpty() || l.charAt(0)==':');
+        } while (l.length()==0 || l.charAt(0)==':');
         String in = l.toString();
-        StringBuilder out = new StringBuilder();
+        StringBuffer out = new StringBuffer();
         /* Now parse the line read from the bat file for % stuff */
-        while (!in.isEmpty()) {
+        while (in.length()>0) {
             if (in.charAt(0)=='%') {
-                in = in.substring(1);if (in.isEmpty()) break;
+                in = in.substring(1);if (in.length()==0) break;
                 if (in.charAt(0) == '%') {
                     in = in.substring(1);
                     out.append('%');
@@ -89,8 +89,9 @@ public class BatchFile {
                     next -= '0';
                     if (cmd.GetCount()<next) continue;
                     String word;
-                    if ((word=cmd.FindCommand(next))==null) continue;
+                    if ((word=cmd.FindCommand((int)next))==null) continue;
                     out.append(word);
+                    continue;
                 } else {
                     /* Not a command line number has to be an environment */
                     int pos = in.indexOf('%');
@@ -119,7 +120,7 @@ public class BatchFile {
     boolean Goto(String where) {
         //Open bat file and search for the where string
         if (!Dos_files.DOS_OpenFile(filename,128,file_handle)) {
-             Log.specializedLog(LogType.LOG_MISC, Level.ERROR,"SHELL: Goto Can't open BatchFile "+filename);
+            if (Log.level<=LogSeverities.LOG_ERROR) Log.log(LogTypes.LOG_MISC, LogSeverities.LOG_ERROR,"SHELL:Goto Can't open BatchFile "+filename);
             close();
             return false;
         }
@@ -128,7 +129,7 @@ public class BatchFile {
         /*Bit8u*/byte[] c=new byte[1];IntRef n=new IntRef(1);
         //again:
         while (true) {
-            StringBuilder l=new StringBuilder();
+            StringBuffer l=new StringBuffer();
             do {
                 n.value=1;
                 Dos_files.DOS_ReadFile(file_handle.value,c,n);
@@ -143,14 +144,14 @@ public class BatchFile {
             } while (c[0]!='\n' && n.value!=0);
 
             String nospace = l.toString().trim();
-            if (!nospace.isEmpty() && nospace.charAt(0) == ':') {
+            if (nospace.length()>0 && nospace.charAt(0) == ':') {
                 nospace=nospace.substring(1); //Skip :
                 //Strip spaces and = from it.
-                while (!nospace.isEmpty() && StringHelper.isspace(nospace.charAt(0)) || nospace.charAt(0)=='=') {
+                while (nospace.length()>0 && StringHelper.isspace(nospace.charAt(0)) || nospace.charAt(0)=='=') {
                     nospace = nospace.substring(1);
                 }
                 String beginLabel = nospace;
-                while (!nospace.isEmpty() && !StringHelper.isspace(nospace.charAt(0)) && nospace.charAt(0)!='=') {
+                while (nospace.length()>0 && !StringHelper.isspace(nospace.charAt(0)) && nospace.charAt(0)!='=') {
                     nospace = nospace.substring(1);
                 }
                 if (where.equalsIgnoreCase(beginLabel.substring(0, beginLabel.length()-nospace.length()))) {
@@ -173,11 +174,11 @@ public class BatchFile {
     void Shift() {
         cmd.Shift(1);
     }
-    /*Bit16u*/final IntRef file_handle=new IntRef(0);
-    /*Bit32u*/ final LongRef location=new LongRef(0);
-    final boolean echo;
-    final Dos_shell shell;
-    final BatchFile prev;
-    final CommandLine cmd;
+    /*Bit16u*/IntRef file_handle=new IntRef(0);
+    /*Bit32u*/ LongRef location=new LongRef(0);
+    boolean echo;
+    Dos_shell shell;
+    BatchFile prev;
+    CommandLine cmd;
     public String filename;
 }

@@ -1,8 +1,8 @@
 package jdos.ints;
 
 import jdos.Dosbox;
-import jdos.hardware.Memory;
 import jdos.types.MachineType;
+import jdos.hardware.Memory;
 
 public class Int10_vptable {
     static private final byte[] vparams = {
@@ -502,12 +502,12 @@ public class Int10_vptable {
     static public /*Bit16u*/int INT10_SetupVideoParameterTable(/*PhysPt*/int basepos) {
         if (Dosbox.IS_VGA_ARCH()) {
             for (/*Bitu*/int i=0;i<0x40*0x1d;i++) {
-                Memory.phys_writeb(basepos+i,video_parameter_table_vga[i]);
+                Memory.phys_writeb((int)(basepos+i),video_parameter_table_vga[i]);
             }
             return (byte)0x40*0x1d;
         } else {
             for (/*Bitu*/int i=0;i<0x40*0x17;i++) {
-                Memory.phys_writeb(basepos+i,video_parameter_table_ega[i]);
+                Memory.phys_writeb((int)(basepos+i),video_parameter_table_ega[i]);
             }
             return (byte)0x40*0x17;
         }
@@ -517,12 +517,12 @@ public class Int10_vptable {
         /* video parameter table at F000:F0A4 */
         Memory.RealSetVec(0x1d,Memory.RealMake(0xF000, 0xF0A4));
         switch (Dosbox.machine) {
-        case MCH_TANDY:
+        case MachineType.MCH_TANDY:
             for (/*Bit16u*/int i = 0; i < vparams_tandy.length; i++) {
                 Memory.phys_writeb(0xFF0A4+i,vparams_tandy[i]);
             }
             break;
-        case MCH_PCJR:
+        case MachineType.MCH_PCJR:
             for (/*Bit16u*/int i = 0; i < vparams_pcjr.length; i++) {
                 Memory.phys_writeb(0xFF0A4+i,vparams_pcjr[i]);
             }

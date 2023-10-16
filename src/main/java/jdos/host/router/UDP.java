@@ -1,5 +1,4 @@
 package jdos.host.router;
-import jdos.util.Log;
 
 public class UDP extends EtherUtil {
     static final public int LEN = 8;
@@ -50,18 +49,18 @@ public class UDP extends EtherUtil {
         System.out.print("Received UDP Packet");
         parse(buffer, offset);
         //dump(buffer, offset, len);
-        if (sum==0 || UDP.udp_csum(Ether.ip.sourceIP, Ether.ip.destIP, buffer, offset, len)==0) {
+        if (sum==0 || UDP.udp_csum(ether.ip.sourceIP, ether.ip.destIP, buffer, offset, len)==0) {
             if (destPort == 67) { // BOOTP/DHCP
-                
+                System.out.println();
                 bootp.handle(buffer, offset + LEN, len - LEN);
-                
+                System.out.println();
             } else {
                 System.out.print(" ");
-                printAddress(Ether.ip.destIP);
-                Log.getLogger().info(":"+destPort);
+                printAddress(ether.ip.destIP);
+                System.out.println(":"+destPort);
             }
         } else {
-            Log.getLogger().info(" Bad Checksum");
+            System.out.println(" Bad Checksum");
         }
     }
 

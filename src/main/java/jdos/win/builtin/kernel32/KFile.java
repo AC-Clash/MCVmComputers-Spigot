@@ -57,8 +57,11 @@ public class KFile extends WinAPI {
                 share = WinFile.FILE_SHARE_NONE;
             }
 
-            boolean write = (uStyle & OF_WRITE) != 0;
-        if ((uStyle & OF_READWRITE)!=0) {
+            boolean write = false;
+            if ((uStyle & OF_WRITE)!=0) {
+                write = true;
+            }
+            if ((uStyle & OF_READWRITE)!=0) {
                 write = true;
             }
             WinFile result = WinFile.create(file, write, share, 0);
