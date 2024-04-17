@@ -1,4 +1,7 @@
 name: VMComputers
-version: '${project.version}'
+version: '${version}'
 main: com.acclash.vmcomputers.VMComputers
 api-version: '1.20'
+authors: [ Anston_Sorensen ]
+description: Control virtual machines inside of vanilla Minecraft
+website: www.acclash.com

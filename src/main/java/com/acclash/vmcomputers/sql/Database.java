@@ -1,13 +1,11 @@
 package com.acclash.vmcomputers.sql;
 
 import com.acclash.vmcomputers.VMComputers;
-import org.bukkit.entity.Player;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.logging.Level;
 
 public abstract class Database {
     VMComputers plugin;
