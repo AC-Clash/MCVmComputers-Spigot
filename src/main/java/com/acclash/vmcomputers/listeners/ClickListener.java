@@ -2,7 +2,6 @@ package com.acclash.vmcomputers.listeners;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.utils.Serialization;
-import jdos.gui.Main;
 import jdos.gui.MainFrame;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
