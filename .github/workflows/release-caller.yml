@@ -1,9 +1,7 @@
 name: Release Caller
 
 on:
-  pull_request:
-    branches:
-      - main
+  push:
 
 jobs:
   call-workflow:
