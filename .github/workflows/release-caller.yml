@@ -1,0 +1,11 @@
+name: Release Caller
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  call-workflow:
+    uses: ac-clash/workflows/.github/workflows/release.yml@reusable-workflow
+
