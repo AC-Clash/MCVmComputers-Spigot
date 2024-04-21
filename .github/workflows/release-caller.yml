@@ -7,4 +7,3 @@ on:
 jobs:
   call-workflow:
     uses: ac-clash/workflows/.github/workflows/release-called.yml@reusable-workflow
-
