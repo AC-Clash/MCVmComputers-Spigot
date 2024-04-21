@@ -9,3 +9,5 @@ jobs:
     permissions:
         contents: write
     uses: ac-clash/workflows/.github/workflows/release-called.yml@reusable-workflow
+    secrets:
+      token: ${{ secrets.TOKEN }}
