@@ -2,6 +2,7 @@ name: Release Caller
 
 on:
   push:
+  pull_request:
 
 jobs:
   call-workflow:
