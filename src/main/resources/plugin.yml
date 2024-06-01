@@ -5,3 +5,6 @@ api-version: '1.20'
 authors: [ Anston_Sorensen ]
 description: Control virtual machines inside of vanilla Minecraft
 website: www.acclash.com
+commands:
+  vmcomputers:
+    description: Manages various actions with computers

@@ -1,9 +1,11 @@
 package com.acclash.vmcomputers;
 
 import com.acclash.vmcomputers.commands.ComputerCM;
+import com.acclash.vmcomputers.gui.ShopGUI;
 import com.acclash.vmcomputers.listeners.ClickListener;
 import com.acclash.vmcomputers.listeners.PlayerListener;
 import com.acclash.vmcomputers.listeners.PreventionListener;
+import com.acclash.vmcomputers.listeners.RecipeListener;
 import com.acclash.vmcomputers.net.InboundHandler;
 import com.acclash.vmcomputers.sql.Database;
 import com.acclash.vmcomputers.sql.SQLite;
@@ -35,6 +37,8 @@ public final class VMComputers extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(), this);
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
+        getServer().getPluginManager().registerEvents(new RecipeListener(), this);
+        getServer().getPluginManager().registerEvents(new ShopGUI(), this);
         Bukkit.getOnlinePlayers().forEach(InboundHandler::attach);
 
         this.db = new SQLite(this);
