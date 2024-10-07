@@ -2,12 +2,16 @@ name: Release Caller
 
 on:
   push:
-  pull_request:
+    branches:
+      - '**'
+    tags-ignore:
+      - '*'
 
 jobs:
   call-workflow:
     permissions:
-        contents: write
+      contents: write
     uses: ac-clash/workflows/.github/workflows/release-called.yml@main
     secrets:
       token: ${{ secrets.TOKEN }}
+      passwd: ${{ secrets.PASSWD }}
