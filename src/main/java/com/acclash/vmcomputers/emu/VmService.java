@@ -74,11 +74,19 @@ public final class VmService {
                             + "); the guest will be very slow.");
                 }
 
-                // No disk and no ISO yet: the guest lands on the firmware boot screen, which is
-                // enough to prove the whole path from QEMU to the map wall.
+                VmPaths.ensureDirectories();
+                // Every computer gets its own disk so anything installed survives a power cycle.
+                // It is created on first boot rather than at build time, so a computer that is only
+                // ever used with live media costs no disk space.
+                java.nio.file.Path disk = VmPaths.diskFor(computer.id());
+                java.nio.file.Path iso = VmPaths.resolveIso(computer.isoName());
+                if (computer.isoName() != null && iso == null) {
+                    post(feedback, "ISO '" + computer.isoName() + "' is missing; booting without it.");
+                }
+
                 QemuVirtualMachine machine = QemuVirtualMachine.forComputer(
                         computer.id(), binary, computer.monitorSize(),
-                        null, null, 2048, line -> plugin.getLogger().info(line));
+                        disk, iso, 2048, line -> plugin.getLogger().info(line));
 
                 MapColorLut palette = plugin.getMapPalette();
                 byte black = palette.match(0, 0, 0);
