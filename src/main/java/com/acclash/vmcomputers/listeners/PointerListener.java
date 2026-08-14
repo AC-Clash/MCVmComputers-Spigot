@@ -13,20 +13,21 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.util.Vector;
 
 /**
- * Aims the guest's mouse by where the player is looking.
+ * Treats the screen as a touchscreen: the guest's pointer is put where the player is looking at the
+ * moment they click, and clicked there.
  *
- * <p>A ray is cast from the player's eyes to the screen plane and the hit point becomes the pointer
- * position. Nothing is ever cancelled or corrected, so there is no rubber-banding: the player looks
- * wherever they like and the pointer follows. RFB's PointerEvent is already absolute, so the hit
- * point maps onto it with no conversion.
+ * <p>An earlier version tracked the pointer continuously and drew a cursor into the framebuffer.
+ * That was both expensive and unnecessary. Expensive because every head movement repainted part of
+ * the screen and dirtied map panels, twenty times a second, for as long as anyone looked around.
+ * Unnecessary because Minecraft already draws a crosshair in the centre of the player's view --
+ * that crosshair is the pointer, rendered client-side for free and always exactly accurate.
  *
- * <p>Precision scales with proximity for free. Standing closer makes the screen cover more of the
- * view, so a degree of head movement crosses fewer pixels. Walking up to read small text also makes
- * it easier to click.
+ * <p>So nothing happens until a click, and a click costs one ray and three small packets. Looking
+ * around a running computer now costs nothing at all.
  */
 public class PointerListener implements Listener {
 
@@ -37,17 +38,14 @@ public class PointerListener implements Listener {
     private static final int BUTTON_LEFT = 1;
     private static final int BUTTON_RIGHT = 1 << 2;
 
-    /** Where each player's pointer last landed, so clicks land at the current position. */
-    private final java.util.Map<java.util.UUID, Aim> lastAim =
-            new java.util.concurrent.ConcurrentHashMap<java.util.UUID, Aim>();
-
-    private static final class Aim {
+    /** Where a look ray landed on a running computer. */
+    private static final class Target {
         final int computerId;
         /** Guest pixel, which is what the machine understands. */
         final int x;
         final int y;
 
-        Aim(int computerId, int x, int y) {
+        Target(int computerId, int x, int y) {
             this.computerId = computerId;
             this.x = x;
             this.y = y;
@@ -55,52 +53,22 @@ public class PointerListener implements Listener {
     }
 
     /**
-     * The computer a player is currently aiming at, or null.
+     * Casts the player's look ray at every running computer and returns the nearest screen it hits.
      *
-     * <p>Lets the keyboard reuse the pointer's notion of "the screen you are looking at" rather
-     * than making the player name a computer id for every keystroke.
+     * <p>Only called on interaction, so the cost is one ray per click rather than one per movement
+     * packet.
      */
-    public Integer targetComputerId(Player player) {
-        Aim current = lastAim.get(player.getUniqueId());
-        if (current == null) {
-            current = aim(player);
-        }
-        return current == null ? null : Integer.valueOf(current.computerId);
-    }
-
-    @EventHandler
-    public void onMove(PlayerMoveEvent e) {
-        // Fires constantly, so bail out before doing any work when nothing is running.
+    private Target trace(Player player) {
         if (ComputerFunctions.getMachines().isEmpty()) {
-            return;
+            return null;
         }
-        Location to = e.getTo();
-        if (to == null) {
-            return;
-        }
-        // Position-only changes cannot alter where the ray lands from a standing player, but they
-        // can when walking, so both are handled -- only skip when literally nothing moved.
-        if (!hasChanged(e.getFrom(), to)) {
-            return;
-        }
-        aim(e.getPlayer());
-    }
 
-    private static boolean hasChanged(Location from, Location to) {
-        return from.getYaw() != to.getYaw() || from.getPitch() != to.getPitch()
-                || from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ();
-    }
-
-    /** Traces the player's look ray and moves the guest pointer if it lands on a live screen. */
-    private Aim aim(Player player) {
         Location eye = player.getEyeLocation();
         Vector direction = eye.getDirection();
         double[] origin = {eye.getX(), eye.getY(), eye.getZ()};
         double[] ray = {direction.getX(), direction.getY(), direction.getZ()};
 
-        Aim best = null;
-        MonitorScreen bestScreen = null;
-        ScreenGeometry.Hit bestHit = null;
+        Target best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (Computer computer : VMComputers.getPlugin().getRegistry().all()) {
@@ -111,7 +79,8 @@ public class PointerListener implements Listener {
             if (machine == null || !machine.isRunning()) {
                 continue;
             }
-            if (eye.distanceSquared(computer.anchorLocation(player.getWorld())) > MAX_RANGE * MAX_RANGE) {
+            if (eye.distanceSquared(computer.anchorLocation(player.getWorld()))
+                    > MAX_RANGE * MAX_RANGE) {
                 continue;
             }
             MonitorScreen screen = VMComputers.getPlugin().getScreen(computer.id());
@@ -120,46 +89,33 @@ public class PointerListener implements Listener {
             }
 
             ScreenGeometry.Hit hit = screen.geometry().trace(origin, ray);
-            // A hit in the letterbox border is not on the guest image, so the pointer stays put
-            // rather than jumping to a clamped edge position.
-            if (hit == null || !hit.onImage || hit.distance > MAX_RANGE || hit.distance >= bestDistance) {
+            // A hit in the letterbox border is not on the guest image at all.
+            if (hit == null || !hit.onImage || hit.distance > MAX_RANGE
+                    || hit.distance >= bestDistance) {
                 continue;
             }
             bestDistance = hit.distance;
             // The ray lands on a displayed pixel; the guest only understands its own coordinates,
             // which differ whenever the image had to be scaled down to fit.
-            best = new Aim(computer.id(), screen.toGuestX(hit.imageX), screen.toGuestY(hit.imageY));
-            bestScreen = screen;
-            bestHit = hit;
-        }
-
-        if (best == null) {
-            Aim previous = lastAim.remove(player.getUniqueId());
-            if (previous != null) {
-                MonitorScreen screen = VMComputers.getPlugin().getScreen(previous.computerId);
-                if (screen != null) {
-                    screen.hideCursor();
-                }
-            }
-            return null;
-        }
-
-        // Drawn at displayed coordinates, since that is the space the framebuffer is in.
-        bestScreen.setCursor(bestHit.imageX, bestHit.imageY);
-
-        lastAim.put(player.getUniqueId(), best);
-        VirtualMachine machine = ComputerFunctions.get(best.computerId);
-        if (machine != null) {
-            // Queued, not written here: this runs on the server tick.
-            machine.sendPointer(best.x, best.y, 0);
+            best = new Target(computer.id(),
+                    screen.toGuestX(hit.imageX), screen.toGuestY(hit.imageY));
         }
         return best;
     }
 
-    /** Attack and use become the left and right mouse buttons. */
+    /**
+     * The computer a player is looking at, or null. Used by the keyboard so typing goes to the
+     * screen in front of you rather than one named by id.
+     */
+    public Integer targetComputerId(Player player) {
+        Target target = trace(player);
+        return target == null ? null : Integer.valueOf(target.computerId);
+    }
+
+    /** Attack and use become the left and right mouse buttons, wherever the crosshair is pointing. */
     @EventHandler
     public void onClick(PlayerInteractEvent e) {
-        if (e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) {
+        if (e.getHand() != EquipmentSlot.HAND) {
             return;
         }
         Action action = e.getAction();
@@ -169,7 +125,7 @@ public class PointerListener implements Listener {
             return;
         }
 
-        Aim target = aim(e.getPlayer());
+        Target target = trace(e.getPlayer());
         if (target == null) {
             return;
         }
@@ -178,28 +134,30 @@ public class PointerListener implements Listener {
             return;
         }
 
-        int mask = left ? BUTTON_LEFT : BUTTON_RIGHT;
-        machine.sendPointer(target.x, target.y, mask);
+        // Move first, then press, then release. Sending the position on its own gives the guest a
+        // chance to update hover state before the button arrives, which some interfaces need in
+        // order to register the click against the right widget.
         machine.sendPointer(target.x, target.y, 0);
-        // Stop the click also punching the block behind the screen.
+        machine.sendPointer(target.x, target.y, left ? BUTTON_LEFT : BUTTON_RIGHT);
+        machine.sendPointer(target.x, target.y, 0);
+
+        // Stop the click also reaching the world behind the screen.
         e.setCancelled(true);
     }
 
     /** The hotbar becomes the scroll wheel, which is the only wheel vanilla can offer. */
     @EventHandler
     public void onScroll(PlayerItemHeldEvent e) {
-        Aim target = lastAim.get(e.getPlayer().getUniqueId());
+        Target target = trace(e.getPlayer());
         if (target == null) {
             return;
         }
         VirtualMachine machine = ComputerFunctions.get(target.computerId);
-        if (machine == null || !machine.isRunning()) {
+        if (machine == null) {
             return;
         }
 
-        int previous = e.getPreviousSlot();
-        int current = e.getNewSlot();
-        int delta = current - previous;
+        int delta = e.getNewSlot() - e.getPreviousSlot();
         // The hotbar wraps between slots 8 and 0, so take the shorter way round.
         if (delta > 4) {
             delta -= 9;

@@ -23,55 +23,21 @@ import java.util.List;
 public final class MonitorScreen {
 
     private static final int PANEL = 128;
-    private static final int CURSOR_WIDTH = 10;
 
     private final Computer computer;
     private final MonitorSize size;
     private final List<PanelRenderer> panels;
     private final List<Integer> mapIds;
 
-    /**
-     * Host-drawn pointer, in guest pixels.
-     *
-     * <p>QEMU does not composite the guest's cursor into the framebuffer it sends over VNC -- it
-     * offers the shape separately through the Cursor pseudo-encoding, and a guest using a hardware
-     * cursor plane therefore appears to have no pointer at all. Drawing our own avoids that
-     * entirely, and a chunky high-contrast arrow survives quantization to 244 colours far better
-     * than a real 12x19 system cursor would.
-     */
-    private static final String[] CURSOR = {
-            "X.........",
-            "XX........",
-            "XPX.......",
-            "XPPX......",
-            "XPPPX.....",
-            "XPPPPX....",
-            "XPPPPPX...",
-            "XPPPPPPX..",
-            "XPPPPPPPX.",
-            "XPPPPPPPPX",
-            "XPPPPPXXXX",
-            "XPPXPPX...",
-            "XPX.XPPX..",
-            "XX...XPPX.",
-            "X.....XPX.",
-            ".......XX."
-    };
-
     private final byte[] framebuffer;
     private int guestWidth;
     private int guestHeight;
     private volatile ScreenGeometry geometry;
 
-    // Last presented image, kept so the cursor can be redrawn without waiting for a new frame.
-    private byte[] lastImage = new byte[0];
+    // Size actually drawn, which the pointer conversion needs in order to map a displayed pixel
+    // back to the guest pixel underneath it.
     private int lastImageWidth;
     private int lastImageHeight;
-    private byte lastBorder;
-    private int cursorX = -1;
-    private int cursorY = -1;
-    private byte cursorFill;
-    private byte cursorOutline;
 
     private MonitorScreen(Computer computer, List<PanelRenderer> panels, List<Integer> mapIds) {
         this.computer = computer;
@@ -161,141 +127,9 @@ public final class MonitorScreen {
         synchronized (framebuffer) {
             java.util.Arrays.fill(framebuffer, colour);
             lastImageWidth = 0;
-            cursorX = -1;
+            lastImageHeight = 0;
         }
         pushAll();
-    }
-
-    /** Colours for the host-drawn pointer. */
-    public void setCursorColours(byte fill, byte outline) {
-        this.cursorFill = fill;
-        this.cursorOutline = outline;
-    }
-
-    /**
-     * Moves the host-drawn pointer and repaints immediately.
-     *
-     * <p>Only the two small rectangles the pointer left and arrived at are touched. Repainting the
-     * whole screen would mark every panel dirty, and since each dirty panel is fully re-rendered on
-     * the next tick, a 24-panel projector would spend some 393,000 setPixel calls per tick just to
-     * move a 10x16 arrow -- twenty times a second, for as long as the player kept looking around.
-     *
-     * <p>Repainting here rather than waiting for the guest's next frame matters too, because an
-     * idle guest sends nothing at all and the pointer still has to track the player's head.
-     */
-    public void setCursor(int imageX, int imageY) {
-        int previousX;
-        int previousY;
-        int offsetX;
-        int offsetY;
-        synchronized (framebuffer) {
-            if (cursorX == imageX && cursorY == imageY) {
-                return;
-            }
-            previousX = cursorX;
-            previousY = cursorY;
-            cursorX = imageX;
-            cursorY = imageY;
-            if (lastImageWidth == 0) {
-                return;
-            }
-            if (previousX >= 0) {
-                restoreArea(previousX, previousY);
-            }
-            if (imageX >= 0) {
-                drawCursor(imageX, imageY);
-            }
-            offsetX = size.letterboxX(lastImageWidth);
-            offsetY = size.letterboxY(lastImageHeight);
-        }
-
-        if (previousX >= 0) {
-            pushRegion(offsetX + previousX, offsetY + previousY, CURSOR_WIDTH, CURSOR.length);
-        }
-        if (imageX >= 0) {
-            pushRegion(offsetX + imageX, offsetY + imageY, CURSOR_WIDTH, CURSOR.length);
-        }
-    }
-
-    public void hideCursor() {
-        setCursor(-1, -1);
-    }
-
-    /** Puts back whatever the guest had under the pointer's old position. */
-    private void restoreArea(int imageX, int imageY) {
-        int offsetX = size.letterboxX(lastImageWidth);
-        int offsetY = size.letterboxY(lastImageHeight);
-        int screenWidth = size.pixelWidth();
-        for (int row = 0; row < CURSOR.length; row++) {
-            int sourceY = imageY + row;
-            int y = offsetY + sourceY;
-            if (y < 0 || y >= size.pixelHeight()) {
-                continue;
-            }
-            for (int col = 0; col < CURSOR_WIDTH; col++) {
-                int sourceX = imageX + col;
-                int x = offsetX + sourceX;
-                if (x < 0 || x >= screenWidth) {
-                    continue;
-                }
-                boolean insideImage = sourceX >= 0 && sourceX < lastImageWidth
-                        && sourceY >= 0 && sourceY < lastImageHeight;
-                framebuffer[y * screenWidth + x] = insideImage
-                        ? lastImage[sourceY * lastImageWidth + sourceX] : lastBorder;
-            }
-        }
-    }
-
-    private void drawCursor(int imageX, int imageY) {
-        int offsetX = size.letterboxX(lastImageWidth);
-        int offsetY = size.letterboxY(lastImageHeight);
-        int screenWidth = size.pixelWidth();
-        for (int row = 0; row < CURSOR.length; row++) {
-            String line = CURSOR[row];
-            int y = offsetY + imageY + row;
-            if (y < 0 || y >= size.pixelHeight()) {
-                continue;
-            }
-            for (int col = 0; col < line.length(); col++) {
-                char pixel = line.charAt(col);
-                if (pixel == '.') {
-                    continue;
-                }
-                int x = offsetX + imageX + col;
-                if (x < 0 || x >= screenWidth) {
-                    continue;
-                }
-                framebuffer[y * screenWidth + x] = pixel == 'X' ? cursorOutline : cursorFill;
-            }
-        }
-    }
-
-    /** Blits just the panels a rectangle overlaps, and only the overlapping part of each. */
-    private void pushRegion(int x, int y, int width, int height) {
-        int screenWidth = size.pixelWidth();
-        int left = Math.max(0, x);
-        int top = Math.max(0, y);
-        int right = Math.min(screenWidth, x + width);
-        int bottom = Math.min(size.pixelHeight(), y + height);
-        if (right <= left || bottom <= top) {
-            return;
-        }
-
-        for (int row = top / PANEL; row <= (bottom - 1) / PANEL; row++) {
-            for (int col = left / PANEL; col <= (right - 1) / PANEL; col++) {
-                int panelX = col * PANEL;
-                int panelY = row * PANEL;
-                int sliceLeft = Math.max(left, panelX);
-                int sliceTop = Math.max(top, panelY);
-                int sliceRight = Math.min(right, panelX + PANEL);
-                int sliceBottom = Math.min(bottom, panelY + PANEL);
-                synchronized (framebuffer) {
-                    panels.get(row * size.columns() + col).blit(framebuffer, screenWidth,
-                            sliceLeft, sliceTop, sliceLeft - panelX, sliceTop - panelY,
-                            sliceRight - sliceLeft, sliceBottom - sliceTop);
-                }
-            }
-        }
     }
 
     /**
@@ -305,55 +139,23 @@ public final class MonitorScreen {
      * @param border colour for the area around the image
      */
     public void present(byte[] image, int imageWidth, int imageHeight, byte border) {
-        synchronized (framebuffer) {
-            int needed = imageWidth * imageHeight;
-            if (lastImage.length < needed) {
-                lastImage = new byte[needed];
-            }
-            System.arraycopy(image, 0, lastImage, 0, needed);
-            lastImageWidth = imageWidth;
-            lastImageHeight = imageHeight;
-            lastBorder = border;
-            composite();
-        }
-        pushAll();
-    }
-
-    /** Rebuilds the framebuffer from the last guest image plus the pointer on top. */
-    private void composite() {
-        int offsetX = size.letterboxX(lastImageWidth);
-        int offsetY = size.letterboxY(lastImageHeight);
+        int offsetX = size.letterboxX(imageWidth);
+        int offsetY = size.letterboxY(imageHeight);
         int screenWidth = size.pixelWidth();
 
-        java.util.Arrays.fill(framebuffer, lastBorder);
-        int copyWidth = Math.min(lastImageWidth, screenWidth - offsetX);
-        int copyHeight = Math.min(lastImageHeight, size.pixelHeight() - offsetY);
-        for (int row = 0; row < copyHeight; row++) {
-            System.arraycopy(lastImage, row * lastImageWidth,
-                    framebuffer, (offsetY + row) * screenWidth + offsetX, copyWidth);
-        }
+        synchronized (framebuffer) {
+            lastImageWidth = imageWidth;
+            lastImageHeight = imageHeight;
 
-        if (cursorX < 0 || cursorY < 0) {
-            return;
-        }
-        for (int row = 0; row < CURSOR.length; row++) {
-            String line = CURSOR[row];
-            int y = offsetY + cursorY + row;
-            if (y < 0 || y >= size.pixelHeight()) {
-                continue;
-            }
-            for (int col = 0; col < line.length(); col++) {
-                char pixel = line.charAt(col);
-                if (pixel == '.') {
-                    continue;
-                }
-                int x = offsetX + cursorX + col;
-                if (x < 0 || x >= screenWidth) {
-                    continue;
-                }
-                framebuffer[y * screenWidth + x] = pixel == 'X' ? cursorOutline : cursorFill;
+            java.util.Arrays.fill(framebuffer, border);
+            int copyWidth = Math.min(imageWidth, screenWidth - offsetX);
+            int copyHeight = Math.min(imageHeight, size.pixelHeight() - offsetY);
+            for (int row = 0; row < copyHeight; row++) {
+                System.arraycopy(image, row * imageWidth,
+                        framebuffer, (offsetY + row) * screenWidth + offsetX, copyWidth);
             }
         }
+        pushAll();
     }
 
     /**
@@ -367,10 +169,12 @@ public final class MonitorScreen {
     private void pushAll() {
         int screenWidth = size.pixelWidth();
         int index = 0;
-        for (int row = 0; row < size.rows(); row++) {
-            for (int col = 0; col < size.columns(); col++) {
-                panels.get(index++).blit(framebuffer, screenWidth,
-                        col * PANEL, row * PANEL, 0, 0, PANEL, PANEL);
+        synchronized (framebuffer) {
+            for (int row = 0; row < size.rows(); row++) {
+                for (int col = 0; col < size.columns(); col++) {
+                    panels.get(index++).blit(framebuffer, screenWidth,
+                            col * PANEL, row * PANEL, 0, 0, PANEL, PANEL);
+                }
             }
         }
     }

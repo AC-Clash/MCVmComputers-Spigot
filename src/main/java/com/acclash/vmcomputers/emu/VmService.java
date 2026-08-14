@@ -93,7 +93,6 @@ public final class VmService {
 
                 MapColorLut palette = plugin.getMapPalette();
                 byte black = palette.match(0, 0, 0);
-                screen.setCursorColours(palette.match(255, 255, 255), palette.match(0, 0, 0));
                 machine.setFrameListener(new FramePump(screen, palette, black));
 
                 machine.start();
