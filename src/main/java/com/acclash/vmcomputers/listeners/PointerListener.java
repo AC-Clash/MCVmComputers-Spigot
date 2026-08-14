@@ -53,6 +53,20 @@ public class PointerListener implements Listener {
         }
     }
 
+    /**
+     * The computer a player is currently aiming at, or null.
+     *
+     * <p>Lets the keyboard reuse the pointer's notion of "the screen you are looking at" rather
+     * than making the player name a computer id for every keystroke.
+     */
+    public Integer targetComputerId(Player player) {
+        Aim current = lastAim.get(player.getUniqueId());
+        if (current == null) {
+            current = aim(player);
+        }
+        return current == null ? null : Integer.valueOf(current.computerId);
+    }
+
     @EventHandler
     public void onMove(PlayerMoveEvent e) {
         // Fires constantly, so bail out before doing any work when nothing is running.
