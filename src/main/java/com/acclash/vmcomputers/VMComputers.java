@@ -31,6 +31,12 @@ public final class VMComputers extends JavaPlugin {
     private ComputerDao computerDao;
     private final ComputerRegistry registry = new ComputerRegistry();
     private MapColorLut mapPalette;
+    private PointerListener pointerListener;
+
+    /** Shared with the keyboard command, which targets whatever screen a player is aiming at. */
+    public PointerListener getPointerListener() {
+        return pointerListener;
+    }
     private final java.util.Map<Integer, MonitorScreen> screens =
             new java.util.concurrent.ConcurrentHashMap<Integer, MonitorScreen>();
 
@@ -109,7 +115,8 @@ public final class VMComputers extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(), this);
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
-        getServer().getPluginManager().registerEvents(new PointerListener(), this);
+        this.pointerListener = new PointerListener();
+        getServer().getPluginManager().registerEvents(pointerListener, this);
     }
 
     @Override

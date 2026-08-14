@@ -112,6 +112,7 @@ public final class VmSpec {
     private final String bootOrder;
     private final boolean rtcLocaltime;
     private final boolean absolutePointer;
+    private final boolean networking;
     private final Path uefiVars;
     private final List<String> extraArgs;
 
@@ -131,6 +132,7 @@ public final class VmSpec {
         this.bootOrder = b.bootOrder;
         this.rtcLocaltime = b.rtcLocaltime;
         this.absolutePointer = b.absolutePointer;
+        this.networking = b.networking;
         this.uefiVars = b.uefiVars;
         this.extraArgs = Collections.unmodifiableList(new ArrayList<String>(b.extraArgs));
     }
@@ -211,6 +213,17 @@ public final class VmSpec {
                 a.add("-device");
                 a.add("usb-kbd,bus=usb.0");
             }
+        }
+
+        if (networking) {
+            // -nic rather than -netdev, because -netdev alone leaves QEMU's implicit default card
+            // in place and the guest would come up with two.
+            a.add("-nic");
+            a.add("user,model=" + (architecture == Architecture.AARCH64
+                    ? "virtio-net-pci" : "e1000"));
+        } else {
+            a.add("-nic");
+            a.add("none");
         }
 
         a.add("-vnc");
@@ -324,6 +337,7 @@ public final class VmSpec {
         private String bootOrder = "dc";
         private boolean rtcLocaltime = true;
         private boolean absolutePointer = true;
+        private boolean networking = true;
         private Path uefiVars;
         private final List<String> extraArgs = new ArrayList<String>();
 
@@ -415,6 +429,19 @@ public final class VmSpec {
         /** Private writable copy of the UEFI variable store; aarch64 only. */
         public Builder uefiVars(Path varsFile) {
             this.uefiVars = varsFile;
+            return this;
+        }
+
+        /**
+         * Whether the guest gets a network card with NAT to the outside world.
+         *
+         * <p>Needed to install anything from network media, but worth an admin's attention: NAT
+         * lets a guest reach whatever the host can reach, including other machines on the host's
+         * LAN. On a shared server that is a way for a player's virtual machine to probe the
+         * network around it.
+         */
+        public Builder networking(boolean enabled) {
+            this.networking = enabled;
             return this;
         }
 
