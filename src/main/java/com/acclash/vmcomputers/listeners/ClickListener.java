@@ -1,9 +1,11 @@
 package com.acclash.vmcomputers.listeners;
 
 import com.acclash.vmcomputers.VMComputers;
-import com.acclash.vmcomputers.utils.Serialization;
-import jdos.gui.MainFrame;
-import org.bukkit.*;
+import com.acclash.vmcomputers.computer.Computer;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -12,7 +14,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -20,9 +21,9 @@ import java.util.Optional;
 
 public class ClickListener implements Listener {
 
-    NamespacedKey eChair = new NamespacedKey(VMComputers.getPlugin(), "isEChair");
+    private final NamespacedKey eChair = new NamespacedKey(VMComputers.getPlugin(), "isEChair");
 
-    // Mounts the player on the chair if they click the hidden chicken
+    /** Seats the player when they click the invisible chair entity. */
     @EventHandler
     public void onRightClick(PlayerInteractEntityEvent e) {
         if (e.getRightClicked() instanceof LivingEntity) {
@@ -33,43 +34,61 @@ public class ClickListener implements Listener {
         }
     }
 
-    // If the player clicks blocks that are part of the computer
     @EventHandler
-    public void onRightClick(PlayerInteractEvent e) {
-        Player player = e.getPlayer();
+    public void onInteract(PlayerInteractEvent e) {
         if (e.getHand() != EquipmentSlot.HAND) return;
-        Location clickedBlockLoc = e.getClickedBlock().getLocation();
-        String clickedS = Serialization.serialize(clickedBlockLoc);
-        if (!VMComputers.getPlugin().getDB().tableContainsValue(clickedS)) return;
-        if (e.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            if (e.getClickedBlock().getType() == Material.SPRUCE_STAIRS) {
-                // Mounts the player if they right-click the stairs
-                Optional<Entity> po = clickedBlockLoc.getWorld().getNearbyEntities(clickedBlockLoc, 1, 1, 1).stream().filter(entity -> entity.getPersistentDataContainer().has(new NamespacedKey(VMComputers.getPlugin(), "isEChair"), PersistentDataType.STRING)).findFirst();
-                if (po.isPresent()) {
-                    Entity eChair = po.get();
-                    eChair.addPassenger(e.getPlayer());
-                }
-            } else if (e.getClickedBlock().getType() == Material.SANDSTONE_WALL) {
-                player.sendMessage(ChatColor.YELLOW + "You right clicked the tower");
-            }
-        } else if (e.getAction() == Action.LEFT_CLICK_BLOCK || e.getAction() == Action.LEFT_CLICK_AIR) {
-            if (e.getClickedBlock().getType() == Material.SANDSTONE_WALL) {
-                // Start emulator
-                Bukkit.broadcastMessage("starting emulator");
-                String[] args = {"-noconsole"};
-                MainFrame.main(args);
+
+        // Air clicks carry no block. This fires on every swing at nothing, so it has to be the
+        // first thing checked.
+        Block clicked = e.getClickedBlock();
+        if (clicked == null) return;
+
+        // Hash lookup against the in-memory index -- no database round trip on the interaction
+        // path, which previously ran a query against every column for every click in the world.
+        Computer computer = VMComputers.getPlugin().getRegistry()
+                .at(clicked.getWorld().getName(), clicked.getX(), clicked.getY(), clicked.getZ());
+        if (computer == null) return;
+
+        Player player = e.getPlayer();
+        Action action = e.getAction();
+
+        if (action == Action.RIGHT_CLICK_BLOCK) {
+            if (isChairBlock(computer, clicked)) {
+                seatPlayer(player, clicked.getLocation());
+                e.setCancelled(true);
+            } else if (isPowerBlock(computer, clicked)) {
+                // TODO: start or stop the VM through ComputerFunctions once the in-game setup flow
+                // decides where disks and ISOs come from.
+                player.sendMessage(ChatColor.YELLOW + "Computer #" + computer.id() + " ("
+                        + computer.monitorSize() + ", " + computer.state() + ") -- power is not "
+                        + "wired up yet.");
+                e.setCancelled(true);
             }
         }
     }
 
-    @EventHandler
-    public void onPlayerMove(PlayerMoveEvent e) {
-        Player player = e.getPlayer();
-        if (!player.isInsideVehicle()) return;
-        if (!player.getVehicle().getPersistentDataContainer().has(eChair, PersistentDataType.STRING)) return;
-        Location newTo = e.getTo();
-        newTo.setPitch(e.getFrom().getPitch());
-        newTo.setYaw(e.getFrom().getYaw());
-        e.setTo(newTo);
+    private boolean isChairBlock(Computer computer, Block block) {
+        if (computer.layout().chair() == null) return false;
+        int[] chair = computer.blockAt(computer.layout().chair());
+        return chair[0] == block.getX() && chair[1] == block.getY() && chair[2] == block.getZ();
+    }
+
+    /** The tower on a desk computer, or the control block on a projector. */
+    private boolean isPowerBlock(Computer computer, Block block) {
+        var offset = computer.layout().tower() != null
+                ? computer.layout().tower()
+                : computer.layout().control();
+        if (offset == null) return false;
+        int[] p = computer.blockAt(offset);
+        return p[0] == block.getX() && p[1] == block.getY() && p[2] == block.getZ();
+    }
+
+    private void seatPlayer(Player player, Location blockLocation) {
+        Optional<Entity> chair = blockLocation.getWorld()
+                .getNearbyEntities(blockLocation.clone().add(0.5, 0.5, 0.5), 1, 1, 1).stream()
+                .filter(entity -> entity.getPersistentDataContainer()
+                        .has(eChair, PersistentDataType.STRING))
+                .findFirst();
+        chair.ifPresent(entity -> entity.addPassenger(player));
     }
 }

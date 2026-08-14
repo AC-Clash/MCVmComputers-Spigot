@@ -1,16 +1,22 @@
 package com.acclash.vmcomputers;
 
 import com.acclash.vmcomputers.commands.ComputerCM;
+import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.computer.ComputerRegistry;
+import com.acclash.vmcomputers.display.MapColorLut;
+import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.listeners.ClickListener;
 import com.acclash.vmcomputers.listeners.PlayerListener;
 import com.acclash.vmcomputers.listeners.PreventionListener;
-import com.acclash.vmcomputers.net.InboundHandler;
+import com.acclash.vmcomputers.sql.ComputerDao;
 import com.acclash.vmcomputers.sql.Database;
 import com.acclash.vmcomputers.sql.SQLite;
-import org.bukkit.Bukkit;
+import com.acclash.vmcomputers.utils.ComputerFunctions;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.sql.SQLException;
+import java.util.List;
+import java.util.logging.Level;
 
 public final class VMComputers extends JavaPlugin {
 
@@ -21,41 +27,107 @@ public final class VMComputers extends JavaPlugin {
     }
 
     private Database db;
+    private ComputerDao computerDao;
+    private final ComputerRegistry registry = new ComputerRegistry();
+    private MapColorLut mapPalette;
+    private final java.util.Map<Integer, MonitorScreen> screens =
+            new java.util.concurrent.ConcurrentHashMap<Integer, MonitorScreen>();
+
+    /** The live screen for a computer, or null if its maps could not be resolved. */
+    public MonitorScreen getScreen(int computerId) {
+        return screens.get(Integer.valueOf(computerId));
+    }
+
+    public void registerScreen(MonitorScreen screen) {
+        screens.put(Integer.valueOf(screen.computer().id()), screen);
+    }
+
+    public void unregisterScreen(int computerId) {
+        screens.remove(Integer.valueOf(computerId));
+    }
+
+    /** Shared RGB -> map palette lookup table. Built once; never use MapPalette.matchColor. */
+    public MapColorLut getMapPalette() {
+        return mapPalette;
+    }
 
     public Database getDB() {
         return db;
     }
 
+    public ComputerDao getComputerDao() {
+        return computerDao;
+    }
+
+    /** In-memory index of placed computers; the click path looks up here, never in SQL. */
+    public ComputerRegistry getRegistry() {
+        return registry;
+    }
+
     @Override
     public void onEnable() {
-        // Plugin startup logic
         plugin = this;
+
+        long lutStart = System.nanoTime();
+        this.mapPalette = MapColorLut.build(MapColorLut.DEFAULT_BITS);
+        getLogger().info("Map palette LUT built in " + ((System.nanoTime() - lutStart) / 1_000_000)
+                + "ms (" + mapPalette.paletteSize() + " usable colours).");
+
+        this.db = new SQLite(this);
+        this.db.load();
+        this.computerDao = new ComputerDao(this.db);
+
+        try {
+            computerDao.createSchema();
+            List<Computer> loaded = computerDao.loadAll();
+            registry.replaceAll(loaded);
+            // Map renderers do not survive a restart -- the default world-map renderer comes back
+            // on every map -- so they have to be reinstalled from the stored panel ids.
+            java.util.Map<Integer, List<Integer>> panels = computerDao.loadAllPanels();
+            int reattached = 0;
+            byte black = mapPalette.match(0, 0, 0);
+            for (Computer computer : loaded) {
+                List<Integer> ids = panels.get(Integer.valueOf(computer.id()));
+                if (ids == null) {
+                    continue;
+                }
+                MonitorScreen screen = MonitorScreen.attach(computer, ids);
+                if (screen != null) {
+                    registerScreen(screen);
+                    screen.fill(black);
+                    reattached++;
+                }
+            }
+            getLogger().info("Loaded " + loaded.size() + " computer(s), "
+                    + reattached + " screen(s) reattached.");
+        } catch (SQLException e) {
+            getLogger().log(Level.SEVERE, "Failed to initialise computer storage", e);
+        }
 
         getCommand("vmcomputers").setExecutor(new ComputerCM());
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(), this);
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
-        Bukkit.getOnlinePlayers().forEach(InboundHandler::attach);
-
-        this.db = new SQLite(this);
-        this.db.load();
-    }
-
-    public Database getRDatabase() {
-        return this.db;
     }
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
-        //for (int id : ComputerFunctions.getTaskMap().values()) {
-         //   Bukkit.getScheduler().cancelTask(id);
-       // }
+        // Each step is guarded separately: these are separate OS processes and an open database,
+        // and a failure in one must not leave the other running. A NoClassDefFoundError here is
+        // also possible if the jar was rebuilt under a live server, which must not stop the rest
+        // of shutdown.
         try {
-            getDB().getSQLConnection().close();
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
+            ComputerFunctions.stopAll();
+        } catch (Throwable t) {
+            getLogger().log(Level.SEVERE, "Failed to stop virtual machines during shutdown", t);
         }
-        Bukkit.getOnlinePlayers().forEach(InboundHandler::detach);
+
+        try {
+            if (db != null && db.getSQLConnection() != null) {
+                db.getSQLConnection().close();
+            }
+        } catch (Throwable t) {
+            getLogger().log(Level.SEVERE, "Failed to close the database during shutdown", t);
+        }
     }
 }

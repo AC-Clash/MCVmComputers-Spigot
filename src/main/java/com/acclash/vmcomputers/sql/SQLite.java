@@ -34,7 +34,6 @@ public class SQLite extends Database {
         File isoFolder =  new File(newFolder, "isos");
         File hddFolder =  new File(newFolder, "hdds");
         File dataFile = new File(newFolder, dbname + ".db");
-        System.out.println(dataFolder);
         if (!newFolder.exists()) {
             newFolder.mkdir();
         }
