@@ -5,6 +5,7 @@ import com.acclash.vmcomputers.commands.ComputerSubCommand;
 import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.computer.ComputerLayout;
 import com.acclash.vmcomputers.utils.ComputerFunctions;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -51,8 +52,13 @@ public class Remove extends ComputerSubCommand {
             return;
         }
 
-        // Stop the VM before the world changes, so a running QEMU process is never orphaned.
-        ComputerFunctions.stop(computer.id());
+        // Destroy the machine off-thread. A graceful stop waits up to ten seconds for a guest to
+        // acknowledge the ACPI power button, and a guest sitting at a firmware prompt never will --
+        // which froze the whole server for the entire timeout. The computer is being deleted, so
+        // there is nothing to shut down cleanly.
+        final int computerId = computer.id();
+        Bukkit.getScheduler().runTaskAsynchronously(VMComputers.getPlugin(),
+                () -> ComputerFunctions.kill(computerId));
 
         try {
             VMComputers.getPlugin().getComputerDao().deletePanels(computer.id());

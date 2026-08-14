@@ -58,8 +58,19 @@ public interface VirtualMachine extends Closeable {
     /** Swaps the CD medium while the machine is running. */
     void insertCdrom(Path iso) throws IOException;
 
-    /** ACPI power button, escalating to a forced stop if the guest ignores it. */
+    /**
+     * ACPI power button, escalating to a forced stop if the guest ignores it. Can block for
+     * several seconds, so never call this from the server thread.
+     */
     void shutdown();
+
+    /**
+     * Destroys the machine immediately, with no chance for the guest to respond.
+     *
+     * <p>Used when the computer is being torn out of the world, where waiting for a guest that may
+     * have no operating system to acknowledge a power button is pure delay.
+     */
+    void kill();
 
     @Override
     void close();

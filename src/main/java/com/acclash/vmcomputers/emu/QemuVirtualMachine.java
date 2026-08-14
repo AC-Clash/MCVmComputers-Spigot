@@ -176,6 +176,18 @@ public final class QemuVirtualMachine implements VirtualMachine {
     }
 
     @Override
+    public void kill() {
+        if (rfb != null) {
+            rfb.close();
+            rfb = null;
+        }
+        if (process != null) {
+            process.kill();
+            process = null;
+        }
+    }
+
+    @Override
     public void close() {
         shutdown();
     }
