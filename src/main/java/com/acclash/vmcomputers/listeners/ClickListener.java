@@ -2,6 +2,8 @@ package com.acclash.vmcomputers.listeners;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.display.MonitorScreen;
+import com.acclash.vmcomputers.emu.VmService;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -57,13 +59,26 @@ public class ClickListener implements Listener {
                 seatPlayer(player, clicked.getLocation());
                 e.setCancelled(true);
             } else if (isPowerBlock(computer, clicked)) {
-                // TODO: start or stop the VM through ComputerFunctions once the in-game setup flow
-                // decides where disks and ISOs come from.
-                player.sendMessage(ChatColor.YELLOW + "Computer #" + computer.id() + " ("
-                        + computer.monitorSize() + ", " + computer.state() + ") -- power is not "
-                        + "wired up yet.");
+                togglePower(player, computer);
                 e.setCancelled(true);
             }
+        }
+    }
+
+    private void togglePower(Player player, Computer computer) {
+        MonitorScreen screen = VMComputers.getPlugin().getScreen(computer.id());
+        if (screen == null) {
+            player.sendMessage(ChatColor.RED + "Computer #" + computer.id()
+                    + " has no screen attached; rebuild it.");
+            return;
+        }
+
+        if (VmService.isRunning(computer.id())) {
+            player.sendMessage(ChatColor.GRAY + "Powering off...");
+            VmService.stop(computer, screen, message -> player.sendMessage(ChatColor.YELLOW + message));
+        } else {
+            player.sendMessage(ChatColor.GRAY + "Powering on...");
+            VmService.start(computer, screen, message -> player.sendMessage(ChatColor.YELLOW + message));
         }
     }
 

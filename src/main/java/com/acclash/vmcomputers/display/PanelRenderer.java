@@ -73,6 +73,14 @@ public final class PanelRenderer extends MapRenderer {
 
     @Override
     public void render(MapView map, MapCanvas canvas, Player player) {
+        // render() is invoked for every map, every tick, per viewer. A 24-panel projector would
+        // otherwise cost ~393k setPixel calls per tick even while the guest sits idle. The canvas
+        // keeps its buffer between renders, so skipping an unchanged panel leaves the correct
+        // image on screen.
+        if (!dirty) {
+            return;
+        }
+
         synchronized (buffer) {
             int i = 0;
             for (int y = 0; y < SIZE; y++) {
