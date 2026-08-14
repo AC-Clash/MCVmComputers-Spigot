@@ -2,13 +2,18 @@ package com.acclash.vmcomputers.commands.computersubcommands;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.commands.ComputerSubCommand;
-import com.acclash.vmcomputers.utils.Calculator;
-import com.acclash.vmcomputers.utils.MagishaMapRenderer;
-import com.acclash.vmcomputers.utils.Serialization;
-import org.bukkit.*;
+import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.computer.ComputerLayout;
+import com.acclash.vmcomputers.display.MonitorSize;
+import com.acclash.vmcomputers.display.MonitorScreen;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Stairs;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
@@ -20,17 +25,22 @@ import org.bukkit.inventory.meta.MapMeta;
 import org.bukkit.map.MapView;
 import org.bukkit.persistence.PersistentDataType;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.net.URL;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
+/**
+ * Builds a computer in the world.
+ *
+ * <p>Placement is driven entirely by {@link ComputerLayout}, so this command never contains a
+ * hard-coded offset. That is what lets a 2x2 desktop and a 24-panel projector share one code path,
+ * and it guarantees that what gets built matches what {@code Remove} tears down and what the click
+ * index believes.
+ */
 public class Create extends ComputerSubCommand {
+
+    private static final String DEFAULT_TYPE = "Generic PC";
 
     @Override
     public String getName() {
@@ -39,206 +49,208 @@ public class Create extends ComputerSubCommand {
 
     @Override
     public String getDescription() {
-        return "Creates a computer of the specified type.";
+        return "Creates a computer where you are standing.";
     }
 
     @Override
     public String getSyntax() {
-        return ChatColor.GOLD + "To create a computer, stand where the chair should be, face where the monitor should be, and enter: /computer create <type>";
+        return ChatColor.GOLD + "Stand where the computer should go, face the screen, then: "
+                + "/vmcomputers create <" + sizeList() + ">";
+    }
+
+    private static String sizeList() {
+        StringBuilder sb = new StringBuilder();
+        for (MonitorSize size : MonitorSize.values()) {
+            if (sb.length() > 0) {
+                sb.append('|');
+            }
+            sb.append(size.name());
+        }
+        return sb.toString();
     }
 
     @Override
     public void perform(Player player, String[] args) {
-        if (args.length == 1) {
-            player.sendMessage(ChatColor.RED + "You need to enter some arguments.");
+        if (args.length < 2) {
+            // TODO: open the size-selection menu here instead once the GUI exists.
             player.sendMessage(getSyntax());
-        } else if (args.length > 1) {
-            List<String> poops = new ArrayList<>(Arrays.asList(args));
-            poops.remove(0);
-            StringBuilder pcType = new StringBuilder();
-            for (String s : poops) {
-                if (poops.get(poops.size() - 1).equals(s)) {
-                    pcType.append(s);
-                } else {
-                    pcType.append(s).append(" ");
-                }
+            for (MonitorSize size : MonitorSize.values()) {
+                player.sendMessage(ChatColor.GRAY + "  " + size.name() + " - " + size.describe()
+                        + ", " + size.form().name().toLowerCase(Locale.ROOT)
+                        + (size.requiresScaling() ? ", scaled (soft text)" : ", 1:1"));
             }
-            switch (pcType.toString()) {
-                case "Dell Dimension L500R":
-                    // Preliminary checks
-                    if (player.isInsideVehicle()) {
-                        player.sendMessage(ChatColor.YELLOW + "You can't ride an entity while doing this.");
-                        return;
-                    }
-
-                    // Start creating computer
-                    Location loc = player.getLocation();
-                    Location blockLoc = loc.getBlock().getLocation();
-                    String blockS = Serialization.serialize(blockLoc);
-                    try {
-                        ResultSet resultSet = VMComputers.getPlugin().getDB().executeQuery("SELECT * FROM `computers` WHERE block_loc = '" + blockLoc + "'");
-                        if (!resultSet.next()) {
-
-                            BlockFace direction = getPlayerDirection(player);
-                            Block standingBlock = player.getLocation().getBlock();
-
-                            //Block monitorSupportBlock = standingBlock.getRelative(direction, 2).getRelative(BlockFace.UP);
-                            //if (monitorSupportBlock.getType() == Material.AIR) {
-                            //    player.sendMessage(ChatColor.RED + "Unable to create computer. There would've been no block behind the monitor.");
-                            //    return;
-                            //}
-
-                            // Place the stairs
-                            standingBlock.setType(Material.SPRUCE_STAIRS);
-                            Stairs stairs = (Stairs) standingBlock.getBlockData();
-                            stairs.setFacing(getOppositeDirection(direction));
-                            standingBlock.setBlockData(stairs);
-
-                            // Create the eChair
-                            Location eChairLoc = Calculator.calculateEChairLoc(blockLoc, direction);
-                            LivingEntity eChair = (LivingEntity) player.getWorld().spawnEntity(eChairLoc, EntityType.CHICKEN);
-                            eChair.getPersistentDataContainer().set(new NamespacedKey(VMComputers.getPlugin(), "isEChair"), PersistentDataType.STRING, "true");
-                            eChair.setRotation(Calculator.getMonitorBlockFaceAndYaw(loc.getYaw()).getInteger(), 0);
-                            eChair.setAI(false);
-                            eChair.setInvisible(true);
-                            eChair.setInvulnerable(true);
-                            eChair.setSilent(true);
-
-                            // Place the monitor
-                            Block monitorBlock = standingBlock.getRelative(direction, 1).getRelative(BlockFace.UP);
-                            Location monitorLoc = monitorBlock.getLocation();
-                            String monitorS = Serialization.serialize(monitorLoc);
-                            ItemFrame monitor = (ItemFrame) loc.getWorld().spawnEntity(monitorLoc, EntityType.ITEM_FRAME);
-                            monitor.getPersistentDataContainer().set(new NamespacedKey(VMComputers.getPlugin(), "isMonitor"), PersistentDataType.STRING, "true");
-                            monitor.setFacingDirection(getOppositeDirection(direction), true);
-                            ItemStack screen = new ItemStack(Material.FILLED_MAP);
-                            MapMeta screenMeta = (MapMeta) screen.getItemMeta();
-                            MapView mapView = Bukkit.createMap(player.getWorld());
-
-                            MagishaMapRenderer mapRenderer = null;
-                            try {
-                                URL url = new URL("https://i.stack.imgur.com/eJ6c0.png");
-                                BufferedImage image = ImageIO.read(url);
-                                mapRenderer = new MagishaMapRenderer(image);
-                            } catch (IOException ex) {
-                                ex.printStackTrace();
-                            }
-
-                            mapView.removeRenderer(mapView.getRenderers().get(0));
-                            mapView.addRenderer(mapRenderer);
-
-                            screenMeta.setMapView(mapView);
-                            screen.setItemMeta(screenMeta);
-                            monitor.setItem(screen);
-
-                            // Place the tower
-                            Block towerBlock = monitorBlock.getRelative(getBlockFaceLeft(direction));
-                            String towerS = Serialization.serialize(towerBlock.getLocation());
-                            towerBlock.setType(Material.SANDSTONE_WALL);
-
-                            // Place the pressure plate
-                            String keyboardS = Serialization.serialize(monitorBlock.getLocation());
-                            monitorBlock.setType(Material.HEAVY_WEIGHTED_PRESSURE_PLATE);
-
-                            // Place the button
-                            Block mouseBlock = monitorBlock.getRelative(getBlockFaceRight(direction));
-                            String mouseS = Serialization.serialize(mouseBlock.getLocation());
-                            BlockData mouseData = Material.STONE_BUTTON.createBlockData("[face=floor]");
-                            mouseBlock.setBlockData(mouseData);
-
-                            // Save computer
-                            String sql2 = "INSERT INTO computers (type, block_loc, monitor_loc, tower_loc, keyboard_loc, button_loc, block_face, state)" +
-                                    "VALUES ('Dell Dimension l500R', '" + blockS + "', '" + monitorS + "', '" + towerS + "', '" + keyboardS + "', '" + mouseS + "', '" + direction + "', '" + "OFF" + "')";
-                            VMComputers.getPlugin().getDB().executeUpdate(sql2);
-                            String sql3 = "SELECT `id` FROM `computers` WHERE `block_loc` = '" + blockS + "'";
-                            ResultSet resultSet1 = VMComputers.getPlugin().getDB().executeQuery(sql3);
-                            resultSet1.next();
-                            player.sendMessage(ChatColor.GREEN + "Successfully created a Dell Dimension L500R with an ID of " + resultSet1.getInt("id"));
-                        } else {
-                            player.sendMessage(ChatColor.RED + "Unable to create computer. You must fully remove the old one that was in it's place first by using /computer remove");
-                        }
-                    } catch (SQLException e) {
-                        e.printStackTrace();
-                    }
-                    break;
-                case "Compaq Presario":
-                    player.sendMessage(ChatColor.YELLOW + "Unfortunately, the Compaq Presario hasn't been made yet.");
-                    break;
-                default:
-                    player.sendMessage(ChatColor.RED + "That isn't a valid type of computer. Please check your spelling and try again.");
-                    break;
-            }
+            return;
         }
 
-    }
+        MonitorSize size;
+        try {
+            size = MonitorSize.valueOf(args[1].toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            player.sendMessage(ChatColor.RED + "Unknown monitor size '" + args[1] + "'.");
+            player.sendMessage(getSyntax());
+            return;
+        }
 
-    public BlockFace getPlayerDirection(Player player) {
-        float yaw = player.getLocation().getYaw();
+        if (player.isInsideVehicle()) {
+            player.sendMessage(ChatColor.YELLOW + "Get out of the chair first.");
+            return;
+        }
 
-        if (yaw >= 45.1 && yaw <= 135) {
-            return BlockFace.WEST;
-        } else if (yaw <= 45.0 && yaw >= -44.9) {
-            return BlockFace.SOUTH;
-        } else if (yaw <= -45.0 && yaw >= -134.9) {
-            return BlockFace.EAST;
+        BlockFace facing = player.getFacing();
+        if (!Computer.isCardinal(facing)) {
+            player.sendMessage(ChatColor.RED + "Face north, east, south or west.");
+            return;
+        }
+
+        World world = player.getWorld();
+        Block anchor = player.getLocation().getBlock();
+
+        Computer computer = new Computer(-1, world.getName(), anchor.getX(), anchor.getY(),
+                anchor.getZ(), facing, size, DEFAULT_TYPE, Computer.State.OFF);
+
+        // Refuse before touching the world, so a rejected build never leaves debris behind.
+        Computer clash = VMComputers.getPlugin().getRegistry().findOverlap(computer);
+        if (clash != null) {
+            player.sendMessage(ChatColor.RED + "That overlaps computer #" + clash.id() + ".");
+            return;
+        }
+
+        Computer saved;
+        try {
+            saved = VMComputers.getPlugin().getComputerDao().insert(computer);
+        } catch (SQLException e) {
+            player.sendMessage(ChatColor.RED + "Could not save the computer; see the console.");
+            VMComputers.getPlugin().getLogger().severe("Insert failed: " + e.getMessage());
+            return;
+        }
+
+        List<Integer> mapIds = build(world, saved);
+        VMComputers.getPlugin().getRegistry().add(saved);
+
+        try {
+            VMComputers.getPlugin().getComputerDao().savePanels(saved.id(), mapIds);
+        } catch (SQLException e) {
+            VMComputers.getPlugin().getLogger().severe("Could not save panel maps: " + e.getMessage());
+        }
+
+        MonitorScreen screen = MonitorScreen.attach(saved, mapIds);
+        if (screen != null) {
+            VMComputers.getPlugin().registerScreen(screen);
+            screen.fill(VMComputers.getPlugin().getMapPalette().match(0, 0, 0));
+        }
+
+        player.sendMessage(ChatColor.GREEN + "Built computer #" + saved.id() + " - "
+                + size.describe());
+        if (size.form() == MonitorSize.Form.PROJECTOR) {
+            player.sendMessage(ChatColor.GRAY + "Projector screen. Stand back about "
+                    + (int) size.viewingDistance() + " blocks; walk closer for finer pointer control.");
         } else {
-            return BlockFace.NORTH;
+            player.sendMessage(ChatColor.GRAY + "Right-click the chair to sit, the tower to power on.");
         }
     }
 
-    public BlockFace getOppositeDirection(BlockFace blockFace) {
-        switch (blockFace) {
-            case NORTH:
-                return BlockFace.SOUTH;
-            case EAST:
-                return BlockFace.WEST;
-            case SOUTH:
-                return BlockFace.NORTH;
-            default:
-                return BlockFace.EAST;
+    private List<Integer> build(World world, Computer computer) {
+        ComputerLayout layout = computer.layout();
+        NamespacedKey monitorKey = new NamespacedKey(VMComputers.getPlugin(), "isMonitor");
+        NamespacedKey chairKey = new NamespacedKey(VMComputers.getPlugin(), "isEChair");
+        NamespacedKey idKey = new NamespacedKey(VMComputers.getPlugin(), "computerId");
+
+        // Backing first: item frames need something solid behind them.
+        // applyPhysics=false throughout: physics updates would pop attached blocks such as the
+        // button and pressure plate off as dropped items.
+        for (ComputerLayout.Offset offset : layout.backingBlocks()) {
+            computer.locationOf(world, offset).getBlock().setType(Material.SMOOTH_STONE, false);
         }
+        for (ComputerLayout.Offset offset : layout.deskBlocks()) {
+            computer.locationOf(world, offset).getBlock().setType(Material.SMOOTH_STONE_SLAB, false);
+        }
+
+        // One map per panel, row-major from the top-left so tile order matches the framebuffer.
+        List<Integer> mapIds = new ArrayList<Integer>();
+        BlockFace screenFacing = computer.facing().getOppositeFace();
+        for (ComputerLayout.Offset offset : layout.screenPanels()) {
+            Location location = computer.locationOf(world, offset);
+            location.getBlock().setType(Material.AIR, false);
+
+            // Renderers are installed by MonitorScreen, which also reattaches them after a
+            // restart. A fresh map is entirely colour 0, which is transparent rather than black,
+            // so until that happens the frames would show the wall behind them.
+            MapView view = Bukkit.createMap(world);
+            mapIds.add(Integer.valueOf(view.getId()));
+
+            ItemStack screen = new ItemStack(Material.FILLED_MAP);
+            MapMeta meta = (MapMeta) screen.getItemMeta();
+            meta.setMapView(view);
+            screen.setItemMeta(meta);
+
+            world.spawn(location, ItemFrame.class, frame -> {
+                frame.setFacingDirection(screenFacing, true);
+                frame.setItem(screen);
+                frame.setVisible(false);
+                frame.setFixed(true);
+                frame.getPersistentDataContainer().set(monitorKey, PersistentDataType.STRING, "true");
+                frame.getPersistentDataContainer().set(idKey, PersistentDataType.INTEGER, computer.id());
+            });
+        }
+
+        if (layout.chair() != null) {
+            Block chairBlock = computer.locationOf(world, layout.chair()).getBlock();
+            chairBlock.setType(Material.SPRUCE_STAIRS, false);
+            Stairs stairs = (Stairs) chairBlock.getBlockData();
+            stairs.setFacing(computer.facing().getOppositeFace());
+            chairBlock.setBlockData(stairs, false);
+
+            Location seat = chairBlock.getLocation().add(0.5, 0, 0.5);
+            world.spawn(seat, org.bukkit.entity.Chicken.class, chicken -> {
+                chicken.getPersistentDataContainer().set(chairKey, PersistentDataType.STRING, "true");
+                chicken.getPersistentDataContainer().set(idKey, PersistentDataType.INTEGER, computer.id());
+                chicken.setAI(false);
+                chicken.setInvisible(true);
+                chicken.setInvulnerable(true);
+                chicken.setSilent(true);
+                chicken.setRotation(yawOf(computer.facing()), 0f);
+            });
+        }
+
+        if (layout.tower() != null) {
+            computer.locationOf(world, layout.tower()).getBlock().setType(Material.SANDSTONE_WALL, false);
+        }
+        if (layout.control() != null) {
+            computer.locationOf(world, layout.control()).getBlock().setType(Material.SANDSTONE_WALL, false);
+        }
+        if (layout.keyboard() != null) {
+            computer.locationOf(world, layout.keyboard()).getBlock()
+                    .setType(Material.HEAVY_WEIGHTED_PRESSURE_PLATE, false);
+        }
+        if (layout.mouse() != null) {
+            Block mouse = computer.locationOf(world, layout.mouse()).getBlock();
+            mouse.setBlockData(Material.STONE_BUTTON.createBlockData("[face=floor]"), false);
+        }
+
+        return mapIds;
     }
 
-    public BlockFace getBlockFaceLeft(BlockFace input) {
-        switch (input) {
-            case NORTH:
-                return BlockFace.WEST;
+    private static float yawOf(BlockFace facing) {
+        switch (facing) {
             case SOUTH:
-                return BlockFace.EAST;
+                return 0f;
             case WEST:
-                return BlockFace.SOUTH;
-            default:
-                return BlockFace.NORTH;
-        }
-    }
-
-    public BlockFace getBlockFaceRight(BlockFace input) {
-        switch (input) {
+                return 90f;
             case NORTH:
-                return BlockFace.EAST;
-            case EAST:
-                return BlockFace.SOUTH;
-            case SOUTH:
-                return BlockFace.WEST;
+                return 180f;
             default:
-                return BlockFace.NORTH;
+                return -90f;
         }
-    }
-
-    public void updateItemFrame(ItemFrame itemFrame, Object data) {
-        // this method will update the item in the ItemFrame with the given data
-        // this is just a placeholder, you need to implement what the data is and how to use it to update the ItemFrame
-        itemFrame.setItem((ItemStack) data);
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, String[] args) {
         if (args.length == 2) {
-            List<String> compTypes = new ArrayList<>();
-            compTypes.add("Dell Dimension L500R");
-            compTypes.add("Compaq Presario");
-
-            return compTypes;
+            List<String> sizes = new ArrayList<String>();
+            for (MonitorSize size : MonitorSize.values()) {
+                sizes.add(size.name());
+            }
+            return sizes;
         }
         return null;
     }
