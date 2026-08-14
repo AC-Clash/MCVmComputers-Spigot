@@ -2,6 +2,7 @@ package com.acclash.vmcomputers.emu;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.display.ImageScaler;
 import com.acclash.vmcomputers.display.MapColorLut;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.rfb.RfbClient;
@@ -126,6 +127,7 @@ public final class VmService {
         private final MapColorLut palette;
         private final byte border;
         private byte[] quantized = new byte[0];
+        private int[] scaled = new int[0];
 
         FramePump(MonitorScreen screen, MapColorLut palette, byte border) {
             this.screen = screen;
@@ -135,6 +137,27 @@ public final class VmService {
 
         @Override
         public void onFrame(int[] argb, int width, int height, List<RfbClient.Rect> damage) {
+            // Guests ignore the EDID hint in text mode and come up at 720x400, which does not fit
+            // the smaller grids. Fit it to the screen keeping aspect ratio; letterboxing handles
+            // the remainder. Without this the image was silently cropped to the top-left corner.
+            int[] fit = ImageScaler.fitDimensions(width, height,
+                    screen.size().pixelWidth(), screen.size().pixelHeight());
+            int targetWidth = fit[0];
+            int targetHeight = fit[1];
+
+            int[] source = argb;
+            if (targetWidth != width || targetHeight != height) {
+                int area = targetWidth * targetHeight;
+                if (scaled.length < area) {
+                    scaled = new int[area];
+                }
+                // Scale in RGB, before quantization: averaging palette indices is meaningless.
+                ImageScaler.scale(argb, width, height, scaled, targetWidth, targetHeight);
+                source = scaled;
+                width = targetWidth;
+                height = targetHeight;
+            }
+
             int needed = width * height;
             if (quantized.length < needed) {
                 quantized = new byte[needed];
@@ -142,7 +165,7 @@ public final class VmService {
             // Ordered dithering: it depends only on (x, y), so identical input always produces
             // identical output. Error diffusion would make one changed pixel alter everything after
             // it, defeating the per-pixel comparison that keeps map traffic small.
-            palette.quantizeDithered(argb, width, height, quantized, DITHER_SPREAD);
+            palette.quantizeDithered(source, width, height, quantized, DITHER_SPREAD);
             screen.present(quantized, width, height, border);
         }
 

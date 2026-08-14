@@ -7,6 +7,7 @@ import com.acclash.vmcomputers.display.MapColorLut;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.listeners.ClickListener;
 import com.acclash.vmcomputers.listeners.PlayerListener;
+import com.acclash.vmcomputers.listeners.PointerListener;
 import com.acclash.vmcomputers.listeners.PreventionListener;
 import com.acclash.vmcomputers.sql.ComputerDao;
 import com.acclash.vmcomputers.sql.Database;
@@ -108,6 +109,7 @@ public final class VMComputers extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(), this);
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
+        getServer().getPluginManager().registerEvents(new PointerListener(), this);
     }
 
     @Override
