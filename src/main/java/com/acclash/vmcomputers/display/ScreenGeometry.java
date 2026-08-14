@@ -129,24 +129,36 @@ public final class ScreenGeometry {
      * @return where the ray landed, or {@code null} if it missed the screen entirely
      */
     public Hit trace(double[] eye, double[] direction) {
-        double dirDotNormal = direction[0] * normalX + direction[1] * normalY + direction[2] * normalZ;
+        return trace(eye[0], eye[1], eye[2], direction[0], direction[1], direction[2]);
+    }
+
+    /**
+     * Primitive form of {@link #trace(double[], double[])}.
+     *
+     * <p>Worth having on its own because this runs on every movement packet of every player near a
+     * live screen, and packing the arguments into two throwaway arrays to unpack them again is pure
+     * garbage at that rate.
+     */
+    public Hit trace(double eyeX, double eyeY, double eyeZ,
+                     double dirX, double dirY, double dirZ) {
+        double dirDotNormal = dirX * normalX + dirY * normalY + dirZ * normalZ;
         if (Math.abs(dirDotNormal) < EPSILON) {
             // Looking exactly along the screen surface.
             return null;
         }
 
-        double toOriginX = originX - eye[0];
-        double toOriginY = originY - eye[1];
-        double toOriginZ = originZ - eye[2];
+        double toOriginX = originX - eyeX;
+        double toOriginY = originY - eyeY;
+        double toOriginZ = originZ - eyeZ;
         double t = (toOriginX * normalX + toOriginY * normalY + toOriginZ * normalZ) / dirDotNormal;
         if (t <= 0) {
             // The screen is behind the player.
             return null;
         }
 
-        double hitX = eye[0] + direction[0] * t;
-        double hitY = eye[1] + direction[1] * t;
-        double hitZ = eye[2] + direction[2] * t;
+        double hitX = eyeX + dirX * t;
+        double hitY = eyeY + dirY * t;
+        double hitZ = eyeZ + dirZ * t;
 
         double localX = hitX - originX;
         double localY = hitY - originY;
@@ -171,8 +183,7 @@ public final class ScreenGeometry {
         int imageY = gridY - offsetY;
         boolean onImage = imageX >= 0 && imageX < guestWidth && imageY >= 0 && imageY < guestHeight;
 
-        double length = Math.sqrt(direction[0] * direction[0]
-                + direction[1] * direction[1] + direction[2] * direction[2]);
+        double length = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
         return new Hit(gridX, gridY, imageX, imageY, onImage, t * length);
     }
 
@@ -186,12 +197,8 @@ public final class ScreenGeometry {
         double yaw = Math.toRadians(yawDegrees);
         double pitch = Math.toRadians(pitchDegrees);
         double cosPitch = Math.cos(pitch);
-        double[] direction = {
-                -cosPitch * Math.sin(yaw),
-                -Math.sin(pitch),
-                cosPitch * Math.cos(yaw)
-        };
-        return trace(eye, direction);
+        return trace(eye[0], eye[1], eye[2],
+                -cosPitch * Math.sin(yaw), -Math.sin(pitch), cosPitch * Math.cos(yaw));
     }
 
     private static int clamp(int value, int min, int max) {

@@ -2,6 +2,7 @@ package com.acclash.vmcomputers.listeners;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.computer.ComputerRegistry;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenGeometry;
 import com.acclash.vmcomputers.emu.VirtualMachine;
@@ -9,110 +10,228 @@ import com.acclash.vmcomputers.utils.ComputerFunctions;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.EquipmentSlot;
-import org.bukkit.util.Vector;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Treats the screen as a touchscreen: the guest's pointer is put where the player is looking at the
- * moment they click, and clicked there.
+ * Aims the guest's mouse by where the player is looking.
  *
- * <p>An earlier version tracked the pointer continuously and drew a cursor into the framebuffer.
- * That was both expensive and unnecessary. Expensive because every head movement repainted part of
- * the screen and dirtied map panels, twenty times a second, for as long as anyone looked around.
- * Unnecessary because Minecraft already draws a crosshair in the centre of the player's view --
- * that crosshair is the pointer, rendered client-side for free and always exactly accurate.
+ * <p>A ray is cast from the player's eyes to the screen plane and the hit point becomes the pointer
+ * position. Nothing is ever cancelled or corrected, so there is no rubber-banding: the player looks
+ * wherever they like and the pointer follows. RFB's PointerEvent is already absolute, so the hit
+ * point maps onto it with no conversion.
  *
- * <p>So nothing happens until a click, and a click costs one ray and three small packets. Looking
- * around a running computer now costs nothing at all.
+ * <p><strong>The pointer is deliberately invisible.</strong> Tracking exists so the guest receives
+ * hover -- menus that open on mouseover, buttons that highlight, tooltips -- none of which a
+ * click-only model can produce. Drawing the pointer is a separate question, and the answer is no:
+ * a host-drawn cursor has to be painted into the framebuffer, which dirties map panels twenty times
+ * a second for as long as anyone looks around, and every one of those repaints reaches the player a
+ * map-packet later than their own head did. The result is a cursor visibly lagging the crosshair it
+ * is trying to follow. Minecraft's own crosshair is already exactly where the pointer is, drawn
+ * client-side and free, so the guest gets the position and the player gets the crosshair.
+ *
+ * <p>What remains is made as cheap as it can be: movement that cannot have moved the ray is
+ * discarded before any maths, the search runs over switched-on machines rather than every computer
+ * ever built, the ray itself allocates nothing, and a position the guest already has is never sent
+ * twice. A player sweeping their head across a screen costs a handful of floating-point operations
+ * per tick and a six-byte packet, and no map traffic whatsoever.
+ *
+ * <p>Precision scales with proximity for free. Standing closer makes the screen cover more of the
+ * view, so a degree of head movement crosses fewer pixels.
  */
 public class PointerListener implements Listener {
 
     /** How far away a player can still drive a screen, in blocks. */
     private static final double MAX_RANGE = 24.0;
+    private static final double MAX_RANGE_SQUARED = MAX_RANGE * MAX_RANGE;
 
     // RFB button mask bits.
     private static final int BUTTON_LEFT = 1;
     private static final int BUTTON_RIGHT = 1 << 2;
 
+    /**
+     * The pointer position last handed to a machine, so the same one is never sent twice.
+     *
+     * <p>Keyed by computer rather than by player because a guest has exactly one pointer: two people
+     * looking at the same pixel should cost one event, not two. The machine is kept alongside the
+     * position so a power cycle invalidates the entry by itself -- a rebooted guest starts with its
+     * pointer wherever it likes, and must not have the first move suppressed as a duplicate.
+     */
+    private final Map<Integer, Sent> lastSent = new ConcurrentHashMap<Integer, Sent>();
+
+    private static final class Sent {
+        final VirtualMachine machine;
+        /** Guest pixel packed as x &lt;&lt; 16 | y. */
+        final int packed;
+
+        Sent(VirtualMachine machine, int packed) {
+            this.machine = machine;
+            this.packed = packed;
+        }
+    }
+
     /** Where a look ray landed on a running computer. */
     private static final class Target {
         final int computerId;
+        final VirtualMachine machine;
         /** Guest pixel, which is what the machine understands. */
         final int x;
         final int y;
 
-        Target(int computerId, int x, int y) {
+        Target(int computerId, VirtualMachine machine, int x, int y) {
             this.computerId = computerId;
+            this.machine = machine;
             this.x = x;
             this.y = y;
         }
     }
 
     /**
-     * Casts the player's look ray at every running computer and returns the nearest screen it hits.
+     * Casts a look ray at every running computer and returns the nearest screen it hits.
      *
-     * <p>Only called on interaction, so the cost is one ray per click rather than one per movement
-     * packet.
+     * <p>Takes the eye and look angles rather than the player, because the one caller that matters
+     * for cost is {@link #onMove}, where the player's own location is still the pre-move one.
      */
-    private Target trace(Player player) {
-        if (ComputerFunctions.getMachines().isEmpty()) {
+    private Target trace(Player player, double eyeX, double eyeY, double eyeZ,
+                         float yaw, float pitch) {
+        Map<Integer, VirtualMachine> machines = ComputerFunctions.getMachines();
+        if (machines.isEmpty()) {
             return null;
         }
 
-        Location eye = player.getEyeLocation();
-        Vector direction = eye.getDirection();
-        double[] origin = {eye.getX(), eye.getY(), eye.getZ()};
-        double[] ray = {direction.getX(), direction.getY(), direction.getZ()};
+        // Minecraft's yaw runs clockwise from south and its pitch is negative looking up, which is
+        // why this is easy to get subtly wrong by hand.
+        double yawRadians = Math.toRadians(yaw);
+        double pitchRadians = Math.toRadians(pitch);
+        double cosPitch = Math.cos(pitchRadians);
+        double dirX = -cosPitch * Math.sin(yawRadians);
+        double dirY = -Math.sin(pitchRadians);
+        double dirZ = cosPitch * Math.cos(yawRadians);
+
+        VMComputers plugin = VMComputers.getPlugin();
+        ComputerRegistry registry = plugin.getRegistry();
+        String worldName = player.getWorld().getName();
 
         Target best = null;
-        double bestDistance = Double.MAX_VALUE;
+        // Seeding the search at MAX_RANGE makes the range test and the nearest-hit test the same
+        // comparison, since the direction above is a unit vector and the hit distance is in blocks.
+        double bestDistance = MAX_RANGE;
 
-        for (Computer computer : VMComputers.getPlugin().getRegistry().all()) {
-            if (!computer.worldName().equals(player.getWorld().getName())) {
+        // Walking the running machines rather than the registry keeps this loop as long as the
+        // number of switched-on computers, not the number ever built in the world.
+        for (Map.Entry<Integer, VirtualMachine> entry : machines.entrySet()) {
+            VirtualMachine machine = entry.getValue();
+            if (!machine.isRunning()) {
                 continue;
             }
-            VirtualMachine machine = ComputerFunctions.get(computer.id());
-            if (machine == null || !machine.isRunning()) {
+            Computer computer = registry.byId(entry.getKey().intValue());
+            if (computer == null || !computer.worldName().equals(worldName)) {
                 continue;
             }
-            if (eye.distanceSquared(computer.anchorLocation(player.getWorld()))
-                    > MAX_RANGE * MAX_RANGE) {
+            // Cheap reject before any ray work, on raw doubles so no Location is built for it.
+            double dx = computer.anchorX() - eyeX;
+            double dy = computer.anchorY() - eyeY;
+            double dz = computer.anchorZ() - eyeZ;
+            if (dx * dx + dy * dy + dz * dz > MAX_RANGE_SQUARED) {
                 continue;
             }
-            MonitorScreen screen = VMComputers.getPlugin().getScreen(computer.id());
+            MonitorScreen screen = plugin.getScreen(computer.id());
             if (screen == null) {
                 continue;
             }
 
-            ScreenGeometry.Hit hit = screen.geometry().trace(origin, ray);
-            // A hit in the letterbox border is not on the guest image at all.
-            if (hit == null || !hit.onImage || hit.distance > MAX_RANGE
-                    || hit.distance >= bestDistance) {
+            ScreenGeometry.Hit hit = screen.geometry().trace(eyeX, eyeY, eyeZ, dirX, dirY, dirZ);
+            // A hit in the letterbox border is not on the guest image, so the pointer stays put
+            // rather than jumping to a clamped edge position.
+            if (hit == null || !hit.onImage || hit.distance >= bestDistance) {
                 continue;
             }
             bestDistance = hit.distance;
             // The ray lands on a displayed pixel; the guest only understands its own coordinates,
             // which differ whenever the image had to be scaled down to fit.
-            best = new Target(computer.id(),
+            best = new Target(computer.id(), machine,
                     screen.toGuestX(hit.imageX), screen.toGuestY(hit.imageY));
         }
         return best;
     }
 
+    /** For the paths that are not the movement hot path and can afford the eye location. */
+    private Target trace(Player player) {
+        Location eye = player.getEyeLocation();
+        return trace(player, eye.getX(), eye.getY(), eye.getZ(), eye.getYaw(), eye.getPitch());
+    }
+
     /**
-     * The computer a player is looking at, or null. Used by the keyboard so typing goes to the
-     * screen in front of you rather than one named by id.
+     * The computer a player is currently aiming at, or null.
+     *
+     * <p>Lets the keyboard reuse the pointer's notion of "the screen you are looking at" rather
+     * than making the player name a computer id for every keystroke.
      */
     public Integer targetComputerId(Player player) {
         Target target = trace(player);
         return target == null ? null : Integer.valueOf(target.computerId);
     }
 
-    /** Attack and use become the left and right mouse buttons, wherever the crosshair is pointing. */
+    /** Follows the player's head, so the guest sees hover. Draws nothing. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onMove(PlayerMoveEvent e) {
+        // Fires for every player every tick, so the cheapest possible test goes first.
+        if (ComputerFunctions.getMachines().isEmpty()) {
+            return;
+        }
+        Location to = e.getTo();
+        if (to == null) {
+            return;
+        }
+        Location from = e.getFrom();
+        // Rotation moves the ray, and so does walking, so both have to be handled -- but the client
+        // also sends position packets when nothing changed at all, and those are free to drop.
+        if (to.getYaw() == from.getYaw() && to.getPitch() == from.getPitch()
+                && to.getX() == from.getX() && to.getY() == from.getY()
+                && to.getZ() == from.getZ()) {
+            return;
+        }
+
+        Player player = e.getPlayer();
+        // The move has not been applied to the entity yet, so the player's own location is still
+        // the old one; and PlayerListener may have rewritten the destination to hold a seated
+        // player in their chair. Running at MONITOR, getTo() is the only position that is both
+        // current and final.
+        Target target = trace(player, to.getX(), to.getY() + player.getEyeHeight(), to.getZ(),
+                to.getYaw(), to.getPitch());
+        if (target != null) {
+            move(target);
+        }
+    }
+
+    /**
+     * Puts the guest pointer on a pixel, unless it is already there.
+     *
+     * <p>This is what makes continuous tracking affordable. A screen scaled down to 256x256 maps a
+     * whole span of head movement onto one guest pixel, and a player standing still with a hand on
+     * the mouse still produces a movement packet every tick; neither should reach the guest.
+     */
+    private void move(Target target) {
+        int packed = (target.x << 16) | target.y;
+        Integer id = Integer.valueOf(target.computerId);
+        Sent previous = lastSent.get(id);
+        if (previous != null && previous.machine == target.machine && previous.packed == packed) {
+            return;
+        }
+        lastSent.put(id, new Sent(target.machine, packed));
+        // Queued, not written here: this runs on the server tick.
+        target.machine.sendPointer(target.x, target.y, 0);
+    }
+
+    /** Attack and use become the left and right mouse buttons. */
     @EventHandler
     public void onClick(PlayerInteractEvent e) {
         if (e.getHand() != EquipmentSlot.HAND) {
@@ -129,17 +248,12 @@ public class PointerListener implements Listener {
         if (target == null) {
             return;
         }
-        VirtualMachine machine = ComputerFunctions.get(target.computerId);
-        if (machine == null) {
-            return;
-        }
 
-        // Move first, then press, then release. Sending the position on its own gives the guest a
-        // chance to update hover state before the button arrives, which some interfaces need in
-        // order to register the click against the right widget.
-        machine.sendPointer(target.x, target.y, 0);
-        machine.sendPointer(target.x, target.y, left ? BUTTON_LEFT : BUTTON_RIGHT);
-        machine.sendPointer(target.x, target.y, 0);
+        // Tracking has usually already put the pointer here, in which case this costs nothing. It
+        // is still attempted, because pressing at the wrong place is worse than a spare packet.
+        move(target);
+        target.machine.sendPointer(target.x, target.y, left ? BUTTON_LEFT : BUTTON_RIGHT);
+        target.machine.sendPointer(target.x, target.y, 0);
 
         // Stop the click also reaching the world behind the screen.
         e.setCancelled(true);
@@ -150,10 +264,6 @@ public class PointerListener implements Listener {
     public void onScroll(PlayerItemHeldEvent e) {
         Target target = trace(e.getPlayer());
         if (target == null) {
-            return;
-        }
-        VirtualMachine machine = ComputerFunctions.get(target.computerId);
-        if (machine == null) {
             return;
         }
 
@@ -168,9 +278,13 @@ public class PointerListener implements Listener {
             return;
         }
 
+        // Keeps the tracked position honest: a wheel event carries coordinates of its own, so the
+        // guest's pointer ends up here whether or not tracking had already moved it.
+        move(target);
+
         boolean up = delta < 0;
         for (int i = 0; i < Math.abs(delta); i++) {
-            machine.sendScroll(target.x, target.y, up);
+            target.machine.sendScroll(target.x, target.y, up);
         }
     }
 }
