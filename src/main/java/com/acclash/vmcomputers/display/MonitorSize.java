@@ -9,19 +9,20 @@ package com.acclash.vmcomputers.display;
  * scales inversely. Offering smaller monitors gives players a genuine trade rather than a cosmetic
  * one.
  *
- * <p>Guest resolutions are chosen so the framebuffer maps onto the grid without scaling wherever
- * possible -- downscaling is what destroys text legibility, far more than the ~250 colour palette
- * does. Where the guest image is smaller than the grid it is centred and the remainder letterboxed.
+ * <p>Every size asks the guest for 640x480, since that is the one mode all firmware and operating
+ * systems support. Only {@link #XLARGE} can show it untouched; the desk sizes scale it down, and
+ * downscaling costs more legibility than the ~250 colour palette does. That is the real reason to
+ * build a projector.
  */
 public enum MonitorSize {
 
     /** 2x2 maps. Cheap and fast, but only really legible for large-font or graphical guests. */
-    SMALL(2, 2, 320, 240, false, Form.DESK, 2.0),
+    SMALL(2, 2, 640, 480, true, Form.DESK, 2.0),
 
-    /** 3x3 maps. 320x240 sits 1:1 with a wide border. */
-    MEDIUM(3, 3, 320, 240, false, Form.DESK, 2.5),
+    /** 3x3 maps. 640x480 scales to 384x288, so text is soft but readable up close. */
+    MEDIUM(3, 3, 640, 480, true, Form.DESK, 2.5),
 
-    /** 4x3 maps. 640x480 has to be halved to fit, so text gets soft. */
+    /** 4x3 maps. 640x480 scales cleanly to 512x384, an exact 0.8 -- the best of the desks. */
     LARGE(4, 3, 640, 480, true, Form.DESK, 3.0),
 
     /**
@@ -126,7 +127,14 @@ public enum MonitorSize {
         return rows * MAP_PIXELS;
     }
 
-    /** Resolution to request from the guest via EDID. */
+    /**
+     * Resolution to request from the guest via EDID.
+     *
+     * <p>Always 640x480, whatever the monitor size. It is the one mode every firmware and operating
+     * system supports, and asking for anything unusual simply fails: ARM UEFI honours the request
+     * literally, so a request for 320x240 left the guest with no usable mode at all. Smaller
+     * monitors scale the result down instead.
+     */
     public int guestWidth() {
         return guestWidth;
     }
