@@ -47,13 +47,16 @@ public interface VirtualMachine extends Closeable {
     /** Must be set before {@link #start()} to avoid missing the first frame. */
     void setFrameListener(FrameListener listener);
 
+    // Input methods queue and return immediately. They are called from the server thread, and a
+    // socket write there -- however small -- is not something to do on the tick.
+
     /** X11 keysym; see {@link RfbClient.Keysym}. */
-    void sendKey(int keysym, boolean pressed) throws IOException;
+    void sendKey(int keysym, boolean pressed);
 
     /** Bit 0 left, bit 1 middle, bit 2 right. */
-    void sendPointer(int x, int y, int buttonMask) throws IOException;
+    void sendPointer(int x, int y, int buttonMask);
 
-    void sendScroll(int x, int y, boolean up) throws IOException;
+    void sendScroll(int x, int y, boolean up);
 
     /** Swaps the CD medium while the machine is running. */
     void insertCdrom(Path iso) throws IOException;

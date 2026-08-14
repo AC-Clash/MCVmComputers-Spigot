@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 /**
@@ -30,12 +32,23 @@ public final class QemuVirtualMachine implements VirtualMachine {
     private RfbClient rfb;
     private volatile FrameListener frameListener;
 
+    /**
+     * Serialises input writes off the server thread. Single-threaded so events keep their order --
+     * a key release must never overtake its press.
+     */
+    private final ExecutorService inputThread;
+
     public QemuVirtualMachine(int computerId, QemuBinary qemu, VmSpec spec, Consumer<String> logger) {
         this.computerId = computerId;
         this.qemu = qemu;
         this.spec = spec;
         this.logger = logger != null ? logger : message -> {
         };
+        this.inputThread = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "vm-input-" + computerId);
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 
     /** Builds a spec sized for a monitor and creates the VM. The disk is created if missing. */
@@ -132,18 +145,41 @@ public final class QemuVirtualMachine implements VirtualMachine {
     }
 
     @Override
-    public void sendKey(int keysym, boolean pressed) throws IOException {
-        requireDisplay().sendKey(keysym, pressed);
+    public void sendKey(int keysym, boolean pressed) {
+        dispatch(client -> client.sendKey(keysym, pressed));
     }
 
     @Override
-    public void sendPointer(int x, int y, int buttonMask) throws IOException {
-        requireDisplay().sendPointer(x, y, buttonMask);
+    public void sendPointer(int x, int y, int buttonMask) {
+        dispatch(client -> client.sendPointer(x, y, buttonMask));
     }
 
     @Override
-    public void sendScroll(int x, int y, boolean up) throws IOException {
-        requireDisplay().sendScroll(x, y, up);
+    public void sendScroll(int x, int y, boolean up) {
+        dispatch(client -> client.sendScroll(x, y, up));
+    }
+
+    /** Queues an input write; failures are logged rather than surfaced to the game thread. */
+    private void dispatch(InputAction action) {
+        RfbClient client = rfb;
+        if (client == null) {
+            return;
+        }
+        try {
+            inputThread.execute(() -> {
+                try {
+                    action.perform(client);
+                } catch (IOException e) {
+                    logger.accept("[vm " + computerId + "] input send failed: " + e);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException ignored) {
+            // The machine is shutting down.
+        }
+    }
+
+    private interface InputAction {
+        void perform(RfbClient client) throws IOException;
     }
 
     @Override
@@ -165,6 +201,7 @@ public final class QemuVirtualMachine implements VirtualMachine {
 
     @Override
     public void shutdown() {
+        inputThread.shutdownNow();
         if (rfb != null) {
             rfb.close();
             rfb = null;
@@ -177,6 +214,7 @@ public final class QemuVirtualMachine implements VirtualMachine {
 
     @Override
     public void kill() {
+        inputThread.shutdownNow();
         if (rfb != null) {
             rfb.close();
             rfb = null;

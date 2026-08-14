@@ -32,6 +32,7 @@ public final class MonitorScreen {
     private final byte[] framebuffer;
     private int guestWidth;
     private int guestHeight;
+    private volatile ScreenGeometry geometry;
 
     private MonitorScreen(Computer computer, List<PanelRenderer> panels, List<Integer> mapIds) {
         this.computer = computer;
@@ -86,6 +87,11 @@ public final class MonitorScreen {
     public void setGuestResolution(int width, int height) {
         this.guestWidth = Math.min(width, size.pixelWidth());
         this.guestHeight = Math.min(height, size.pixelHeight());
+        ScreenGeometry existing = geometry;
+        if (existing != null) {
+            // Letterbox borders move when the guest changes mode, so the pointer mapping must too.
+            existing.setGuestResolution(this.guestWidth, this.guestHeight);
+        }
     }
 
     /** Paints the whole screen one colour. Black is the powered-off state. */
@@ -132,6 +138,35 @@ public final class MonitorScreen {
                         col * PANEL, row * PANEL, 0, 0, PANEL, PANEL);
             }
         }
+    }
+
+    /**
+     * The screen's plane in world space, for aiming the pointer.
+     *
+     * <p>The surface is the block <em>face</em> pointing at the viewer, not the block's origin
+     * corner, so which corner to start from depends on the facing. Along an axis whose direction is
+     * negative the relevant edge is one block further along, hence the +1 terms. The screen's right
+     * and forward axes are always perpendicular, so each of the two terms touches a different axis.
+     */
+    public ScreenGeometry geometry() {
+        ScreenGeometry cached = geometry;
+        if (cached == null) {
+            int[] block = computer.blockAt(computer.layout().screenBottomLeft());
+            int forwardX = computer.facing().getModX();
+            int forwardZ = computer.facing().getModZ();
+            int rightX = -forwardZ;
+            int rightZ = forwardX;
+
+            double originX = block[0] + (rightX < 0 ? 1 : 0) + (forwardX < 0 ? 1 : 0);
+            double originZ = block[2] + (rightZ < 0 ? 1 : 0) + (forwardZ < 0 ? 1 : 0);
+
+            // wallMounted takes the direction from the screen towards the viewer.
+            cached = ScreenGeometry.wallMounted(size,
+                    new double[]{originX, block[1], originZ}, -forwardX, -forwardZ);
+            cached.setGuestResolution(guestWidth, guestHeight);
+            geometry = cached;
+        }
+        return cached;
     }
 
     public int guestWidth() {
