@@ -36,10 +36,20 @@ public class ComputerFunctions {
         }
     }
 
+    /** Destroys one machine immediately, without waiting for the guest. */
+    public static void kill(int computerId) {
+        VirtualMachine machine = MACHINES.remove(Integer.valueOf(computerId));
+        if (machine != null) {
+            machine.kill();
+        }
+    }
+
     /** Stops everything; called on plugin disable so no QEMU process outlives the server. */
     public static void stopAll() {
+        // Server shutdown must not hang waiting on guests, and a graceful stop can take ten
+        // seconds each. The processes are being torn down regardless.
         for (Integer id : MACHINES.keySet()) {
-            stop(id.intValue());
+            kill(id.intValue());
         }
     }
 }
