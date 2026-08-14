@@ -8,14 +8,19 @@ import com.acclash.vmcomputers.display.ScreenGeometry;
 import com.acclash.vmcomputers.emu.VirtualMachine;
 import com.acclash.vmcomputers.utils.ComputerFunctions;
 import org.bukkit.Location;
+import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerAnimationType;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 
 import java.util.Map;
@@ -46,6 +51,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Precision scales with proximity for free. Standing closer makes the screen cover more of the
  * view, so a degree of head movement crosses fewer pixels.
+ *
+ * <p>Clicks are harder than they look, because a screen is built out of item frames and an item
+ * frame is an entity. Clicking an entity does not raise {@code PlayerInteractEvent} at all -- the
+ * left button becomes an attack and the right button becomes an entity interaction -- so all three
+ * paths have to be listened to or the buttons only work when aimed past arm's reach. It can be seen
+ * with {@code /vmcomputers debug}, which draws the pointer.
  */
 public class PointerListener implements Listener {
 
@@ -67,6 +78,23 @@ public class PointerListener implements Listener {
      */
     private final Map<Integer, Sent> lastSent = new ConcurrentHashMap<Integer, Sent>();
 
+    /** How long a click blocks an identical one from another event path. One tick. */
+    private static final long DUPLICATE_CLICK_NANOS = 50_000_000L;
+
+    /** The last button each player delivered, for that de-duplication. */
+    private final Map<java.util.UUID, Click> lastClick =
+            new ConcurrentHashMap<java.util.UUID, Click>();
+
+    private static final class Click {
+        final int button;
+        final long at;
+
+        Click(int button, long at) {
+            this.button = button;
+            this.at = at;
+        }
+    }
+
     private static final class Sent {
         final VirtualMachine machine;
         /** Guest pixel packed as x &lt;&lt; 16 | y. */
@@ -82,15 +110,23 @@ public class PointerListener implements Listener {
     private static final class Target {
         final int computerId;
         final VirtualMachine machine;
+        final MonitorScreen screen;
         /** Guest pixel, which is what the machine understands. */
         final int x;
         final int y;
+        /** The same point in screen pixels, which is what the debug cursor is drawn at. */
+        final int screenX;
+        final int screenY;
 
-        Target(int computerId, VirtualMachine machine, int x, int y) {
+        Target(int computerId, VirtualMachine machine, MonitorScreen screen,
+               int x, int y, int screenX, int screenY) {
             this.computerId = computerId;
             this.machine = machine;
+            this.screen = screen;
             this.x = x;
             this.y = y;
+            this.screenX = screenX;
+            this.screenY = screenY;
         }
     }
 
@@ -157,8 +193,9 @@ public class PointerListener implements Listener {
             bestDistance = hit.distance;
             // The ray lands on a displayed pixel; the guest only understands its own coordinates,
             // which differ whenever the image had to be scaled down to fit.
-            best = new Target(computer.id(), machine,
-                    screen.toGuestX(hit.imageX), screen.toGuestY(hit.imageY));
+            best = new Target(computer.id(), machine, screen,
+                    screen.toGuestX(hit.imageX), screen.toGuestY(hit.imageY),
+                    hit.gridX, hit.gridY);
         }
         return best;
     }
@@ -209,6 +246,12 @@ public class PointerListener implements Listener {
                 to.getYaw(), to.getPitch());
         if (target != null) {
             move(target);
+        } else if (VMComputers.getPlugin().isPointerDebug()) {
+            // Looking away leaves the drawn arrow stranded mid-screen, which reads as a freeze.
+            // Only under debug, and setCursor returns immediately when there is nothing to hide.
+            for (MonitorScreen screen : VMComputers.getPlugin().screens()) {
+                screen.hideCursor();
+            }
         }
     }
 
@@ -220,6 +263,12 @@ public class PointerListener implements Listener {
      * the mouse still produces a movement packet every tick; neither should reach the guest.
      */
     private void move(Target target) {
+        if (VMComputers.getPlugin().isPointerDebug()) {
+            // Drawn at screen coordinates, since that is the space the framebuffer is in. Outside
+            // debug mode nothing is ever painted, which is the whole point.
+            target.screen.setCursor(target.screenX, target.screenY);
+        }
+
         int packed = (target.x << 16) | target.y;
         Integer id = Integer.valueOf(target.computerId);
         Sent previous = lastSent.get(id);
@@ -231,32 +280,95 @@ public class PointerListener implements Listener {
         target.machine.sendPointer(target.x, target.y, 0);
     }
 
-    /** Attack and use become the left and right mouse buttons. */
+    /**
+     * Left click, taken from the arm swing rather than from {@code PlayerInteractEvent}.
+     *
+     * <p>An item frame is an entity, and a screen is made of them. Left-clicking an entity is an
+     * <em>attack</em>: the client sends it as such, the server raises
+     * {@code EntityDamageByEntityEvent}, and {@code PlayerInteractEvent} is never fired at all. So
+     * every left click that landed on a screen close enough to reach was silently swallowed, and
+     * only clicks aimed past the reach limit -- which arrive as LEFT_CLICK_AIR -- ever worked. That
+     * is why a button in an installer could not be pressed while sitting at the desk.
+     *
+     * <p>The arm swing has no such problem: it is sent for every left click regardless of what is
+     * in front of the player, entity, block or nothing. It is also the only signal that survives
+     * {@link PreventionListener} cancelling the damage to keep the frame from being broken.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSwing(PlayerAnimationEvent e) {
+        if (e.getAnimationType() != PlayerAnimationType.ARM_SWING) {
+            return;
+        }
+        click(e.getPlayer(), BUTTON_LEFT);
+    }
+
+    /** Right click, when the ray passes the frames -- into the border, or beyond arm's reach. */
     @EventHandler
     public void onClick(PlayerInteractEvent e) {
         if (e.getHand() != EquipmentSlot.HAND) {
             return;
         }
         Action action = e.getAction();
-        boolean left = action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK;
-        boolean right = action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK;
-        if (!left && !right) {
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
             return;
+        }
+        if (click(e.getPlayer(), BUTTON_RIGHT)) {
+            // Stop the click also reaching the world behind the screen.
+            e.setCancelled(true);
+        }
+    }
+
+    /**
+     * Right click, when it lands on one of the screen's item frames.
+     *
+     * <p>Same blind spot as the left button: right-clicking an entity raises this instead of
+     * {@code PlayerInteractEvent}, so without it the right button also stopped working as soon as
+     * the player was close enough to touch the screen. Runs before {@link PreventionListener}
+     * cancels the frame rotation at HIGH.
+     */
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onRightClickEntity(PlayerInteractEntityEvent e) {
+        if (e.getHand() != EquipmentSlot.HAND || !(e.getRightClicked() instanceof ItemFrame)) {
+            return;
+        }
+        if (click(e.getPlayer(), BUTTON_RIGHT)) {
+            e.setCancelled(true);
+        }
+    }
+
+    /** Presses and releases a button wherever the player is aiming. True if it hit a screen. */
+    private boolean click(Player player, int button) {
+        Target target = trace(player);
+        if (target == null) {
+            return false;
         }
 
-        Target target = trace(e.getPlayer());
-        if (target == null) {
-            return;
+        // One physical click can arrive down two paths. The screen's frames are fixed, and the
+        // vanilla client treats a fixed frame as not having consumed the interaction, so it follows
+        // the entity packet with a use-item packet -- raising PlayerInteractEntityEvent and then
+        // PlayerInteractEvent for the same press. Both are needed, since which ones arrive depends
+        // on what the ray hit, so the duplicate is dropped here instead. The window is one tick,
+        // far below the gap between two clicks of a real double-click.
+        long now = System.nanoTime();
+        java.util.UUID id = player.getUniqueId();
+        Click previous = lastClick.get(id);
+        if (previous != null && previous.button == button
+                && now - previous.at < DUPLICATE_CLICK_NANOS) {
+            return true;
         }
+        lastClick.put(id, new Click(button, now));
 
         // Tracking has usually already put the pointer here, in which case this costs nothing. It
         // is still attempted, because pressing at the wrong place is worse than a spare packet.
         move(target);
-        target.machine.sendPointer(target.x, target.y, left ? BUTTON_LEFT : BUTTON_RIGHT);
+        target.machine.sendPointer(target.x, target.y, button);
         target.machine.sendPointer(target.x, target.y, 0);
+        return true;
+    }
 
-        // Stop the click also reaching the world behind the screen.
-        e.setCancelled(true);
+    @EventHandler
+    public void onQuit(PlayerQuitEvent e) {
+        lastClick.remove(e.getPlayer().getUniqueId());
     }
 
     /** The hotbar becomes the scroll wheel, which is the only wheel vanilla can offer. */

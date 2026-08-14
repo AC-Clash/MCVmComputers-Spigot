@@ -93,6 +93,9 @@ public final class VmService {
 
                 MapColorLut palette = plugin.getMapPalette();
                 byte black = palette.match(0, 0, 0);
+                // Only used when /vmcomputers debug is on, but the palette is right here and the
+                // toggle is not, so set them now rather than plumbing the palette to the command.
+                screen.setCursorColours(palette.match(255, 255, 255), black);
                 machine.setFrameListener(new FramePump(screen, palette, black));
 
                 machine.start();

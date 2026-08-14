@@ -88,9 +88,17 @@ public class PreventionListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityDamagedByEntity(EntityDamageByEntityEvent e) {
         Computer computer = ownerOf(e.getEntity());
-        if (computer != null) {
-            refuse(e, e.getDamager(), computer);
+        if (computer == null) {
+            return;
         }
+        // Left-clicking a screen panel is how the mouse is clicked, not an attempt to break it, so
+        // it is refused silently. Telling the player how to dismantle the computer every time they
+        // press a button in the guest would be relentless.
+        if (e.getEntity() instanceof org.bukkit.entity.ItemFrame) {
+            e.setCancelled(true);
+            return;
+        }
+        refuse(e, e.getDamager(), computer);
     }
 
     /**

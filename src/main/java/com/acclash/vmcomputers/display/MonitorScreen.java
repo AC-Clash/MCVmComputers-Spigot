@@ -24,6 +24,39 @@ public final class MonitorScreen {
 
     private static final int PANEL = 128;
 
+    /**
+     * Debug pointer, in screen pixels. Off unless {@code /vmcomputers debug} turns it on.
+     *
+     * <p>Not how the pointer is meant to be seen -- drawing it into the framebuffer dirties map
+     * panels on every head movement, and the arrow arrives a map packet behind the crosshair it is
+     * chasing, so it visibly lags. That is exactly why it is useful for testing: it shows where the
+     * plugin thinks the guest's pointer is, which is otherwise invisible when the guest draws its
+     * cursor on a hardware plane.
+     *
+     * <p>A chunky high-contrast arrow also survives quantization to 244 colours far better than a
+     * real 12x19 system cursor would.
+     */
+    private static final String[] CURSOR = {
+            "X.........",
+            "XX........",
+            "XPX.......",
+            "XPPX......",
+            "XPPPX.....",
+            "XPPPPX....",
+            "XPPPPPX...",
+            "XPPPPPPX..",
+            "XPPPPPPPX.",
+            "XPPPPPPPPX",
+            "XPPPPPXXXX",
+            "XPPXPPX...",
+            "XPX.XPPX..",
+            "XX...XPPX.",
+            "X.....XPX.",
+            ".......XX."
+    };
+    private static final int CURSOR_WIDTH = 10;
+    private static final int CURSOR_HEIGHT = CURSOR.length;
+
     private final Computer computer;
     private final MonitorSize size;
     private final List<PanelRenderer> panels;
@@ -38,6 +71,20 @@ public final class MonitorScreen {
     // back to the guest pixel underneath it.
     private int lastImageWidth;
     private int lastImageHeight;
+
+    /**
+     * The pixels the debug cursor is covering, so they can be put back when it moves.
+     *
+     * <p>Saving the patch is what lets the fast path stay fast. The earlier drawn cursor kept a
+     * whole second copy of the guest image and recomposited the screen to move the arrow; a 10x16
+     * patch of the framebuffer holds exactly the same information for this purpose and costs
+     * nothing when the cursor is off.
+     */
+    private final byte[] cursorBackup = new byte[CURSOR_WIDTH * CURSOR_HEIGHT];
+    private int cursorX = -1;
+    private int cursorY = -1;
+    private byte cursorFill;
+    private byte cursorOutline;
 
     private MonitorScreen(Computer computer, List<PanelRenderer> panels, List<Integer> mapIds) {
         this.computer = computer;
@@ -128,8 +175,137 @@ public final class MonitorScreen {
             java.util.Arrays.fill(framebuffer, colour);
             lastImageWidth = 0;
             lastImageHeight = 0;
+            // Whatever the cursor was covering is gone, so its backup is meaningless now.
+            cursorX = -1;
+            cursorY = -1;
         }
         pushAll();
+    }
+
+    /** Colours for the debug cursor, from the palette the frames are quantized against. */
+    public void setCursorColours(byte fill, byte outline) {
+        this.cursorFill = fill;
+        this.cursorOutline = outline;
+    }
+
+    /**
+     * Moves the debug cursor, or hides it when given a negative coordinate.
+     *
+     * <p>Coordinates are screen pixels -- the framebuffer's own space, which is what the look ray
+     * already reports as {@code Hit.gridX/gridY}, so no letterbox arithmetic is needed here.
+     *
+     * <p>Only the two small rectangles the cursor left and arrived at are repainted. A full repaint
+     * would mark every panel dirty, and since a dirty panel is re-rendered whole on the next tick,
+     * a 24-panel projector would spend some 393,000 setPixel calls per tick to move a 10x16 arrow.
+     */
+    public void setCursor(int screenX, int screenY) {
+        synchronized (framebuffer) {
+            if (cursorX == screenX && cursorY == screenY) {
+                return;
+            }
+            int previousX = cursorX;
+            int previousY = cursorY;
+            if (previousX >= 0) {
+                restoreCursorArea(previousX, previousY);
+            }
+            cursorX = screenX;
+            cursorY = screenY;
+            if (screenX >= 0) {
+                saveCursorArea(screenX, screenY);
+                drawCursor(screenX, screenY);
+            }
+            if (previousX >= 0) {
+                pushCursorArea(previousX, previousY);
+            }
+            if (screenX >= 0) {
+                pushCursorArea(screenX, screenY);
+            }
+        }
+    }
+
+    public void hideCursor() {
+        setCursor(-1, -1);
+    }
+
+    private void saveCursorArea(int x, int y) {
+        int screenWidth = size.pixelWidth();
+        int screenHeight = size.pixelHeight();
+        for (int row = 0; row < CURSOR_HEIGHT; row++) {
+            int py = y + row;
+            for (int col = 0; col < CURSOR_WIDTH; col++) {
+                int px = x + col;
+                boolean inside = px >= 0 && px < screenWidth && py >= 0 && py < screenHeight;
+                cursorBackup[row * CURSOR_WIDTH + col] =
+                        inside ? framebuffer[py * screenWidth + px] : 0;
+            }
+        }
+    }
+
+    private void restoreCursorArea(int x, int y) {
+        int screenWidth = size.pixelWidth();
+        int screenHeight = size.pixelHeight();
+        for (int row = 0; row < CURSOR_HEIGHT; row++) {
+            int py = y + row;
+            if (py < 0 || py >= screenHeight) {
+                continue;
+            }
+            for (int col = 0; col < CURSOR_WIDTH; col++) {
+                int px = x + col;
+                if (px < 0 || px >= screenWidth) {
+                    continue;
+                }
+                framebuffer[py * screenWidth + px] = cursorBackup[row * CURSOR_WIDTH + col];
+            }
+        }
+    }
+
+    private void drawCursor(int x, int y) {
+        int screenWidth = size.pixelWidth();
+        int screenHeight = size.pixelHeight();
+        for (int row = 0; row < CURSOR_HEIGHT; row++) {
+            String line = CURSOR[row];
+            int py = y + row;
+            if (py < 0 || py >= screenHeight) {
+                continue;
+            }
+            for (int col = 0; col < line.length(); col++) {
+                char pixel = line.charAt(col);
+                if (pixel == '.') {
+                    continue;
+                }
+                int px = x + col;
+                if (px < 0 || px >= screenWidth) {
+                    continue;
+                }
+                framebuffer[py * screenWidth + px] = pixel == 'X' ? cursorOutline : cursorFill;
+            }
+        }
+    }
+
+    /** Blits just the panels the cursor rectangle overlaps, and only the overlapping part of each. */
+    private void pushCursorArea(int x, int y) {
+        int screenWidth = size.pixelWidth();
+        int left = Math.max(0, x);
+        int top = Math.max(0, y);
+        int right = Math.min(screenWidth, x + CURSOR_WIDTH);
+        int bottom = Math.min(size.pixelHeight(), y + CURSOR_HEIGHT);
+        if (right <= left || bottom <= top) {
+            return;
+        }
+
+        for (int row = top / PANEL; row <= (bottom - 1) / PANEL; row++) {
+            for (int col = left / PANEL; col <= (right - 1) / PANEL; col++) {
+                int panelX = col * PANEL;
+                int panelY = row * PANEL;
+                int sliceLeft = Math.max(left, panelX);
+                int sliceTop = Math.max(top, panelY);
+                int sliceRight = Math.min(right, panelX + PANEL);
+                int sliceBottom = Math.min(bottom, panelY + PANEL);
+                panels.get(row * size.columns() + col).blit(framebuffer, screenWidth,
+                        sliceLeft, sliceTop, sliceLeft - panelX, sliceTop - panelY,
+                        sliceRight - sliceLeft, sliceBottom - sliceTop);
+            }
+        }
     }
 
     /**
@@ -153,6 +329,13 @@ public final class MonitorScreen {
             for (int row = 0; row < copyHeight; row++) {
                 System.arraycopy(image, row * imageWidth,
                         framebuffer, (offsetY + row) * screenWidth + offsetX, copyWidth);
+            }
+
+            // The new frame has just overwritten whatever the cursor was covering, so the backup
+            // has to be taken again from the fresh pixels before the arrow goes back on top.
+            if (cursorX >= 0) {
+                saveCursorArea(cursorX, cursorY);
+                drawCursor(cursorX, cursorY);
             }
         }
         pushAll();
