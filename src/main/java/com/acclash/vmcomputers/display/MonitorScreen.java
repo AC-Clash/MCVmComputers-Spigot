@@ -65,6 +65,9 @@ public final class MonitorScreen {
     private final byte[] framebuffer;
     private int guestWidth;
     private int guestHeight;
+    /** Size the guest image is drawn at, which is where the letterbox border falls. */
+    private volatile int displayedWidth;
+    private volatile int displayedHeight;
     private volatile ScreenGeometry geometry;
 
     // Size actually drawn, which the pointer conversion needs in order to map a displayed pixel
@@ -94,6 +97,8 @@ public final class MonitorScreen {
         this.framebuffer = new byte[size.pixelWidth() * size.pixelHeight()];
         this.guestWidth = size.guestWidth();
         this.guestHeight = size.guestHeight();
+        this.displayedWidth = size.guestWidth();
+        this.displayedHeight = size.guestHeight();
     }
 
     /**
@@ -148,6 +153,8 @@ public final class MonitorScreen {
 
     /** Size actually drawn on the screen, after any downscale. Drives the letterbox and the ray. */
     public void setDisplayedSize(int width, int height) {
+        this.displayedWidth = width;
+        this.displayedHeight = height;
         ScreenGeometry existing = geometry;
         if (existing != null) {
             // Letterbox borders move when the displayed size changes, so the ray mapping must too.
@@ -365,27 +372,19 @@ public final class MonitorScreen {
     /**
      * The screen's plane in world space, for aiming the pointer.
      *
-     * <p>The surface is the block <em>face</em> pointing at the viewer, not the block's origin
-     * corner, so which corner to start from depends on the facing. Along an axis whose direction is
-     * negative the relevant edge is one block further along, hence the +1 terms. The screen's right
-     * and forward axes are always perpendicular, so each of the two terms touches a different axis.
+     * <p>Where exactly that plane sits is {@link ScreenGeometry#wallMounted}'s problem, and it is
+     * fussier than it looks -- see the note on the frame plane there.
      */
     public ScreenGeometry geometry() {
         ScreenGeometry cached = geometry;
         if (cached == null) {
-            int[] block = computer.blockAt(computer.layout().screenBottomLeft());
-            int forwardX = computer.facing().getModX();
-            int forwardZ = computer.facing().getModZ();
-            int rightX = -forwardZ;
-            int rightZ = forwardX;
-
-            double originX = block[0] + (rightX < 0 ? 1 : 0) + (forwardX < 0 ? 1 : 0);
-            double originZ = block[2] + (rightZ < 0 ? 1 : 0) + (forwardZ < 0 ? 1 : 0);
-
-            // wallMounted takes the direction from the screen towards the viewer.
             cached = ScreenGeometry.wallMounted(size,
-                    new double[]{originX, block[1], originZ}, -forwardX, -forwardZ);
-            cached.setGuestResolution(guestWidth, guestHeight);
+                    computer.blockAt(computer.layout().screenBottomLeft()),
+                    computer.facing().getModX(), computer.facing().getModZ());
+            // The displayed size, not the guest's: it is what decides where the letterbox falls.
+            // Taken from the field rather than left to the next frame, because an idle guest sends
+            // no frames at all and this is built lazily, the first time anyone looks at the screen.
+            cached.setGuestResolution(displayedWidth, displayedHeight);
             geometry = cached;
         }
         return cached;
