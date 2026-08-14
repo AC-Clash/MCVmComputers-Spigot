@@ -32,6 +32,8 @@ public final class VMComputers extends JavaPlugin {
     private final ComputerRegistry registry = new ComputerRegistry();
     private MapColorLut mapPalette;
     private PointerListener pointerListener;
+    /** Read from the server tick and written from a command; both are the main thread, but be safe. */
+    private volatile boolean pointerDebug;
 
     /** Shared with the keyboard command, which targets whatever screen a player is aiming at. */
     public PointerListener getPointerListener() {
@@ -51,6 +53,25 @@ public final class VMComputers extends JavaPlugin {
 
     public void unregisterScreen(int computerId) {
         screens.remove(Integer.valueOf(computerId));
+    }
+
+    /** Every live screen. Only the debug cursor needs this; everything else works one screen at a time. */
+    public java.util.Collection<MonitorScreen> screens() {
+        return screens.values();
+    }
+
+    /**
+     * Whether to draw the pointer onto screens. Off by default and meant to stay off: the drawn
+     * arrow costs map traffic on every head movement and lags behind the crosshair, which is why
+     * the pointer is normally invisible. It exists so testing can see where the guest's pointer
+     * actually is.
+     */
+    public boolean isPointerDebug() {
+        return pointerDebug;
+    }
+
+    public void setPointerDebug(boolean pointerDebug) {
+        this.pointerDebug = pointerDebug;
     }
 
     /** Shared RGB -> map palette lookup table. Built once; never use MapPalette.matchColor. */

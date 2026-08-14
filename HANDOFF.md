@@ -216,7 +216,14 @@ java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --o
 /vmcomputers type <text>              # types into the screen you're looking at
 /vmcomputers type @RETURN             # @TAB @ESC @BACKSPACE @UP..@F12
 /vmcomputers testdisplay [clear]      # ItemDisplay diagnostic (answer: doesn't work)
+/vmcomputers debug                    # toggle: draws the pointer on screen, for testing
 ```
+
+`debug` exists because the pointer is invisible by design (§4) and "invisible and working" looks
+exactly like "invisible and broken". Turn it on to see where the plugin thinks the guest's pointer
+is; the arrow will trail your crosshair, which is the map protocol rather than the aim. It is
+global, not per player, since the arrow is painted into a framebuffer everyone looking at that
+screen shares. Leave it off otherwise — it costs map traffic on every head movement.
 Right-click the tower (desk) or control block (projector) to power on/off.
 
 **Test assets already downloaded** in `run/plugins/vm_computers/isos/`:
@@ -270,6 +277,17 @@ code.
   as dropped items.
 - Item frames need care: breaking one in creative fires **no block event**, and right-clicking
   **rotates** the item. `PlayerInteractEvent` cancellation is not enough.
+- **Clicking an item frame never fires `PlayerInteractEvent`.** A frame is an entity: left click is
+  an attack (`EntityDamageByEntityEvent`), right click is `PlayerInteractEntityEvent`. Since the
+  screen *is* item frames, a mouse driven only by `PlayerInteractEvent` works when you aim past arm's
+  reach — the miss arrives as `LEFT_CLICK_AIR` — and silently does nothing when you sit at the desk.
+  This cost a debugging session. `PointerListener` now takes the left button from
+  `PlayerAnimationEvent` (the arm swing, sent for every left click whatever is in front of you) and
+  the right button from both interact events.
+- **The screen's frames are `setFixed(true)`, and the vanilla client treats a fixed frame as not
+  having consumed the interaction.** So it follows the entity packet with a use-item packet, and one
+  right click raises `PlayerInteractEntityEvent` *and* `PlayerInteractEvent`. Both paths are needed,
+  so `PointerListener` drops the duplicate with a one-tick window instead.
 - `PlayerInteractEvent.getClickedBlock()` is **null** for air clicks — fires on every swing.
 - Don't cancel `PlayerMoveEvent` wholesale to keep a player seated; it cancels rotation too and the
   client rubber-bands. Refuse position only, pass yaw/pitch through.
