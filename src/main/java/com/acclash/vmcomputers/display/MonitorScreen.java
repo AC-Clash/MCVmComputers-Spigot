@@ -29,10 +29,48 @@ public final class MonitorScreen {
     private final List<PanelRenderer> panels;
     private final List<Integer> mapIds;
 
+    /**
+     * Host-drawn pointer, in guest pixels.
+     *
+     * <p>QEMU does not composite the guest's cursor into the framebuffer it sends over VNC -- it
+     * offers the shape separately through the Cursor pseudo-encoding, and a guest using a hardware
+     * cursor plane therefore appears to have no pointer at all. Drawing our own avoids that
+     * entirely, and a chunky high-contrast arrow survives quantization to 244 colours far better
+     * than a real 12x19 system cursor would.
+     */
+    private static final String[] CURSOR = {
+            "X.........",
+            "XX........",
+            "XPX.......",
+            "XPPX......",
+            "XPPPX.....",
+            "XPPPPX....",
+            "XPPPPPX...",
+            "XPPPPPPX..",
+            "XPPPPPPPX.",
+            "XPPPPPPPPX",
+            "XPPPPPXXXX",
+            "XPPXPPX...",
+            "XPX.XPPX..",
+            "XX...XPPX.",
+            "X.....XPX.",
+            ".......XX."
+    };
+
     private final byte[] framebuffer;
     private int guestWidth;
     private int guestHeight;
     private volatile ScreenGeometry geometry;
+
+    // Last presented image, kept so the cursor can be redrawn without waiting for a new frame.
+    private byte[] lastImage = new byte[0];
+    private int lastImageWidth;
+    private int lastImageHeight;
+    private byte lastBorder;
+    private int cursorX = -1;
+    private int cursorY = -1;
+    private byte cursorFill;
+    private byte cursorOutline;
 
     private MonitorScreen(Computer computer, List<PanelRenderer> panels, List<Integer> mapIds) {
         this.computer = computer;
@@ -83,21 +121,79 @@ public final class MonitorScreen {
         return mapIds;
     }
 
-    /** Guest resolution currently being displayed; changes when the guest switches video mode. */
+    /**
+     * The guest's own framebuffer size, which may be larger than what is displayed.
+     *
+     * <p>Kept separately from the displayed size so pointer coordinates can be converted back:
+     * the player aims at displayed pixels, but the guest only understands its own.
+     */
     public void setGuestResolution(int width, int height) {
-        this.guestWidth = Math.min(width, size.pixelWidth());
-        this.guestHeight = Math.min(height, size.pixelHeight());
+        this.guestWidth = width;
+        this.guestHeight = height;
+    }
+
+    /** Size actually drawn on the screen, after any downscale. Drives the letterbox and the ray. */
+    public void setDisplayedSize(int width, int height) {
         ScreenGeometry existing = geometry;
         if (existing != null) {
-            // Letterbox borders move when the guest changes mode, so the pointer mapping must too.
-            existing.setGuestResolution(this.guestWidth, this.guestHeight);
+            // Letterbox borders move when the displayed size changes, so the ray mapping must too.
+            existing.setGuestResolution(width, height);
         }
+    }
+
+    /**
+     * Converts a displayed pixel to the guest pixel underneath it.
+     *
+     * <p>The identity when nothing is scaled, which is the case whenever the guest image already
+     * fits the grid.
+     */
+    public int toGuestX(int displayedX) {
+        return lastImageWidth <= 0 ? displayedX : displayedX * guestWidth / lastImageWidth;
+    }
+
+    public int toGuestY(int displayedY) {
+        return lastImageHeight <= 0 ? displayedY : displayedY * guestHeight / lastImageHeight;
     }
 
     /** Paints the whole screen one colour. Black is the powered-off state. */
     public void fill(byte colour) {
-        java.util.Arrays.fill(framebuffer, colour);
+        synchronized (framebuffer) {
+            java.util.Arrays.fill(framebuffer, colour);
+            lastImageWidth = 0;
+            cursorX = -1;
+        }
         pushAll();
+    }
+
+    /** Colours for the host-drawn pointer. */
+    public void setCursorColours(byte fill, byte outline) {
+        this.cursorFill = fill;
+        this.cursorOutline = outline;
+    }
+
+    /**
+     * Moves the host-drawn pointer and repaints immediately.
+     *
+     * <p>Repainting here rather than waiting for the guest's next frame matters: an idle guest
+     * sends nothing at all, and the pointer has to keep up with the player's head regardless.
+     */
+    public void setCursor(int imageX, int imageY) {
+        synchronized (framebuffer) {
+            if (cursorX == imageX && cursorY == imageY) {
+                return;
+            }
+            cursorX = imageX;
+            cursorY = imageY;
+            if (lastImageWidth == 0) {
+                return;
+            }
+            composite();
+        }
+        pushAll();
+    }
+
+    public void hideCursor() {
+        setCursor(-1, -1);
     }
 
     /**
@@ -107,18 +203,55 @@ public final class MonitorScreen {
      * @param border colour for the area around the image
      */
     public void present(byte[] image, int imageWidth, int imageHeight, byte border) {
-        int offsetX = size.letterboxX(imageWidth);
-        int offsetY = size.letterboxY(imageHeight);
-        int screenWidth = size.pixelWidth();
-
-        java.util.Arrays.fill(framebuffer, border);
-        int copyWidth = Math.min(imageWidth, screenWidth - offsetX);
-        int copyHeight = Math.min(imageHeight, size.pixelHeight() - offsetY);
-        for (int row = 0; row < copyHeight; row++) {
-            System.arraycopy(image, row * imageWidth,
-                    framebuffer, (offsetY + row) * screenWidth + offsetX, copyWidth);
+        synchronized (framebuffer) {
+            int needed = imageWidth * imageHeight;
+            if (lastImage.length < needed) {
+                lastImage = new byte[needed];
+            }
+            System.arraycopy(image, 0, lastImage, 0, needed);
+            lastImageWidth = imageWidth;
+            lastImageHeight = imageHeight;
+            lastBorder = border;
+            composite();
         }
         pushAll();
+    }
+
+    /** Rebuilds the framebuffer from the last guest image plus the pointer on top. */
+    private void composite() {
+        int offsetX = size.letterboxX(lastImageWidth);
+        int offsetY = size.letterboxY(lastImageHeight);
+        int screenWidth = size.pixelWidth();
+
+        java.util.Arrays.fill(framebuffer, lastBorder);
+        int copyWidth = Math.min(lastImageWidth, screenWidth - offsetX);
+        int copyHeight = Math.min(lastImageHeight, size.pixelHeight() - offsetY);
+        for (int row = 0; row < copyHeight; row++) {
+            System.arraycopy(lastImage, row * lastImageWidth,
+                    framebuffer, (offsetY + row) * screenWidth + offsetX, copyWidth);
+        }
+
+        if (cursorX < 0 || cursorY < 0) {
+            return;
+        }
+        for (int row = 0; row < CURSOR.length; row++) {
+            String line = CURSOR[row];
+            int y = offsetY + cursorY + row;
+            if (y < 0 || y >= size.pixelHeight()) {
+                continue;
+            }
+            for (int col = 0; col < line.length(); col++) {
+                char pixel = line.charAt(col);
+                if (pixel == '.') {
+                    continue;
+                }
+                int x = offsetX + cursorX + col;
+                if (x < 0 || x >= screenWidth) {
+                    continue;
+                }
+                framebuffer[y * screenWidth + x] = pixel == 'X' ? cursorOutline : cursorFill;
+            }
+        }
     }
 
     /**

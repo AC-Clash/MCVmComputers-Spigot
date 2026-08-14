@@ -93,6 +93,7 @@ public final class VmService {
 
                 MapColorLut palette = plugin.getMapPalette();
                 byte black = palette.match(0, 0, 0);
+                screen.setCursorColours(palette.match(255, 255, 255), palette.match(0, 0, 0));
                 machine.setFrameListener(new FramePump(screen, palette, black));
 
                 machine.start();
@@ -151,6 +152,10 @@ public final class VmService {
             // Guests ignore the EDID hint in text mode and come up at 720x400, which does not fit
             // the smaller grids. Fit it to the screen keeping aspect ratio; letterboxing handles
             // the remainder. Without this the image was silently cropped to the top-left corner.
+            // Track the guest's own size every frame, not just on mode changes: the very first
+            // frame arrives without a preceding resize event.
+            screen.setGuestResolution(width, height);
+
             int[] fit = ImageScaler.fitDimensions(width, height,
                     screen.size().pixelWidth(), screen.size().pixelHeight());
             int targetWidth = fit[0];
@@ -177,11 +182,16 @@ public final class VmService {
             // identical output. Error diffusion would make one changed pixel alter everything after
             // it, defeating the per-pixel comparison that keeps map traffic small.
             palette.quantizeDithered(source, width, height, quantized, DITHER_SPREAD);
+            screen.setDisplayedSize(width, height);
             screen.present(quantized, width, height, border);
         }
 
         @Override
         public void onResize(int width, int height) {
+            screen.setGuestResolution(width, height);
+        }
+
+        void noteGuestSize(int width, int height) {
             screen.setGuestResolution(width, height);
         }
     }

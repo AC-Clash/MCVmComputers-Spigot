@@ -43,6 +43,7 @@ public class PointerListener implements Listener {
 
     private static final class Aim {
         final int computerId;
+        /** Guest pixel, which is what the machine understands. */
         final int x;
         final int y;
 
@@ -98,6 +99,8 @@ public class PointerListener implements Listener {
         double[] ray = {direction.getX(), direction.getY(), direction.getZ()};
 
         Aim best = null;
+        MonitorScreen bestScreen = null;
+        ScreenGeometry.Hit bestHit = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (Computer computer : VMComputers.getPlugin().getRegistry().all()) {
@@ -123,13 +126,26 @@ public class PointerListener implements Listener {
                 continue;
             }
             bestDistance = hit.distance;
-            best = new Aim(computer.id(), hit.imageX, hit.imageY);
+            // The ray lands on a displayed pixel; the guest only understands its own coordinates,
+            // which differ whenever the image had to be scaled down to fit.
+            best = new Aim(computer.id(), screen.toGuestX(hit.imageX), screen.toGuestY(hit.imageY));
+            bestScreen = screen;
+            bestHit = hit;
         }
 
         if (best == null) {
-            lastAim.remove(player.getUniqueId());
+            Aim previous = lastAim.remove(player.getUniqueId());
+            if (previous != null) {
+                MonitorScreen screen = VMComputers.getPlugin().getScreen(previous.computerId);
+                if (screen != null) {
+                    screen.hideCursor();
+                }
+            }
             return null;
         }
+
+        // Drawn at displayed coordinates, since that is the space the framebuffer is in.
+        bestScreen.setCursor(bestHit.imageX, bestHit.imageY);
 
         lastAim.put(player.getUniqueId(), best);
         VirtualMachine machine = ComputerFunctions.get(best.computerId);
