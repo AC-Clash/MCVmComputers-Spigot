@@ -138,6 +138,9 @@ public final class VMComputers extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
         this.pointerListener = new PointerListener();
         getServer().getPluginManager().registerEvents(pointerListener, this);
+        // Aim is sampled on the tick rather than driven by PlayerMoveEvent, which CraftBukkit does
+        // not raise until the look has swung ten degrees. See PointerListener.tick().
+        pointerListener.start(this);
     }
 
     @Override
@@ -146,6 +149,14 @@ public final class VMComputers extends JavaPlugin {
         // and a failure in one must not leave the other running. A NoClassDefFoundError here is
         // also possible if the jar was rebuilt under a live server, which must not stop the rest
         // of shutdown.
+        try {
+            if (pointerListener != null) {
+                pointerListener.stop();
+            }
+        } catch (Throwable t) {
+            getLogger().log(Level.SEVERE, "Failed to stop pointer tracking during shutdown", t);
+        }
+
         try {
             ComputerFunctions.stopAll();
         } catch (Throwable t) {

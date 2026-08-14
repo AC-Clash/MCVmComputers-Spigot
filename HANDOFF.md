@@ -124,12 +124,23 @@ separately via the Cursor pseudo-encoding, which this client doesn't request. A 
 hardware cursor plane therefore looks like it has no pointer. **Resolution: don't care** — Minecraft's
 own crosshair is the pointer.
 
+**`PlayerMoveEvent` cannot drive a pointer.** CraftBukkit gates it on
+`squaredPositionDelta > 1/256 || |Δyaw| + |Δpitch| > 10`, measured against the last *firing*, not the
+last packet. So turning your head raises no event at all until the look has swung a cumulative **ten
+degrees**, then it arrives in one jump — while walking clears the position term on nearly every
+packet. The symptom is unmistakable and was reported exactly this way: aiming by looking feels stuck
+and steppy, aiming by walking feels fine. Ten degrees is most of the width of a desk monitor at
+seating distance. Verified in Paper 26.2 bytecode (`ServerGamePacketListenerImpl.handleMovePlayer`,
+constants `0.00390625` and `10.0f`), not inferred. **Aim is therefore sampled on a 1-tick repeating
+task**, which is also the rate the client sends position at and the rate a map can be redrawn, so
+nothing is gained by going faster.
+
 **Pointer tracking itself is nearly free; *drawing* the pointer is what was expensive.** The two got
 conflated once and the tracking was removed along with the cursor. Tracking costs one plane
 intersection and a 6-byte RFB packet; it touches no map. The current `PointerListener` keeps the
-cost there: a move that cannot have changed the ray is dropped before any maths, the search runs
-over running machines rather than the whole registry, the ray allocates nothing, and a guest pixel
-the machine already has is never re-sent (deduped per *computer*, so two players aiming at one spot
+cost there: a move that cannot have changed the ray is dropped before any maths, a player who has not moved is
+skipped before any maths, the search runs over running machines rather than the whole registry, the
+ray allocates nothing, and a guest pixel the machine already has is never re-sent (deduped per *computer*, so two players aiming at one spot
 cost one event). `ScreenGeometry.trace` has a primitive-argument overload for exactly this path.
 
 **x86 vs ARM guest resolution behaviour differs fundamentally:**

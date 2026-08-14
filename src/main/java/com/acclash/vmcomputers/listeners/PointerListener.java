@@ -7,6 +7,7 @@ import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenGeometry;
 import com.acclash.vmcomputers.emu.VirtualMachine;
 import com.acclash.vmcomputers.utils.ComputerFunctions;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.Player;
@@ -19,9 +20,10 @@ import org.bukkit.event.player.PlayerAnimationType;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,11 +45,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * is trying to follow. Minecraft's own crosshair is already exactly where the pointer is, drawn
  * client-side and free, so the guest gets the position and the player gets the crosshair.
  *
- * <p>What remains is made as cheap as it can be: movement that cannot have moved the ray is
- * discarded before any maths, the search runs over switched-on machines rather than every computer
- * ever built, the ray itself allocates nothing, and a position the guest already has is never sent
- * twice. A player sweeping their head across a screen costs a handful of floating-point operations
- * per tick and a six-byte packet, and no map traffic whatsoever.
+ * <p>Aim is <strong>sampled once per tick</strong>, not taken from {@code PlayerMoveEvent}. See
+ * {@link #tick()}: that event is not raised for a look that has swung less than ten degrees, which
+ * makes it useless for aiming.
+ *
+ * <p>What remains is made as cheap as it can be: a player who has not moved at all is skipped before
+ * any maths, the search runs over switched-on machines rather than every computer ever built, the
+ * ray itself allocates nothing, and a position the guest already has is never sent twice. A player
+ * sweeping their head across a screen costs a handful of floating-point operations per tick and a
+ * six-byte packet, and no map traffic whatsoever.
  *
  * <p>Precision scales with proximity for free. Standing closer makes the screen cover more of the
  * view, so a degree of head movement crosses fewer pixels.
@@ -77,6 +83,12 @@ public class PointerListener implements Listener {
      * pointer wherever it likes, and must not have the first move suppressed as a duplicate.
      */
     private final Map<Integer, Sent> lastSent = new ConcurrentHashMap<Integer, Sent>();
+
+    private BukkitTask task;
+    /** Reused by the sampler; only ever touched on the server thread. */
+    private final Location scratch = new Location(null, 0, 0, 0);
+    private final java.util.Map<java.util.UUID, Pose> poses =
+            new java.util.HashMap<java.util.UUID, Pose>();
 
     /** How long a click blocks an identical one from another event path. One tick. */
     private static final long DUPLICATE_CLICK_NANOS = 50_000_000L;
@@ -217,41 +229,85 @@ public class PointerListener implements Listener {
         return target == null ? null : Integer.valueOf(target.computerId);
     }
 
-    /** Follows the player's head, so the guest sees hover. Draws nothing. */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onMove(PlayerMoveEvent e) {
-        // Fires for every player every tick, so the cheapest possible test goes first.
+    /** Begins sampling player aim. Stopped on disable so no task outlives the plugin. */
+    public void start(Plugin plugin) {
+        this.task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
+    }
+
+    public void stop() {
+        if (task != null) {
+            task.cancel();
+            task = null;
+        }
+    }
+
+    /**
+     * Samples where everyone is looking, once per tick.
+     *
+     * <p>Polling rather than listening to {@code PlayerMoveEvent}, which cannot drive a pointer.
+     * CraftBukkit gates that event on
+     * {@code squaredPositionDelta > 1/256 || |yawDelta| + |pitchDelta| > 10}, measured against the
+     * last firing rather than the last packet -- so turning your head raises nothing at all until
+     * the look has swung a cumulative <em>ten degrees</em>, and then it arrives in one jump. Ten
+     * degrees is most of the width of a desk monitor at seating distance, which made aiming by
+     * looking feel stuck while walking, which clears the position term on nearly every packet, felt
+     * fine. Confirmed in Paper 26.2 bytecode, not inferred from the symptom.
+     *
+     * <p>A tick is also exactly the right rate: it is how often the client sends its position, and
+     * how often a map can be redrawn, so sampling faster could not reach anyone anyway.
+     */
+    private void tick() {
         if (ComputerFunctions.getMachines().isEmpty()) {
             return;
         }
-        Location to = e.getTo();
-        if (to == null) {
-            return;
+        boolean debug = VMComputers.getPlugin().isPointerDebug();
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            // Fills a Location we own instead of allocating one per player per tick.
+            Location at = player.getLocation(scratch);
+            Pose pose = poses.get(player.getUniqueId());
+            if (pose == null) {
+                pose = new Pose();
+                poses.put(player.getUniqueId(), pose);
+            } else if (pose.matches(at)) {
+                // Standing perfectly still: the ray cannot have moved, so do not cast it.
+                continue;
+            }
+            pose.copyFrom(at);
+
+            Target target = trace(player, at.getX(), at.getY() + player.getEyeHeight(), at.getZ(),
+                    at.getYaw(), at.getPitch());
+            if (target != null) {
+                move(target);
+            } else if (debug) {
+                // Looking away leaves the drawn arrow stranded mid-screen, which reads as a freeze.
+                // setCursor returns immediately when there is nothing to hide.
+                for (MonitorScreen screen : VMComputers.getPlugin().screens()) {
+                    screen.hideCursor();
+                }
+            }
         }
-        Location from = e.getFrom();
-        // Rotation moves the ray, and so does walking, so both have to be handled -- but the client
-        // also sends position packets when nothing changed at all, and those are free to drop.
-        if (to.getYaw() == from.getYaw() && to.getPitch() == from.getPitch()
-                && to.getX() == from.getX() && to.getY() == from.getY()
-                && to.getZ() == from.getZ()) {
-            return;
+    }
+
+    /** A player's last sampled aim. Mutable and reused, since this runs twenty times a second. */
+    private static final class Pose {
+        private double x;
+        private double y;
+        private double z;
+        private float yaw;
+        private float pitch;
+
+        boolean matches(Location location) {
+            return x == location.getX() && y == location.getY() && z == location.getZ()
+                    && yaw == location.getYaw() && pitch == location.getPitch();
         }
 
-        Player player = e.getPlayer();
-        // The move has not been applied to the entity yet, so the player's own location is still
-        // the old one; and PlayerListener may have rewritten the destination to hold a seated
-        // player in their chair. Running at MONITOR, getTo() is the only position that is both
-        // current and final.
-        Target target = trace(player, to.getX(), to.getY() + player.getEyeHeight(), to.getZ(),
-                to.getYaw(), to.getPitch());
-        if (target != null) {
-            move(target);
-        } else if (VMComputers.getPlugin().isPointerDebug()) {
-            // Looking away leaves the drawn arrow stranded mid-screen, which reads as a freeze.
-            // Only under debug, and setCursor returns immediately when there is nothing to hide.
-            for (MonitorScreen screen : VMComputers.getPlugin().screens()) {
-                screen.hideCursor();
-            }
+        void copyFrom(Location location) {
+            x = location.getX();
+            y = location.getY();
+            z = location.getZ();
+            yaw = location.getYaw();
+            pitch = location.getPitch();
         }
     }
 
@@ -369,6 +425,7 @@ public class PointerListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         lastClick.remove(e.getPlayer().getUniqueId());
+        poses.remove(e.getPlayer().getUniqueId());
     }
 
     /** The hotbar becomes the scroll wheel, which is the only wheel vanilla can offer. */
