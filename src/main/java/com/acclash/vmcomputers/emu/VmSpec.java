@@ -21,6 +21,36 @@ import java.util.List;
  */
 public final class VmSpec {
 
+    /**
+     * Guest CPU architecture.
+     *
+     * <p>Worth choosing deliberately: hardware virtualization only works when the guest matches the
+     * host CPU. On Apple Silicon an aarch64 guest runs under HVF at native speed while an x86_64
+     * guest is interpreted instruction by instruction, which is roughly two orders of magnitude
+     * slower.
+     */
+    public enum Architecture {
+        X86_64("qemu-system-x86_64", "q35"),
+        /** ARM64. Uses UEFI and virtio throughout -- no BIOS, no VGA, no IDE. */
+        AARCH64("qemu-system-aarch64", "virt");
+
+        private final String binaryName;
+        private final String defaultMachine;
+
+        Architecture(String binaryName, String defaultMachine) {
+            this.binaryName = binaryName;
+            this.defaultMachine = defaultMachine;
+        }
+
+        public String binaryName() {
+            return binaryName;
+        }
+
+        public String defaultMachine() {
+            return defaultMachine;
+        }
+    }
+
     /** Guest display adapter. */
     public enum Vga {
         /** Bochs/standard VGA. Works everywhere, supports EDID resolution hints. */
@@ -68,6 +98,7 @@ public final class VmSpec {
     }
 
     private final String name;
+    private final Architecture architecture;
     private final int memoryMb;
     private final int cpus;
     private final String machine;
@@ -81,13 +112,15 @@ public final class VmSpec {
     private final String bootOrder;
     private final boolean rtcLocaltime;
     private final boolean absolutePointer;
+    private final Path uefiVars;
     private final List<String> extraArgs;
 
     private VmSpec(Builder b) {
         this.name = b.name;
+        this.architecture = b.architecture;
         this.memoryMb = b.memoryMb;
         this.cpus = b.cpus;
-        this.machine = b.machine;
+        this.machine = b.machine != null ? b.machine : b.architecture.defaultMachine();
         this.accelerator = b.accelerator;
         this.vga = b.vga;
         this.width = b.width;
@@ -98,6 +131,7 @@ public final class VmSpec {
         this.bootOrder = b.bootOrder;
         this.rtcLocaltime = b.rtcLocaltime;
         this.absolutePointer = b.absolutePointer;
+        this.uefiVars = b.uefiVars;
         this.extraArgs = Collections.unmodifiableList(new ArrayList<String>(b.extraArgs));
     }
 
@@ -107,6 +141,10 @@ public final class VmSpec {
 
     public String name() {
         return name;
+    }
+
+    public Architecture architecture() {
+        return architecture;
     }
 
     public int width() {
@@ -145,71 +183,111 @@ public final class VmSpec {
 
         List<String> a = new ArrayList<String>();
         a.add(qemu.systemBinary().toString());
-
         a.add("-name");
         a.add(name);
-
         a.add("-machine");
         a.add(machine + ",accel=" + accel);
-
         a.add("-m");
         a.add(Integer.toString(memoryMb));
-
         a.add("-smp");
         a.add(Integer.toString(cpus));
 
-        // Suppress the implicit adapter so the explicit -device below is the only one.
-        a.add("-vga");
-        a.add("none");
-        a.add("-device");
-        a.add(vgaDeviceArg());
+        if (architecture == Architecture.AARCH64) {
+            appendAarch64(a, qemu, accel);
+        } else {
+            appendX86(a);
+        }
 
+        // RFB PointerEvent carries absolute coordinates. Without an absolute input device QEMU has
+        // to synthesise relative deltas from them and the guest cursor drifts out of sync with
+        // where we think it is, which breaks aiming the pointer by looking at the monitor.
         if (absolutePointer) {
-            // RFB PointerEvent carries absolute coordinates. Without an absolute input device QEMU
-            // has to synthesise relative PS/2 deltas from them, and the guest cursor steadily
-            // drifts out of sync with where we think it is -- which breaks aiming the pointer by
-            // looking at the monitor. q35 has no USB controller by default, hence the xhci.
             a.add("-device");
             a.add("qemu-xhci,id=usb");
             a.add("-device");
             a.add("usb-tablet,bus=usb.0");
+            if (architecture == Architecture.AARCH64) {
+                // The virt machine has no PS/2 controller, so without this there is no keyboard.
+                a.add("-device");
+                a.add("usb-kbd,bus=usb.0");
+            }
         }
 
-        // -vnc takes a display number, not a port. Loopback only: there is no authentication.
         a.add("-vnc");
         a.add("127.0.0.1:" + vncDisplay);
-
         a.add("-qmp");
         a.add("tcp:127.0.0.1:" + qmpPort + ",server=on,wait=off");
-
-        // Keep stdio clear so the only thing on it is diagnostics we want to capture.
         a.add("-monitor");
         a.add("none");
 
-        if (rtcLocaltime) {
+        if (rtcLocaltime && architecture == Architecture.X86_64) {
             a.add("-rtc");
             a.add("base=localtime");
         }
 
+        String diskInterfaceValue =
+                architecture == Architecture.AARCH64 ? "virtio" : diskInterface.value();
         for (Path disk : disks) {
             a.add("-drive");
-            a.add("file=" + disk.toAbsolutePath() + ",format=qcow2,if=" + diskInterface.value());
+            a.add("file=" + disk.toAbsolutePath() + ",format=qcow2,if=" + diskInterfaceValue);
         }
 
         if (cdrom != null) {
-            // An explicit drive rather than -cdrom, so the medium can be swapped later over QMP
-            // using this id.
-            a.add("-drive");
-            a.add("id=cd0,file=" + cdrom.toAbsolutePath() + ",media=cdrom,if=" + diskInterface.value());
+            if (architecture == Architecture.AARCH64) {
+                // virt has no IDE, and UEFI boots happily from USB storage.
+                a.add("-drive");
+                a.add("if=none,id=cd0,format=raw,readonly=on,media=cdrom,file="
+                        + cdrom.toAbsolutePath());
+                a.add("-device");
+                a.add("usb-storage,bus=usb.0,drive=cd0");
+            } else {
+                // An explicit drive rather than -cdrom, so the medium can be swapped over QMP.
+                a.add("-drive");
+                a.add("id=cd0,file=" + cdrom.toAbsolutePath() + ",media=cdrom,if="
+                        + diskInterface.value());
+            }
         }
 
-        if (bootOrder != null) {
+        if (bootOrder != null && architecture == Architecture.X86_64) {
+            // UEFI decides its own boot order; -boot order only applies to BIOS machines.
             a.add("-boot");
             a.add("order=" + bootOrder);
         }
 
         a.addAll(extraArgs);
         return a;
+    }
+
+    private void appendX86(List<String> a) {
+        // Suppress the implicit adapter so the explicit -device below is the only one.
+        a.add("-vga");
+        a.add("none");
+        a.add("-device");
+        a.add(vgaDeviceArg());
+    }
+
+    private void appendAarch64(List<String> a, QemuBinary qemu, String accel) {
+        // There is no default CPU on virt, and hvf can only run the host's own core.
+        a.add("-cpu");
+        a.add("hvf".equals(accel) || "kvm".equals(accel) ? "host" : "max");
+
+        // No BIOS on ARM: firmware is UEFI, supplied as a pair of pflash images. The code half is
+        // read-only and shared; the variable half must be a private writable copy or boot entries
+        // written by an installed system would be lost.
+        Path code = qemu.firmware("edk2-aarch64-code.fd");
+        if (code != null) {
+            a.add("-drive");
+            a.add("if=pflash,format=raw,readonly=on,file=" + code.toAbsolutePath());
+            if (uefiVars != null) {
+                a.add("-drive");
+                a.add("if=pflash,format=raw,file=" + uefiVars.toAbsolutePath());
+            }
+        }
+
+        a.add("-device");
+        StringBuilder gpu = new StringBuilder("virtio-gpu-pci");
+        gpu.append(",edid=on,xres=").append(width).append(",yres=").append(height);
+        a.add(gpu.toString());
     }
 
     private String vgaDeviceArg() {
@@ -234,7 +312,8 @@ public final class VmSpec {
         private final String name;
         private int memoryMb = 2048;
         private int cpus = 2;
-        private String machine = "q35";
+        private Architecture architecture = Architecture.X86_64;
+        private String machine;
         private String accelerator;
         private Vga vga = Vga.STD;
         private int width = 640;
@@ -245,6 +324,7 @@ public final class VmSpec {
         private String bootOrder = "dc";
         private boolean rtcLocaltime = true;
         private boolean absolutePointer = true;
+        private Path uefiVars;
         private final List<String> extraArgs = new ArrayList<String>();
 
         private Builder(String name) {
@@ -270,7 +350,12 @@ public final class VmSpec {
             return this;
         }
 
-        /** {@code q35} for anything modern, {@code pc} for DOS and other old guests. */
+        public Builder architecture(Architecture architecture) {
+            this.architecture = architecture;
+            return this;
+        }
+
+        /** Overrides the architecture default; {@code pc} for DOS and other very old x86 guests. */
         public Builder machine(String machine) {
             this.machine = machine;
             return this;
@@ -327,6 +412,12 @@ public final class VmSpec {
          * Whether to attach a USB tablet for absolute pointing. Leave on for anything modern;
          * turn it off for pre-USB guests (DOS, Win9x), which need a relative PS/2 mouse instead.
          */
+        /** Private writable copy of the UEFI variable store; aarch64 only. */
+        public Builder uefiVars(Path varsFile) {
+            this.uefiVars = varsFile;
+            return this;
+        }
+
         public Builder absolutePointer(boolean absolute) {
             this.absolutePointer = absolute;
             return this;

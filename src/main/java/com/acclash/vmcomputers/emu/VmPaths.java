@@ -38,6 +38,29 @@ public final class VmPaths {
         return root().resolve("hdds").resolve("computer-" + computerId + ".qcow2");
     }
 
+    /**
+     * Private UEFI variable store for a computer, on architectures that boot via UEFI.
+     *
+     * <p>Must be per machine and writable: an installed system records its boot entry here, and
+     * sharing one copy between machines would have them overwrite each other's.
+     */
+    public static Path uefiVarsFor(int computerId) {
+        return root().resolve("hdds").resolve("computer-" + computerId + "-vars.fd");
+    }
+
+    /** Copies the firmware's blank variable template into place if this computer has none yet. */
+    public static Path ensureUefiVars(int computerId, Path template) throws IOException {
+        Path vars = uefiVarsFor(computerId);
+        if (template == null) {
+            return null;
+        }
+        if (!Files.exists(vars)) {
+            Files.createDirectories(vars.getParent());
+            Files.copy(template, vars);
+        }
+        return vars;
+    }
+
     public static void ensureDirectories() throws IOException {
         Files.createDirectories(isoDirectory());
         Files.createDirectories(root().resolve("hdds"));
@@ -81,6 +104,7 @@ public final class VmPaths {
     /** Deletes a computer's disk image, if it has one. */
     public static void deleteDisk(int computerId) {
         try {
+            Files.deleteIfExists(uefiVarsFor(computerId));
             Files.deleteIfExists(diskFor(computerId));
         } catch (IOException ignored) {
             // Leaving a stale image behind is harmless.

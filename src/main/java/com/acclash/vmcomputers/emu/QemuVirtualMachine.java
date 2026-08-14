@@ -56,8 +56,15 @@ public final class QemuVirtualMachine implements VirtualMachine {
                                                  Path disk, Path iso, int memoryMb,
                                                  Consumer<String> logger) throws IOException {
         VmSpec.Builder builder = VmSpec.builder("vmcomputer-" + computerId)
+                .architecture(qemu.architecture())
                 .resolution(monitor.guestWidth(), monitor.guestHeight())
                 .memoryMb(memoryMb);
+
+        if (qemu.architecture() == VmSpec.Architecture.AARCH64) {
+            // ARM guests boot UEFI rather than a BIOS, and need their own writable variable store.
+            builder.uefiVars(VmPaths.ensureUefiVars(computerId,
+                    qemu.firmware("edk2-arm-vars.fd")));
+        }
 
         if (disk != null) {
             qemu.createDisk(disk, 16L * 1024 * 1024 * 1024);

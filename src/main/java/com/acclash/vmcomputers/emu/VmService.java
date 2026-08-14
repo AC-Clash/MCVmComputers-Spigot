@@ -26,7 +26,8 @@ public final class VmService {
     /** Ordered-dither strength in 0-255 colour units; enough to smooth a 244-colour palette. */
     private static final int DITHER_SPREAD = 20;
 
-    private static volatile QemuBinary qemu;
+    private static final java.util.Map<VmSpec.Architecture, QemuBinary> BINARIES =
+            new java.util.concurrent.ConcurrentHashMap<VmSpec.Architecture, QemuBinary>();
 
     private VmService() {
     }
@@ -36,14 +37,15 @@ public final class VmService {
      *
      * @throws IOException if QEMU is not installed, with an actionable message
      */
-    public static QemuBinary qemu() throws IOException {
-        QemuBinary cached = qemu;
+    public static QemuBinary qemu(VmSpec.Architecture architecture) throws IOException {
+        QemuBinary cached = BINARIES.get(architecture);
         if (cached == null) {
             synchronized (VmService.class) {
-                if (qemu == null) {
-                    qemu = QemuBinary.discover();
+                cached = BINARIES.get(architecture);
+                if (cached == null) {
+                    cached = QemuBinary.discover(architecture);
+                    BINARIES.put(architecture, cached);
                 }
-                cached = qemu;
             }
         }
         return cached;
@@ -68,10 +70,11 @@ public final class VmService {
         VMComputers plugin = VMComputers.getPlugin();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                QemuBinary binary = qemu();
+                QemuBinary binary = qemu(computer.architecture());
                 if (!binary.hasHardwareAcceleration()) {
-                    post(feedback, "No hardware acceleration on this host (" + binary.accelerators()
-                            + "); the guest will be very slow.");
+                    post(feedback, "No hardware acceleration for " + computer.architecture()
+                            + " on this host (" + binary.accelerators() + "); the guest will be very"
+                            + " slow. " + QemuBinary.nativeArchitecture() + " guests run natively.");
                 }
 
                 VmPaths.ensureDirectories();

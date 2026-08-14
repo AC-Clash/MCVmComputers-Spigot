@@ -54,11 +54,16 @@ public final class RfbDump {
         int maxSeconds = intOpt(opts, "seconds", 60);
         int memoryMb = intOpt(opts, "mem", 2048);
         int cpus = intOpt(opts, "cpus", 2);
-        String machine = opts.getOrDefault("machine", "q35");
+        // Left null unless asked for, so the architecture picks its own default machine.
+        String machine = opts.get("machine");
         Path outDir = Paths.get(opts.getOrDefault("out", "vmshots"));
 
-        log("Locating QEMU...");
-        QemuBinary qemu = QemuBinary.discover();
+        VmSpec.Architecture architecture = opts.containsKey("arch")
+                ? VmSpec.Architecture.valueOf(opts.get("arch").toUpperCase(Locale.ROOT))
+                : QemuBinary.nativeArchitecture();
+
+        log("Locating QEMU for " + architecture + "...");
+        QemuBinary qemu = QemuBinary.discover(architecture);
         log("  binary       " + qemu.systemBinary());
         log("  " + qemu.version());
         log("  accelerators " + qemu.accelerators());
@@ -69,10 +74,13 @@ public final class RfbDump {
         }
 
         VmSpec.Builder builder = VmSpec.builder("rfbdump")
+                .architecture(architecture)
                 .resolution(width, height)
                 .memoryMb(memoryMb)
-                .cpus(cpus)
-                .machine(machine);
+                .cpus(cpus);
+        if (machine != null) {
+            builder.machine(machine);
+        }
 
         if (opts.containsKey("vga")) {
             builder.vga(VmSpec.Vga.valueOf(opts.get("vga").toUpperCase(Locale.ROOT)));
@@ -88,6 +96,16 @@ public final class RfbDump {
                 throw new IOException("cannot read ISO: " + iso);
             }
             builder.cdrom(iso).bootOrder("dc");
+        }
+
+        if (architecture == VmSpec.Architecture.AARCH64) {
+            java.nio.file.Path template = qemu.firmware("edk2-arm-vars.fd");
+            java.nio.file.Path vars = Paths.get("rfbdump-vars.fd");
+            if (template != null && !Files.exists(vars)) {
+                Files.copy(template, vars);
+            }
+            builder.uefiVars(Files.exists(vars) ? vars : null);
+            log("  UEFI code   " + qemu.firmware("edk2-aarch64-code.fd"));
         }
 
         VmSpec spec = builder.build();
@@ -232,7 +250,8 @@ public final class RfbDump {
         log("  --height <px>     guest height (default 480)");
         log("  --mem <mb>        guest memory (default 2048)");
         log("  --cpus <n>        guest vCPUs (default 2)");
-        log("  --machine <name>  q35 (default) or pc for old guests");
+        log("  --machine <name>  q35 (x86) or virt (arm)");
+        log("  --arch <name>     X86_64 or AARCH64 (defaults to the host CPU)");
         log("  --vga <name>      STD (default), VIRTIO, CIRRUS, VMWARE");
         log("");
         log("With no --iso or --disk the guest lands on the SeaBIOS boot-failure screen,");
