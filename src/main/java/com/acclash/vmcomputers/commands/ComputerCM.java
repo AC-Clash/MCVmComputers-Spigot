@@ -1,6 +1,7 @@
 package com.acclash.vmcomputers.commands;
 
 import com.acclash.vmcomputers.commands.computersubcommands.Create;
+import com.acclash.vmcomputers.commands.computersubcommands.Iso;
 import com.acclash.vmcomputers.commands.computersubcommands.Remove;
 import com.acclash.vmcomputers.commands.computersubcommands.TestDisplay;
 import org.bukkit.ChatColor;
@@ -23,6 +24,7 @@ public class ComputerCM implements TabExecutor {
     public ComputerCM() {
         subCommands.add(new Create());
         subCommands.add(new Remove());
+        subCommands.add(new Iso());
         subCommands.add(new TestDisplay());
     }
 

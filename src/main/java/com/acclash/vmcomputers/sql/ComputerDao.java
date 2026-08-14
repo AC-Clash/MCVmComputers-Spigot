@@ -38,6 +38,7 @@ public final class ComputerDao {
                     + "monitor_size TEXT NOT NULL,"
                     + "type TEXT NOT NULL,"
                     + "state TEXT NOT NULL,"
+                    + "iso TEXT,"
                     + "UNIQUE (world, x, y, z)"
                     + ")";
 
@@ -70,7 +71,23 @@ public final class ComputerDao {
             }
             statement.executeUpdate(CREATE_TABLE);
             statement.executeUpdate(CREATE_PANELS);
+            // Added after the table shipped, so existing databases need it bolted on.
+            if (!hasColumn(connection, "computers", "iso")) {
+                statement.executeUpdate("ALTER TABLE computers ADD COLUMN iso TEXT");
+            }
         }
+    }
+
+    private boolean hasColumn(Connection connection, String table, String column)
+            throws SQLException {
+        try (ResultSet columns = connection.getMetaData().getColumns(null, null, table, null)) {
+            while (columns.next()) {
+                if (column.equalsIgnoreCase(columns.getString("COLUMN_NAME"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean hasLegacySchema(Connection connection) throws SQLException {
@@ -87,7 +104,7 @@ public final class ComputerDao {
 
     public List<Computer> loadAll() throws SQLException {
         List<Computer> out = new ArrayList<Computer>();
-        String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state FROM computers";
+        String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state, iso FROM computers";
         try (PreparedStatement statement = database.getSQLConnection().prepareStatement(sql);
              ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
@@ -103,7 +120,7 @@ public final class ComputerDao {
     private Computer read(ResultSet rs) throws SQLException {
         int id = rs.getInt("id");
         try {
-            return new Computer(
+            Computer computer = new Computer(
                     id,
                     rs.getString("world"),
                     rs.getInt("x"),
@@ -113,6 +130,8 @@ public final class ComputerDao {
                     MonitorSize.valueOf(rs.getString("monitor_size")),
                     rs.getString("type"),
                     Computer.State.valueOf(rs.getString("state")));
+            computer.setIsoName(rs.getString("iso"));
+            return computer;
         } catch (IllegalArgumentException e) {
             // An unknown enum name means the row predates a rename. Skip it rather than refusing
             // to start the whole plugin.
@@ -184,6 +203,15 @@ public final class ComputerDao {
         try (PreparedStatement statement = database.getSQLConnection()
                 .prepareStatement("DELETE FROM computer_panels WHERE computer_id = ?")) {
             statement.setInt(1, computerId);
+            statement.executeUpdate();
+        }
+    }
+
+    public void updateIso(int id, String isoName) throws SQLException {
+        try (PreparedStatement statement = database.getSQLConnection()
+                .prepareStatement("UPDATE computers SET iso = ? WHERE id = ?")) {
+            statement.setString(1, isoName);
+            statement.setInt(2, id);
             statement.executeUpdate();
         }
     }

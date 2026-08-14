@@ -57,8 +57,11 @@ public class Remove extends ComputerSubCommand {
         // which froze the whole server for the entire timeout. The computer is being deleted, so
         // there is nothing to shut down cleanly.
         final int computerId = computer.id();
-        Bukkit.getScheduler().runTaskAsynchronously(VMComputers.getPlugin(),
-                () -> ComputerFunctions.kill(computerId));
+        Bukkit.getScheduler().runTaskAsynchronously(VMComputers.getPlugin(), () -> {
+            ComputerFunctions.kill(computerId);
+            // The disk belongs to this computer alone, so it goes with it.
+            com.acclash.vmcomputers.emu.VmPaths.deleteDisk(computerId);
+        });
 
         try {
             VMComputers.getPlugin().getComputerDao().deletePanels(computer.id());

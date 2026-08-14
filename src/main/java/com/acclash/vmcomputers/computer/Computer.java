@@ -34,6 +34,7 @@ public final class Computer {
     private final MonitorSize monitorSize;
     private final String type;
     private volatile State state;
+    private volatile String isoName;
 
     private final ComputerLayout layout;
 
@@ -98,6 +99,15 @@ public final class Computer {
 
     public void setState(State state) {
         this.state = state;
+    }
+
+    /** File name of the ISO in this computer's drive, relative to the isos folder, or null. */
+    public String isoName() {
+        return isoName;
+    }
+
+    public void setIsoName(String isoName) {
+        this.isoName = isoName;
     }
 
     public ComputerLayout layout() {
