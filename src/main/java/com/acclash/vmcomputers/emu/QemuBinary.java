@@ -29,23 +29,30 @@ public final class QemuBinary {
     private static final boolean WINDOWS =
             System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
 
+    private final VmSpec.Architecture architecture;
     private final Path system;
     private final Path img;
     private final String version;
     private final Set<String> accelerators;
 
-    private QemuBinary(Path system, Path img, String version, Set<String> accelerators) {
+    private QemuBinary(VmSpec.Architecture architecture, Path system, Path img, String version,
+                       Set<String> accelerators) {
+        this.architecture = architecture;
         this.system = system;
         this.img = img;
         this.version = version;
         this.accelerators = accelerators;
     }
 
-    /** Finds {@code qemu-system-x86_64} and {@code qemu-img} on PATH and probes them. */
     public static QemuBinary discover() throws IOException {
-        Path system = findOnPath("qemu-system-x86_64");
+        return discover(VmSpec.Architecture.X86_64);
+    }
+
+    /** Finds the system emulator for an architecture, plus {@code qemu-img}, and probes them. */
+    public static QemuBinary discover(VmSpec.Architecture architecture) throws IOException {
+        Path system = findOnPath(architecture.binaryName());
         if (system == null) {
-            throw new IOException("qemu-system-x86_64 was not found on PATH. Install QEMU "
+            throw new IOException(architecture.binaryName() + " was not found on PATH. Install QEMU "
                     + "(macOS: brew install qemu, Debian/Ubuntu: apt install qemu-system-x86, "
                     + "Windows: https://qemu.weilnetz.de/w64/) or configure an explicit path.");
         }
@@ -54,22 +61,47 @@ public final class QemuBinary {
             throw new IOException("found " + system + " but qemu-img is not on PATH; "
                     + "it is needed to create and inspect disk images");
         }
-        return at(system, img);
+        return at(architecture, system, img);
     }
 
     /** Probes an explicitly configured pair of binaries. */
-    public static QemuBinary at(Path system, Path img) throws IOException {
+    public static QemuBinary at(VmSpec.Architecture architecture, Path system, Path img)
+            throws IOException {
         if (!Files.isExecutable(system)) {
             throw new IOException("not executable: " + system);
         }
         if (!Files.isExecutable(img)) {
             throw new IOException("not executable: " + img);
         }
-        return new QemuBinary(system, img, probeVersion(system), probeAccelerators(system));
+        return new QemuBinary(architecture, system, img, probeVersion(system),
+                probeAccelerators(system));
+    }
+
+    public VmSpec.Architecture architecture() {
+        return architecture;
     }
 
     public Path systemBinary() {
         return system;
+    }
+
+    /**
+     * Locates a firmware image shipped alongside the binary, such as the UEFI code ARM guests boot
+     * from. Installations put these in {@code <prefix>/share/qemu}, one level up from {@code bin}.
+     *
+     * @return the path, or null if this build does not ship it
+     */
+    public Path firmware(String fileName) {
+        Path binDirectory = system.getParent();
+        if (binDirectory == null) {
+            return null;
+        }
+        Path prefix = binDirectory.getParent();
+        if (prefix == null) {
+            return null;
+        }
+        Path candidate = prefix.resolve("share").resolve("qemu").resolve(fileName);
+        return Files.isReadable(candidate) ? candidate : null;
     }
 
     public Path imgBinary() {
@@ -106,6 +138,18 @@ public final class QemuBinary {
     }
 
     /** Host-appropriate accelerator preference order, best first. */
+    /**
+     * The architecture that can be hardware accelerated on this host, which is simply the one
+     * matching the host CPU. Anything else has to be interpreted.
+     */
+    public static VmSpec.Architecture nativeArchitecture() {
+        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        if (arch.contains("aarch64") || arch.contains("arm64")) {
+            return VmSpec.Architecture.AARCH64;
+        }
+        return VmSpec.Architecture.X86_64;
+    }
+
     public static List<String> preferredAccelerators() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("mac") || os.contains("darwin")) {
@@ -120,7 +164,7 @@ public final class QemuBinary {
 
     @Override
     public String toString() {
-        return "QemuBinary{" + system + ", version=" + version
+        return "QemuBinary{" + architecture + ", " + system + ", version=" + version
                 + ", accel=" + accelerators + ", best=" + bestAccelerator() + "}";
     }
 

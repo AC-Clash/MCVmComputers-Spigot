@@ -1,6 +1,7 @@
 package com.acclash.vmcomputers.computer;
 
 import com.acclash.vmcomputers.display.MonitorSize;
+import com.acclash.vmcomputers.emu.VmSpec;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
@@ -35,6 +36,7 @@ public final class Computer {
     private final String type;
     private volatile State state;
     private volatile String isoName;
+    private volatile VmSpec.Architecture architecture = VmSpec.Architecture.X86_64;
 
     private final ComputerLayout layout;
 
@@ -99,6 +101,18 @@ public final class Computer {
 
     public void setState(State state) {
         this.state = state;
+    }
+
+    /**
+     * Guest CPU architecture. Must match the installed operating system and the ISO -- an x86 image
+     * will not boot on an ARM machine.
+     */
+    public VmSpec.Architecture architecture() {
+        return architecture;
+    }
+
+    public void setArchitecture(VmSpec.Architecture architecture) {
+        this.architecture = architecture;
     }
 
     /** File name of the ISO in this computer's drive, relative to the isos folder, or null. */

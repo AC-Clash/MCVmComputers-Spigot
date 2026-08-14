@@ -39,6 +39,7 @@ public final class ComputerDao {
                     + "type TEXT NOT NULL,"
                     + "state TEXT NOT NULL,"
                     + "iso TEXT,"
+                    + "arch TEXT,"
                     + "UNIQUE (world, x, y, z)"
                     + ")";
 
@@ -75,6 +76,9 @@ public final class ComputerDao {
             if (!hasColumn(connection, "computers", "iso")) {
                 statement.executeUpdate("ALTER TABLE computers ADD COLUMN iso TEXT");
             }
+            if (!hasColumn(connection, "computers", "arch")) {
+                statement.executeUpdate("ALTER TABLE computers ADD COLUMN arch TEXT");
+            }
         }
     }
 
@@ -104,7 +108,7 @@ public final class ComputerDao {
 
     public List<Computer> loadAll() throws SQLException {
         List<Computer> out = new ArrayList<Computer>();
-        String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state, iso FROM computers";
+        String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state, iso, arch FROM computers";
         try (PreparedStatement statement = database.getSQLConnection().prepareStatement(sql);
              ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
@@ -131,6 +135,15 @@ public final class ComputerDao {
                     rs.getString("type"),
                     Computer.State.valueOf(rs.getString("state")));
             computer.setIsoName(rs.getString("iso"));
+            String arch = rs.getString("arch");
+            if (arch != null) {
+                try {
+                    computer.setArchitecture(
+                            com.acclash.vmcomputers.emu.VmSpec.Architecture.valueOf(arch));
+                } catch (IllegalArgumentException ignored) {
+                    // Unknown architecture name: keep the default rather than dropping the row.
+                }
+            }
             return computer;
         } catch (IllegalArgumentException e) {
             // An unknown enum name means the row predates a rename. Skip it rather than refusing
@@ -203,6 +216,16 @@ public final class ComputerDao {
         try (PreparedStatement statement = database.getSQLConnection()
                 .prepareStatement("DELETE FROM computer_panels WHERE computer_id = ?")) {
             statement.setInt(1, computerId);
+            statement.executeUpdate();
+        }
+    }
+
+    public void updateArchitecture(int id, com.acclash.vmcomputers.emu.VmSpec.Architecture arch)
+            throws SQLException {
+        try (PreparedStatement statement = database.getSQLConnection()
+                .prepareStatement("UPDATE computers SET arch = ? WHERE id = ?")) {
+            statement.setString(1, arch.name());
+            statement.setInt(2, id);
             statement.executeUpdate();
         }
     }

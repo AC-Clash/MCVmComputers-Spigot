@@ -6,6 +6,8 @@ import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.computer.ComputerLayout;
 import com.acclash.vmcomputers.display.MonitorSize;
 import com.acclash.vmcomputers.display.MonitorScreen;
+import com.acclash.vmcomputers.emu.QemuBinary;
+import com.acclash.vmcomputers.emu.VmSpec;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -55,7 +57,7 @@ public class Create extends ComputerSubCommand {
     @Override
     public String getSyntax() {
         return ChatColor.GOLD + "Stand where the computer should go, face the screen, then: "
-                + "/vmcomputers create <" + sizeList() + ">";
+                + "/vmcomputers create <" + sizeList() + "> [x86_64|aarch64]";
     }
 
     private static String sizeList() {
@@ -89,6 +91,20 @@ public class Create extends ComputerSubCommand {
             player.sendMessage(ChatColor.RED + "Unknown monitor size '" + args[1] + "'.");
             player.sendMessage(getSyntax());
             return;
+        }
+
+        // Architecture is fixed at build time, like real hardware. It defaults to the host CPU
+        // because only a matching guest can be hardware accelerated -- anything else is emulated
+        // instruction by instruction and roughly two orders of magnitude slower.
+        VmSpec.Architecture architecture = QemuBinary.nativeArchitecture();
+        if (args.length >= 3) {
+            try {
+                architecture = VmSpec.Architecture.valueOf(args[2].toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                player.sendMessage(ChatColor.RED + "Unknown architecture '" + args[2]
+                        + "'. Use X86_64 or AARCH64.");
+                return;
+            }
         }
 
         if (player.isInsideVehicle()) {
@@ -133,6 +149,13 @@ public class Create extends ComputerSubCommand {
             VMComputers.getPlugin().getLogger().severe("Could not save panel maps: " + e.getMessage());
         }
 
+        saved.setArchitecture(architecture);
+        try {
+            VMComputers.getPlugin().getComputerDao().updateArchitecture(saved.id(), architecture);
+        } catch (SQLException e) {
+            VMComputers.getPlugin().getLogger().severe("Could not save architecture: " + e.getMessage());
+        }
+
         MonitorScreen screen = MonitorScreen.attach(saved, mapIds);
         if (screen != null) {
             VMComputers.getPlugin().registerScreen(screen);
@@ -141,6 +164,9 @@ public class Create extends ComputerSubCommand {
 
         player.sendMessage(ChatColor.GREEN + "Built computer #" + saved.id() + " - "
                 + size.describe());
+        boolean nativeArch = architecture == QemuBinary.nativeArchitecture();
+        player.sendMessage((nativeArch ? ChatColor.GREEN : ChatColor.YELLOW) + "Architecture: "
+                + architecture + (nativeArch ? " (hardware accelerated)" : " (emulated, slow)"));
         if (size.form() == MonitorSize.Form.PROJECTOR) {
             player.sendMessage(ChatColor.GRAY + "Projector screen. Stand back about "
                     + (int) size.viewingDistance() + " blocks; walk closer for finer pointer control.");
@@ -251,6 +277,13 @@ public class Create extends ComputerSubCommand {
                 sizes.add(size.name());
             }
             return sizes;
+        }
+        if (args.length == 3) {
+            List<String> architectures = new ArrayList<String>();
+            for (VmSpec.Architecture architecture : VmSpec.Architecture.values()) {
+                architectures.add(architecture.name());
+            }
+            return architectures;
         }
         return null;
     }
