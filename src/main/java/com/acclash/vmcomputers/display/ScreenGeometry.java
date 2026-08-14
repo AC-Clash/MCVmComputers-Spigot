@@ -206,21 +206,45 @@ public final class ScreenGeometry {
     }
 
     /**
-     * Builds the geometry for a wall-mounted screen from the direction it faces.
+     * How far into the panel block the picture sits, measured along the viewer's line of sight.
      *
-     * @param origin world position of the screen's bottom-left corner as the viewer sees it
-     * @param facingX unit vector component pointing from the screen towards the viewer
+     * <p>A screen panel is an item frame hanging in an <em>air</em> block, attached to the wall
+     * behind it, so its picture is at the far face of that block rather than the near one. Vanilla
+     * puts a frame 0.46875 blocks from the block centre on the side away from the way it faces,
+     * which is where this number comes from.
+     *
+     * <p>Getting this wrong is not a small offset, it is parallax. Intersecting the look ray with a
+     * plane a block nearer than the picture makes the pointer fall short of wherever the player is
+     * aiming, by an amount that grows with how far off to the side the target is and vanishes when
+     * they stand square in front of it. From a LARGE desk that cost about a third of the sweep: the
+     * pointer covered roughly 72% of the screen while the head crossed all of it.
      */
-    public static ScreenGeometry wallMounted(MonitorSize size, double[] origin,
-                                             double facingX, double facingZ) {
-        // The viewer looks along -facing, and their right hand points along (view x worldUp).
-        double viewX = -facingX;
-        double viewZ = -facingZ;
-        // (viewX, 0, viewZ) x (0, 1, 0)
-        double rightX = -viewZ;
-        double rightZ = viewX;
+    private static final double FRAME_PLANE = 0.96875;
 
-        return new ScreenGeometry(size, origin,
+    /**
+     * Builds the geometry for a wall of item frames from the direction the viewer looks at them.
+     *
+     * @param block    block coordinates of the bottom-left screen panel, as the viewer sees it
+     * @param forwardX unit vector component pointing from the viewer towards the screen
+     */
+    public static ScreenGeometry wallMounted(MonitorSize size, int[] block,
+                                             int forwardX, int forwardZ) {
+        // The viewer's right hand points along (forward x worldUp).
+        int rightX = -forwardZ;
+        int rightZ = forwardX;
+
+        // Two separate corrections, on two different axes, which is why they can be summed
+        // blindly: right and forward are perpendicular, so each touches an axis the other does
+        // not. Along an axis running negative, the corner the screen starts from is one block
+        // further along -- hence the +1 terms. And along the line of sight, the picture is at the
+        // frame rather than at the block's near face.
+        double originX = block[0] + (rightX < 0 ? 1 : 0) + (forwardX < 0 ? 1 : 0)
+                + forwardX * FRAME_PLANE;
+        double originZ = block[2] + (rightZ < 0 ? 1 : 0) + (forwardZ < 0 ? 1 : 0)
+                + forwardZ * FRAME_PLANE;
+
+        return new ScreenGeometry(size,
+                new double[]{originX, block[1], originZ},
                 new double[]{rightX, 0, rightZ},
                 new double[]{0, 1, 0},
                 size.columns(), size.rows());

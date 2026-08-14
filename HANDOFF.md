@@ -124,6 +124,18 @@ separately via the Cursor pseudo-encoding, which this client doesn't request. A 
 hardware cursor plane therefore looks like it has no pointer. **Resolution: don't care** — Minecraft's
 own crosshair is the pointer.
 
+**The screen's plane is the far face of the panel block, not the near one.** A panel is an item
+frame hanging in an *air* block, attached to the wall behind it, so the picture is ~0.97 blocks into
+that block (vanilla puts a frame 0.46875 from the block centre, away from its facing). Intersecting
+the look ray with the near face instead is not a small offset, it is **parallax**: the pointer falls
+short of wherever you aim, by an amount that grows with how far off to the side the target is and
+vanishes when you stand square in front of it. Reported as "the cursor only goes so far, it never
+reaches all the way I turn, unless I walk in front of the spot" — that is the signature, and it
+names the depth of the plane, nothing else. Measured on a LARGE desk before the fix: sweeping the aim
+across the whole picture moved the guest pointer 122 → 561 of 640, **69% of the width**, with the
+outer margins unreachable at both ends. `ScreenGeometry.wallMounted` owns this now and is pure, so
+it can be checked without a server.
+
 **`PlayerMoveEvent` cannot drive a pointer.** CraftBukkit gates it on
 `squaredPositionDelta > 1/256 || |Δyaw| + |Δpitch| > 10`, measured against the last *firing*, not the
 last packet. So turning your head raises no event at all until the look has swung a cumulative **ten
