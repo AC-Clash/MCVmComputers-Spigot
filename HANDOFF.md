@@ -54,6 +54,7 @@ QEMU process ──QMP (JSON/TCP)──▶  emu/    lifecycle: start, stop, medi
 | `rfb/` | RFB 3.8 client. **No Bukkit.** | `RfbClient` |
 | `display/` | Guest pixels → Minecraft maps | `MonitorScreen`, `PanelRenderer`, `ScreenPump` (sends frames), `MapColorLut`, `ImageScaler`, `ScreenGeometry`, `MonitorSize` |
 | `computer/` | The in-world model | `ComputerLayout` (pure offsets), `Computer`, `ComputerRegistry` (O(1) block index) |
+| `parts/` | Component appearance | `PartModel`/`PartModels` (geometry from `parts.json`), `PartRenderer` (transforms + spawning), `ComponentType` (catalogue) |
 | `sql/` | Persistence | `ComputerDao` |
 | `listeners/` | Game events | `PointerListener`, `PreventionListener`, `ClickListener`, `PlayerListener` |
 | `bench/` | Standalone harness, no Minecraft needed | `RfbDump` |
@@ -97,6 +98,37 @@ a host-drawn cursor has to be painted into the framebuffer, which dirties map pa
 anyone looks around and reaches the player a map-packet behind their own head, so the drawn arrow
 visibly lags the crosshair it is chasing. Minecraft's crosshair is already exactly where the pointer
 is, client-side and free. So the guest gets the position and the player gets the crosshair. See §5.
+
+**Components are display entities built from vanilla blocks, not a resource pack and not player
+heads.** The mod draws its parts as Blockbench item models — custom geometry on custom textures —
+which a pack could reproduce exactly, and the assets are GPLv3 like this repo so they could simply
+be reused. The pack was rejected anyway: it is one more thing an admin has to host, and this plugin's
+whole selling point is that a vanilla client needs nothing. Player heads were rejected because their
+skins have to live on Mojang's texture servers, which is an outside dependency for artwork that
+would still read as a head.
+
+What is left is geometry. A Blockbench element is a box with a size, a centre and an optional
+rotation about a pivot, and that is exactly what a `BlockDisplay` transformation expresses, so the
+shapes convert one-for-one — 27 models, 103 boxes, no hand modelling. `tools/generate_parts.py` does
+the conversion offline and commits `parts.json`, so the mod is a tool dependency and not a build
+dependency.
+
+**Colour is the part that is approximate, and it is good enough.** Each box takes the vanilla block
+nearest its texture's *dominant* colour — dominant, not mean, because the mean of a high-contrast
+texture is a colour that appears nowhere in it (cpu.png is 48% black with gold pins and averages to
+an olive that matches neither). Against the 26.2 client's own textures the auto-matched error is a
+median of 10.7 and a worst of 18.9 on a 0–441 RGB scale. The remaining weak spot is circuit-board
+green: vanilla's greens are all duller and more olive than a real PCB, and `green_concrete` is the
+best available at an error around 50.
+
+`OVERRIDES` in the generator is the tuning knob, and it exists mostly to keep *materials* consistent
+rather than colours close. Left alone the matcher gives the plain case and the windowed case
+different blacks and puts obsidian's purple sheen on the keyboard; boards and contacts are likewise
+forced to one green and one gold, so a motherboard and a RAM stick read as the same material.
+
+**What this cannot do:** an inventory slot renders an `ItemStack`, so display entities are unusable
+in a GUI. Every component icon in the ordering menu is therefore an ordinary vanilla item chosen to
+be recognisable and, more importantly, distinct at a glance — see `ComponentType`.
 
 ---
 
@@ -275,6 +307,9 @@ java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --o
 /vmcomputers type @RETURN             # @TAB @ESC @BACKSPACE @UP..@F12
 /vmcomputers testdisplay [clear]      # ItemDisplay diagnostic (answer: doesn't work)
 /vmcomputers debug                    # toggle: draws the pointer on screen, for testing
+/vmcomputers parts list               # component models and their piece counts
+/vmcomputers parts <model> [scale]    # preview one where you stand, facing you
+/vmcomputers parts clear              # remove previews within 32 blocks
 ```
 
 `debug` exists because the pointer is invisible by design (§4) and "invisible and working" looks
@@ -313,6 +348,12 @@ code.
 ## 10. Known state: what's untested or unfinished
 
 **Untested / just changed** (the last two commits shipped without a play test):
+- **Component models have never been looked at in game.** The load path is verified (27 models,
+  103 pieces, every block id resolves on 26.2) and the transform maths is verified against known
+  bounds, but *nobody has stood in front of one*. Two things to check first: whether parts face the
+  right way (the authored-north convention in `PartRenderer.yawFor` is an assumption about
+  Blockbench, not a measured fact), and whether the desk accessories sit on the slab surface rather
+  than floating or sunk. `/vmcomputers parts <model>` is the fast loop for this.
 - The `PointerListener` rewrite: invisible head tracking, and the click model on top of it.
 - `PreventionListener` rewrite — was **entirely dead code** (queried the old schema by serialized
   location string), so left-clicking *destroyed screen panels*. Fixed but unverified.
@@ -327,6 +368,14 @@ code.
   architecture. Anston's call, noted 2026-08-14.
 - **No size-selection GUI** — user asked for "both" (command arg *and* chest GUI); only the arg
   exists. `Create.perform` has a TODO where the menu should open.
+- **No ordering GUI.** `ComponentType` is the catalogue it will read from — ids, names, prices in
+  iron (taken from the mod's `ItemList`), categories and inventory icons — but nothing opens a menu
+  yet, and there is no currency, no delivery and no assembly. A computer is still built whole by
+  `/vmcomputers create`; parts cannot yet be ordered, carried or installed.
+- **Parts that carry their detail in a texture come out flat.** The keyboard is one cuboid whose
+  mod texture draws the key rows, and the motherboard's traces and capacitors are painted on;
+  neither survives the conversion to blocks. The fix is to add geometry the mod never needed —
+  actual raised keys, actual chips — which display entities make affordable. Not done.
 - **No OS catalog / downloader.** ISOs are dropped in a folder by hand. Plan: port `quickget`'s
   catalog concept to a JSON manifest.
 - **Security:** guests get user-mode NAT, which reaches whatever the host can reach including its

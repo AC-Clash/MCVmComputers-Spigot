@@ -8,6 +8,7 @@ import com.acclash.vmcomputers.display.MonitorSize;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.emu.QemuBinary;
 import com.acclash.vmcomputers.emu.VmSpec;
+import com.acclash.vmcomputers.parts.PartRenderer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -236,22 +237,54 @@ public class Create extends ComputerSubCommand {
             });
         }
 
+        // The tower and the control block are what a player right-clicks to power the machine on,
+        // and that path is driven by PlayerInteractEvent, which needs a real block -- a display
+        // entity has no hitbox and an air click arrives with no block attached at all. So the
+        // clickable volume stays a block and only its appearance moves to display entities.
+        // BARRIER is used because it is invisible, solid and unbreakable in survival: the case the
+        // player sees is the model, and the block behind it neither shows through nor pops off.
         if (layout.tower() != null) {
-            computer.locationOf(world, layout.tower()).getBlock().setType(Material.SANDSTONE_WALL, false);
+            Location tower = computer.locationOf(world, layout.tower());
+            tower.getBlock().setType(Material.BARRIER, false);
+            // Bottom centre of the block: the model's own origin is its bottom centre, so it
+            // stands on the floor rather than sinking into it.
+            PartRenderer.spawnNamed(tower.clone().add(0.5, 0.0, 0.5), computer.facing(),
+                    "pc_case_sidepanel", 1.0f, computer.id());
         }
         if (layout.control() != null) {
-            computer.locationOf(world, layout.control()).getBlock().setType(Material.SANDSTONE_WALL, false);
-        }
-        if (layout.keyboard() != null) {
-            computer.locationOf(world, layout.keyboard()).getBlock()
-                    .setType(Material.HEAVY_WEIGHTED_PRESSURE_PLATE, false);
-        }
-        if (layout.mouse() != null) {
-            Block mouse = computer.locationOf(world, layout.mouse()).getBlock();
-            mouse.setBlockData(Material.STONE_BUTTON.createBlockData("[face=floor]"), false);
+            Location control = computer.locationOf(world, layout.control());
+            control.getBlock().setType(Material.BARRIER, false);
+            PartRenderer.spawnNamed(control.clone().add(0.5, 0.0, 0.5), computer.facing(),
+                    "pc_case_sidepanel", 1.0f, computer.id());
         }
 
+        // The keyboard and mouse are decoration -- nothing reads them as blocks -- so they become
+        // pure display entities and their blocks are left as air.
+        //
+        // They sit on the desk surface, which is the top of a bottom slab: half a block above the
+        // slab's own position, and half a block *below* the layout offset. The offset names the
+        // block a plate would have occupied, and a plate rests on the floor of it; a model has to
+        // be told the height explicitly.
+        placeOnDesk(world, computer, layout.keyboard(), "keyboard");
+        placeOnDesk(world, computer, layout.mouse(), "mouse");
+
         return mapIds;
+    }
+
+    /**
+     * Draws a desk accessory on the surface below its layout offset.
+     *
+     * <p>Facing is reversed: the layout's facing points away from the seated player, towards the
+     * screen, but a keyboard and mouse are used from the player's side and so look back at them.
+     */
+    private void placeOnDesk(World world, Computer computer, ComputerLayout.Offset offset,
+                             String modelName) {
+        if (offset == null) {
+            return;
+        }
+        Location surface = computer.locationOf(world, offset).add(0.5, -0.5, 0.5);
+        PartRenderer.spawnNamed(surface, computer.facing().getOppositeFace(), modelName,
+                1.0f, computer.id());
     }
 
     private static float yawOf(BlockFace facing) {
