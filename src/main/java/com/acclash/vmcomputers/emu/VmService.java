@@ -87,9 +87,13 @@ public final class VmService {
                     post(feedback, "ISO '" + computer.isoName() + "' is missing; booting without it.");
                 }
 
+                // TODO: choose this when the computer is built, alongside size and architecture.
+                // Until that exists it is one number for every machine, and it has to be the one
+                // that boots a modern desktop: an Ubuntu live session unpacks itself into a
+                // RAM-backed overlay and does not get anywhere on 2 GB.
                 QemuVirtualMachine machine = QemuVirtualMachine.forComputer(
                         computer.id(), binary, computer.monitorSize(),
-                        disk, iso, 2048, line -> plugin.getLogger().info(line));
+                        disk, iso, 4096, line -> plugin.getLogger().info(line));
 
                 MapColorLut palette = plugin.getMapPalette();
                 byte black = palette.match(0, 0, 0);

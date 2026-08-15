@@ -282,7 +282,13 @@ screen shares. Leave it off otherwise — it costs map traffic on every head mov
 Right-click the tower (desk) or control block (projector) to power on/off.
 
 **Test assets already downloaded** in `run/plugins/vm_computers/isos/`:
-`TinyCore-17.1.iso` (26 MB, x86) and `debian-13.6.0-arm64-netinst.iso` (701 MB, ARM).
+
+| ISO | Size | Use |
+|---|---|---|
+| `ubuntu-26.04-desktop-arm64.iso` | 3968 MB | **Live desktop, ARM.** Auto-boots to a live session, no keypress. The one to test mouse and GUI with. |
+| `alpine-virt-3.24.1-aarch64.iso` | 88 MB | **Fast iteration, ARM.** Console only, boots in seconds, scrolls continuously. |
+| `debian-13.6.0-arm64-netinst.iso` | 701 MB | Installer, ARM. **Stops on a GRUB menu waiting for a keypress** — it looks frozen but isn't. Bad for quick tests. |
+| `TinyCore-17.1.iso` | 26 MB | x86 — TCG only on Apple Silicon, so ~100× slow. |
 
 ---
 
@@ -313,6 +319,9 @@ code.
 - **The pointer is invisible by design** (§4), so the guest's own cursor is the only feedback. A
   guest on a hardware cursor plane shows nothing at all, and there the crosshair is all you get.
 - **Keyboard is chat-based** (`/vmcomputers type`). The planned on-screen keyboard doesn't exist.
+- **Guest RAM is one hardcoded number** (`VmService`, currently 4096 MB — 2048 could not boot an
+  Ubuntu live session). It should be chosen when the computer is built, next to size and
+  architecture. Anston's call, noted 2026-08-14.
 - **No size-selection GUI** — user asked for "both" (command arg *and* chest GUI); only the arg
   exists. `Create.perform` has a TODO where the menu should open.
 - **No OS catalog / downloader.** ISOs are dropped in a folder by hand. Plan: port `quickget`'s
