@@ -144,14 +144,29 @@ public final class PartRenderer {
      */
     public static boolean spawnNamed(Location origin, BlockFace facing, String modelName,
                                      float scale, int computerId) {
+        return !spawnNamedDisplays(origin, facing, modelName, scale, computerId).isEmpty();
+    }
+
+    /**
+     * As {@link #spawnNamed}, but hands back the entities.
+     *
+     * <p>Callers that need to remove exactly what they spawned want these. Clearing by proximity
+     * instead is fine for a computer, whose parts are the only ones near it, but not for anything
+     * that can stand next to another of its own kind -- a delivered package would take its
+     * neighbour's model with it.
+     *
+     * @return the spawned displays, empty if the model is unknown
+     */
+    public static List<BlockDisplay> spawnNamedDisplays(Location origin, BlockFace facing,
+                                                        String modelName, float scale,
+                                                        int computerId) {
         PartModel model = PartModels.get(modelName);
         if (model == null) {
             VMComputers.getPlugin().getLogger()
                     .warning("No part model named '" + modelName + "'; nothing drawn.");
-            return false;
+            return new ArrayList<BlockDisplay>();
         }
-        spawn(origin, facing, model, scale, computerId);
-        return true;
+        return spawn(origin, facing, model, scale, computerId);
     }
 
     /**
