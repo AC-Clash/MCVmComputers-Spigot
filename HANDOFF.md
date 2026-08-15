@@ -54,7 +54,8 @@ QEMU process ──QMP (JSON/TCP)──▶  emu/    lifecycle: start, stop, medi
 | `rfb/` | RFB 3.8 client. **No Bukkit.** | `RfbClient` |
 | `display/` | Guest pixels → Minecraft maps | `MonitorScreen`, `PanelRenderer`, `ScreenPump` (sends frames), `MapColorLut`, `ImageScaler`, `ScreenGeometry`, `MonitorSize` |
 | `computer/` | The in-world model | `ComputerLayout` (pure offsets), `Computer`, `ComputerRegistry` (O(1) block index) |
-| `parts/` | Component appearance | `PartModel`/`PartModels` (geometry from `parts.json`), `PartRenderer` (transforms + spawning), `ComponentType` (catalogue) |
+| `parts/` | Component appearance + catalogue | `PartModel`/`PartModels` (geometry from `parts.json`), `PartRenderer` (transforms + spawning), `Furniture` (generated desk), `ComponentType`/`ComponentSlot` |
+| `gui/` | Chest menus | `Menu` (base, holder-identified), `MenuListener`, `OrderMenu` (shop), `CaseMenu` (shift-click the tower), `IsoMenu` |
 | `sql/` | Persistence | `ComputerDao` |
 | `listeners/` | Game events | `PointerListener`, `PreventionListener`, `ClickListener`, `PlayerListener` |
 | `bench/` | Standalone harness, no Minecraft needed | `RfbDump` |
@@ -307,6 +308,7 @@ java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --o
 /vmcomputers type @RETURN             # @TAB @ESC @BACKSPACE @UP..@F12
 /vmcomputers testdisplay [clear]      # ItemDisplay diagnostic (answer: doesn't work)
 /vmcomputers debug                    # toggle: draws the pointer on screen, for testing
+/vmcomputers order                    # parts shop, paid in iron
 /vmcomputers parts list               # component models and their piece counts
 /vmcomputers parts <model> [scale]    # preview one where you stand, facing you
 /vmcomputers parts clear              # remove previews within 32 blocks
@@ -348,6 +350,13 @@ code.
 ## 10. Known state: what's untested or unfinished
 
 **Untested / just changed** (the last two commits shipped without a play test):
+- **Every menu.** `OrderMenu`, `CaseMenu` and `IsoMenu` have never been opened by a player. The
+  load path, the schema migration and the legacy backfill are verified on a real server; the
+  clicking is not. Watch in particular for parts being duplicated or lost around `fit`/`remove`,
+  which is where an inventory bug would actually cost something.
+- **Guest RAM and cores now come from fitted parts**, replacing the hardcoded 4096 MB. A machine
+  with a 64 MB stick really does get 64 MB, so it really will fail to boot a desktop. That is
+  intended, but it has not been watched happen.
 - **Component models have never been looked at in game.** The load path is verified (27 models,
   103 pieces, every block id resolves on 26.2) and the transform maths is verified against known
   bounds, but *nobody has stood in front of one*. Two things to check first: whether parts face the
@@ -368,10 +377,14 @@ code.
   architecture. Anston's call, noted 2026-08-14.
 - **No size-selection GUI** — user asked for "both" (command arg *and* chest GUI); only the arg
   exists. `Create.perform` has a TODO where the menu should open.
-- **No ordering GUI.** `ComponentType` is the catalogue it will read from — ids, names, prices in
-  iron (taken from the mod's `ItemList`), categories and inventory icons — but nothing opens a menu
-  yet, and there is no currency, no delivery and no assembly. A computer is still built whole by
-  `/vmcomputers create`; parts cannot yet be ordered, carried or installed.
+- **The ordering GUI has no delivery theatre.** The mod makes you wait for a satellite, drops a
+  payment chest, then an order chest. Here `/vmcomputers order` opens the catalogue and pays iron
+  straight out of your inventory. The transaction underneath is the same, so the theatre can be
+  layered on without the catalogue or the prices moving.
+- **No ordering tablet item.** The shop is a command. The mod reaches it through a held tablet.
+- **Assembly has no in-world build route.** `/vmcomputers create` still builds a whole machine and
+  fits it with the default loadout. There is no "place an empty case and build it up" path, so
+  ordering parts is currently only useful for *changing* a machine, not creating one.
 - **Parts that carry their detail in a texture come out flat.** The keyboard is one cuboid whose
   mod texture draws the key rows, and the motherboard's traces and capacitors are painted on;
   neither survives the conversion to blocks. The fix is to add geometry the mod never needed —

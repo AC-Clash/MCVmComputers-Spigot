@@ -3,6 +3,7 @@ package com.acclash.vmcomputers.commands;
 import com.acclash.vmcomputers.commands.computersubcommands.Create;
 import com.acclash.vmcomputers.commands.computersubcommands.Debug;
 import com.acclash.vmcomputers.commands.computersubcommands.Iso;
+import com.acclash.vmcomputers.commands.computersubcommands.Order;
 import com.acclash.vmcomputers.commands.computersubcommands.Parts;
 import com.acclash.vmcomputers.commands.computersubcommands.Remove;
 import com.acclash.vmcomputers.commands.computersubcommands.TestDisplay;
@@ -30,6 +31,7 @@ public class ComputerCM implements TabExecutor {
         subCommands.add(new Iso());
         subCommands.add(new Type());
         subCommands.add(new TestDisplay());
+        subCommands.add(new Order());
         subCommands.add(new Parts());
         subCommands.add(new Debug());
     }

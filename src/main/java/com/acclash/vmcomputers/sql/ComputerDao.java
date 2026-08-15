@@ -43,6 +43,14 @@ public final class ComputerDao {
                     + "UNIQUE (world, x, y, z)"
                     + ")";
 
+    private static final String CREATE_COMPONENTS =
+            "CREATE TABLE IF NOT EXISTS computer_components ("
+                    + "computer_id INTEGER NOT NULL,"
+                    + "slot TEXT NOT NULL,"
+                    + "component_id TEXT NOT NULL,"
+                    + "PRIMARY KEY (computer_id, slot)"
+                    + ")";
+
     private static final String CREATE_PANELS =
             "CREATE TABLE IF NOT EXISTS computer_panels ("
                     + "computer_id INTEGER NOT NULL,"
@@ -72,6 +80,7 @@ public final class ComputerDao {
             }
             statement.executeUpdate(CREATE_TABLE);
             statement.executeUpdate(CREATE_PANELS);
+            statement.executeUpdate(CREATE_COMPONENTS);
             // Added after the table shipped, so existing databases need it bolted on.
             if (!hasColumn(connection, "computers", "iso")) {
                 statement.executeUpdate("ALTER TABLE computers ADD COLUMN iso TEXT");
@@ -215,6 +224,57 @@ public final class ComputerDao {
     public void deletePanels(int computerId) throws SQLException {
         try (PreparedStatement statement = database.getSQLConnection()
                 .prepareStatement("DELETE FROM computer_panels WHERE computer_id = ?")) {
+            statement.setInt(1, computerId);
+            statement.executeUpdate();
+        }
+    }
+
+    /**
+     * Installs or removes one component.
+     *
+     * <p>One row per occupied bay rather than a column per bay: the set of bays is a plugin
+     * concept that will grow, and a table does not need a migration to gain one. Passing a null
+     * {@code componentId} empties the bay.
+     */
+    public void saveComponent(int computerId, String slot, String componentId) throws SQLException {
+        Connection connection = database.getSQLConnection();
+        if (componentId == null) {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM computer_components WHERE computer_id = ? AND slot = ?")) {
+                statement.setInt(1, computerId);
+                statement.setString(2, slot);
+                statement.executeUpdate();
+            }
+            return;
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT OR REPLACE INTO computer_components (computer_id, slot, component_id) "
+                        + "VALUES (?, ?, ?)")) {
+            statement.setInt(1, computerId);
+            statement.setString(2, slot);
+            statement.setString(3, componentId);
+            statement.executeUpdate();
+        }
+    }
+
+    /** Installed components for every computer, keyed by computer id then slot name. */
+    public Map<Integer, Map<String, String>> loadAllComponents() throws SQLException {
+        Map<Integer, Map<String, String>> out = new HashMap<Integer, Map<String, String>>();
+        try (PreparedStatement statement = database.getSQLConnection().prepareStatement(
+                "SELECT computer_id, slot, component_id FROM computer_components");
+             ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) {
+                out.computeIfAbsent(Integer.valueOf(rs.getInt("computer_id")),
+                                k -> new HashMap<String, String>())
+                        .put(rs.getString("slot"), rs.getString("component_id"));
+            }
+        }
+        return out;
+    }
+
+    public void deleteComponents(int computerId) throws SQLException {
+        try (PreparedStatement statement = database.getSQLConnection()
+                .prepareStatement("DELETE FROM computer_components WHERE computer_id = ?")) {
             statement.setInt(1, computerId);
             statement.executeUpdate();
         }
