@@ -102,6 +102,23 @@ public abstract class Menu implements InventoryHolder {
         return stack;
     }
 
+    /** As {@link #button(Material, String, String...)}, but for a stack that is already built. */
+    protected static ItemStack button(ItemStack stack, String name, String... lore) {
+        ItemMeta meta = stack.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.RESET + name);
+            if (lore.length > 0) {
+                List<String> lines = new ArrayList<String>();
+                for (String line : lore) {
+                    lines.add(line.isEmpty() ? "" : ChatColor.GRAY + line);
+                }
+                meta.setLore(lines);
+            }
+            stack.setItemMeta(meta);
+        }
+        return stack;
+    }
+
     /** Adds lore to an existing stack without disturbing what is already there. */
     protected static ItemStack withLore(ItemStack stack, String... extra) {
         ItemMeta meta = stack.getItemMeta();

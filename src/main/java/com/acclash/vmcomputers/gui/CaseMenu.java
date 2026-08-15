@@ -79,7 +79,7 @@ public class CaseMenu extends Menu {
                         ChatColor.YELLOW + "Click to remove");
                 set(index, stack);
             } else {
-                set(index, button(slot.emptyIcon(),
+                set(index, button(slot.emptyStack(),
                         (slot.required() ? ChatColor.RED : ChatColor.GRAY) + slot.label()
                                 + (slot.required() ? " (required)" : " (optional)"),
                         slot.description(),

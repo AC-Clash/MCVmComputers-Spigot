@@ -67,6 +67,22 @@ public enum ComponentSlot {
         return description;
     }
 
+    /**
+     * The stack shown when this bay is empty.
+     *
+     * <p>Prefers the head of a component that fits here, so an empty bay and the part that goes in
+     * it are recognisably the same object. Falls back to the plain material when no head is
+     * configured for any of them.
+     */
+    public org.bukkit.inventory.ItemStack emptyStack() {
+        for (ComponentType type : ComponentType.forSlot(this)) {
+            if (type.hasHead()) {
+                return type.emptyIconStack();
+            }
+        }
+        return new org.bukkit.inventory.ItemStack(emptyIcon);
+    }
+
     /** Bays that sit on the desk and are drawn there when fitted. */
     public boolean isDeskPeripheral() {
         return this == KEYBOARD || this == MOUSE;
