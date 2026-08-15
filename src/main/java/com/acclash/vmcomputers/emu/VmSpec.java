@@ -113,6 +113,7 @@ public final class VmSpec {
     private final boolean rtcLocaltime;
     private final boolean absolutePointer;
     private final boolean networking;
+    private final boolean audio;
     private final Path uefiVars;
     private final List<String> extraArgs;
 
@@ -133,6 +134,7 @@ public final class VmSpec {
         this.rtcLocaltime = b.rtcLocaltime;
         this.absolutePointer = b.absolutePointer;
         this.networking = b.networking;
+        this.audio = b.audio;
         this.uefiVars = b.uefiVars;
         this.extraArgs = Collections.unmodifiableList(new ArrayList<String>(b.extraArgs));
     }
@@ -215,6 +217,21 @@ public final class VmSpec {
             }
         }
 
+        if (audio) {
+            // The backend is "none": QEMU still mixes the guest's audio, it just has nowhere local
+            // to play it. That is exactly what is wanted -- the samples are captured off the VNC
+            // connection instead, and a server host has no business making noise of its own.
+            //
+            // intel-hda is a PCI device, so it works on q35 and on ARM virt alike, unlike the ISA
+            // sound cards which have no bus to sit on in virt.
+            a.add("-audiodev");
+            a.add("none,id=snd0");
+            a.add("-device");
+            a.add("intel-hda");
+            a.add("-device");
+            a.add("hda-output,audiodev=snd0");
+        }
+
         if (networking) {
             // -nic rather than -netdev, because -netdev alone leaves QEMU's implicit default card
             // in place and the guest would come up with two.
@@ -227,7 +244,11 @@ public final class VmSpec {
         }
 
         a.add("-vnc");
-        a.add("127.0.0.1:" + vncDisplay);
+        // audiodev is what actually turns the audio extension on. QEMU only honours the audio
+        // pseudo-encoding "if (vs->vd->audio_be)", which is set from this parameter and nothing
+        // else -- so without it a client's request is refused with "Audio message N with audio
+        // disabled" and the connection is dropped. Naming the sound card on -device is not enough.
+        a.add("127.0.0.1:" + vncDisplay + (audio ? ",audiodev=snd0" : ""));
         a.add("-qmp");
         a.add("tcp:127.0.0.1:" + qmpPort + ",server=on,wait=off");
         a.add("-monitor");
@@ -337,6 +358,7 @@ public final class VmSpec {
         private String bootOrder = "dc";
         private boolean rtcLocaltime = true;
         private boolean absolutePointer = true;
+        private boolean audio = true;
         private boolean networking = true;
         private Path uefiVars;
         private final List<String> extraArgs = new ArrayList<String>();
@@ -442,6 +464,15 @@ public final class VmSpec {
          */
         public Builder networking(boolean enabled) {
             this.networking = enabled;
+            return this;
+        }
+
+        /**
+         * Whether the guest gets a sound card. On by default: it costs nothing when nobody is
+         * listening, and a guest booted without one can never grow audio later without a restart.
+         */
+        public Builder audio(boolean audio) {
+            this.audio = audio;
             return this;
         }
 
