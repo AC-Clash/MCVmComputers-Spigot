@@ -34,6 +34,17 @@ public final class VmPaths {
     }
 
     /** One qcow2 per computer, named by its id. */
+    /**
+     * Folder handed to guests as a read-only drive.
+     *
+     * <p>The way to get files into a machine that has no network drivers, no shared clipboard and
+     * no way to accept a download -- which is most of the interesting ones. Drop something in here
+     * and it appears as a disk inside every guest that gets one.
+     */
+    public static Path sharedDirectory() {
+        return root().resolve("shared");
+    }
+
     public static Path diskFor(int computerId) {
         return root().resolve("hdds").resolve("computer-" + computerId + ".qcow2");
     }
@@ -62,6 +73,7 @@ public final class VmPaths {
     }
 
     public static void ensureDirectories() throws IOException {
+        java.nio.file.Files.createDirectories(sharedDirectory());
         Files.createDirectories(isoDirectory());
         Files.createDirectories(root().resolve("hdds"));
     }

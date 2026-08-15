@@ -29,6 +29,30 @@ public final class VmSpec {
      * guest is interpreted instruction by instruction, which is roughly two orders of magnitude
      * slower.
      */
+    /**
+     * What the guest is offered to make noise with.
+     *
+     * <p>Whichever is chosen, it feeds the same audiodev, so the VNC audio capture is unaffected --
+     * this only decides whether the guest has a driver for what it finds.
+     */
+    public enum SoundCard {
+        /** Intel HD Audio. PCI, so it works on q35 and ARM virt alike. Anything modern has drivers. */
+        HDA("intel-hda", "hda-output,audiodev=snd0"),
+        /** Creative Sound Blaster 16. ISA, so x86 only -- and the only thing DOS and Win9x know. */
+        SB16("sb16,audiodev=snd0"),
+        NONE();
+
+        private final String[] devices;
+
+        SoundCard(String... devices) {
+            this.devices = devices;
+        }
+
+        String[] devices() {
+            return devices;
+        }
+    }
+
     public enum Architecture {
         X86_64("qemu-system-x86_64", "q35"),
         /** ARM64. Uses UEFI and virtio throughout -- no BIOS, no VGA, no IDE. */
@@ -114,6 +138,8 @@ public final class VmSpec {
     private final boolean absolutePointer;
     private final boolean networking;
     private final boolean audio;
+    private final SoundCard soundCard;
+    private final Path sharedFolder;
     private final Path uefiVars;
     private final List<String> extraArgs;
 
@@ -135,6 +161,8 @@ public final class VmSpec {
         this.absolutePointer = b.absolutePointer;
         this.networking = b.networking;
         this.audio = b.audio;
+        this.soundCard = b.soundCard;
+        this.sharedFolder = b.sharedFolder;
         this.uefiVars = b.uefiVars;
         this.extraArgs = Collections.unmodifiableList(new ArrayList<String>(b.extraArgs));
     }
@@ -217,6 +245,17 @@ public final class VmSpec {
             }
         }
 
+        if (sharedFolder != null) {
+            a.add("-drive");
+            // snapshot=on rather than readonly=on, for two reasons. QEMU refuses to attach a
+            // read-only IDE hard disk at all ("Block node is read-only"), and vvfat's writable
+            // mode has a long history of eating the host directory behind it. A snapshot gives the
+            // guest a disk it can write to freely -- DOS wants somewhere to save a config -- while
+            // every write lands in a throwaway overlay and the folder on the host is never touched.
+            a.add("file=fat:" + sharedFolder.toAbsolutePath()
+                    + ",format=raw,if=ide,snapshot=on");
+        }
+
         if (audio) {
             // The backend is "none": QEMU still mixes the guest's audio, it just has nowhere local
             // to play it. That is exactly what is wanted -- the samples are captured off the VNC
@@ -226,10 +265,10 @@ public final class VmSpec {
             // sound cards which have no bus to sit on in virt.
             a.add("-audiodev");
             a.add("none,id=snd0");
-            a.add("-device");
-            a.add("intel-hda");
-            a.add("-device");
-            a.add("hda-output,audiodev=snd0");
+            for (String device : soundCard.devices()) {
+                a.add("-device");
+                a.add(device);
+            }
         }
 
         if (networking) {
@@ -359,7 +398,9 @@ public final class VmSpec {
         private boolean rtcLocaltime = true;
         private boolean absolutePointer = true;
         private boolean audio = true;
+        private SoundCard soundCard = SoundCard.HDA;
         private boolean networking = true;
+        private Path sharedFolder;
         private Path uefiVars;
         private final List<String> extraArgs = new ArrayList<String>();
 
@@ -468,11 +509,32 @@ public final class VmSpec {
         }
 
         /**
+         * Which sound card the guest gets. HDA for anything modern; SB16 for guests old enough to
+         * have no idea what HDA is, which on this project means anything running on x86.
+         */
+        public Builder soundCard(SoundCard soundCard) {
+            this.soundCard = soundCard;
+            return this;
+        }
+
+        /**
          * Whether the guest gets a sound card. On by default: it costs nothing when nobody is
          * listening, and a guest booted without one can never grow audio later without a restart.
          */
         public Builder audio(boolean audio) {
             this.audio = audio;
+            return this;
+        }
+
+        /**
+         * Presents a host folder to the guest as a read-only FAT disk, via QEMU's vvfat.
+         *
+         * <p>Read-only deliberately: vvfat's writable mode has a long history of corrupting the
+         * host directory it is backed by, and handing a guest a way to eat files on the server is
+         * not a trade worth making to let DOS save a config.
+         */
+        public Builder sharedFolder(Path folder) {
+            this.sharedFolder = folder;
             return this;
         }
 

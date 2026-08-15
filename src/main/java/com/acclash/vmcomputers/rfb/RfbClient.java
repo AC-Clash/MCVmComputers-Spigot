@@ -733,6 +733,21 @@ public final class RfbClient implements Closeable {
 
     /** X11 keysyms for the keys a virtual keyboard actually needs. */
     public static final class Keysym {
+        /** Characters that are only reachable on a US layout by holding shift. */
+        private static final String SHIFTED_SYMBOLS = "~!@#$%^&*()_+{}|:\"<>?";
+
+        /**
+         * Whether a character needs shift held down to type it.
+         *
+         * <p>Sending the keysym alone is not enough. QEMU translates a keysym to a scancode for the
+         * physical key, and without a shift the guest reads whatever is printed on the unshifted
+         * half of it -- so a colon arrives as a semicolon, and "C:" becomes "C;". Every symbol on
+         * the top half of a key has the same problem.
+         */
+        public static boolean needsShift(char c) {
+            return (c >= 'A' && c <= 'Z') || SHIFTED_SYMBOLS.indexOf(c) >= 0;
+        }
+
         public static final int BACKSPACE = 0xFF08;
         public static final int TAB = 0xFF09;
         public static final int RETURN = 0xFF0D;

@@ -112,7 +112,7 @@ public class Type extends ComputerSubCommand {
             for (int i = 0; i < token.length(); i++) {
                 char c = token.charAt(i);
                 try {
-                    tap(machine, RfbClient.Keysym.ofChar(c));
+                    tapChar(machine, c);
                     sent++;
                 } catch (IllegalArgumentException e) {
                     player.sendMessage(ChatColor.RED + "Cannot type '" + c + "'.");
@@ -120,6 +120,18 @@ public class Type extends ComputerSubCommand {
             }
         }
         return sent;
+    }
+
+    /** Types one character, holding shift for the ones that need it. */
+    private static void tapChar(VirtualMachine machine, char c) {
+        int keysym = RfbClient.Keysym.ofChar(c);
+        if (!RfbClient.Keysym.needsShift(c)) {
+            tap(machine, keysym);
+            return;
+        }
+        machine.sendKey(RfbClient.Keysym.SHIFT_LEFT, true);
+        tap(machine, keysym);
+        machine.sendKey(RfbClient.Keysym.SHIFT_LEFT, false);
     }
 
     private static void tap(VirtualMachine machine, int keysym) {
