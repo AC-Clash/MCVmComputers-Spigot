@@ -4,6 +4,7 @@ import com.acclash.vmcomputers.commands.ComputerCM;
 import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.computer.ComputerRegistry;
 import com.acclash.vmcomputers.display.MapColorLut;
+import com.acclash.vmcomputers.parts.PartModels;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenPump;
 import com.acclash.vmcomputers.listeners.ClickListener;
@@ -105,6 +106,9 @@ public final class VMComputers extends JavaPlugin {
         this.mapPalette = MapColorLut.build(MapColorLut.DEFAULT_BITS);
         getLogger().info("Map palette LUT built in " + ((System.nanoTime() - lutStart) / 1_000_000)
                 + "ms (" + mapPalette.paletteSize() + " usable colours).");
+
+        // Parses every part's block data once, so building a computer is only entity creation.
+        PartModels.load(getLogger());
 
         this.db = new SQLite(this);
         this.db.load();
