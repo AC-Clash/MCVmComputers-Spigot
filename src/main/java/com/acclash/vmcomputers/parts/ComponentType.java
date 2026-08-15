@@ -61,6 +61,28 @@ public final class ComponentType {
     private static final Map<String, ComponentType> REGISTRY =
             new LinkedHashMap<String, ComponentType>();
 
+    /**
+     * Head textures for the catalogue, by component id.
+     *
+     * <p>One block rather than an argument on each entry, so filling the set in is a single paste
+     * rather than twenty scattered edits. Anything left out or left empty keeps its vanilla item
+     * icon, so a half-finished set still works and can be finished a part at a time.
+     *
+     * <p>Values may be a base64 texture value, a bare texture hash, or a full
+     * {@code textures.minecraft.net} URL -- head sites are inconsistent about which they hand out.
+     * See {@link HeadTextures} for where these come from and what depends on them.
+     */
+    private static final Map<String, String> HEAD_TEXTURES = new LinkedHashMap<String, String>();
+
+    static {
+        // Paste texture values here, e.g.:
+        //   HEAD_TEXTURES.put("gpu", "eyJ0ZXh0dXJlcyI6...");
+        //
+        // Ids: pc_case, case_side_panel, motherboard, motherboard64, cpu2, cpu4, cpu6, gpu,
+        //      harddrive, ram64m, ram128m, ram256m, ram512m, ram1g, ram2g, ram4g,
+        //      keyboard, mouse, monitor_small, monitor_medium, monitor_large, monitor_xlarge
+    }
+
     // ---- the catalogue ---------------------------------------------------
 
     public static final ComponentType PC_CASE = register(new ComponentType(
@@ -200,6 +222,22 @@ public final class ComponentType {
         return icon;
     }
 
+    /**
+     * The icon to show for an empty bay of this kind: this component's head if one is configured,
+     * otherwise the plain material. Without it a fitted GPU would be a card and an empty graphics
+     * bay a daylight detector, which reads as two unrelated things.
+     */
+    public ItemStack emptyIconStack() {
+        ItemStack head = HeadTextures.head(id, HEAD_TEXTURES.get(id), 1);
+        return head != null ? head : new ItemStack(icon);
+    }
+
+    /** Whether this part has a head texture, rather than falling back to its item icon. */
+    public boolean hasHead() {
+        String value = HEAD_TEXTURES.get(id);
+        return value != null && !value.isEmpty();
+    }
+
     /** Price in iron ingots, as in the mod. */
     public int price() {
         return price;
@@ -253,7 +291,12 @@ public final class ComponentType {
      * recognise it again when a player drops it into a case.
      */
     public ItemStack toItemStack(int amount) {
-        ItemStack stack = new ItemStack(icon, amount);
+        // A head if this part has a texture, the vanilla stand-in otherwise. Falling back rather
+        // than requiring a full set means textures can be filled in one part at a time.
+        ItemStack stack = HeadTextures.head(id, HEAD_TEXTURES.get(id), amount);
+        if (stack == null) {
+            stack = new ItemStack(icon, amount);
+        }
         ItemMeta meta = stack.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.RESET + "" + ChatColor.AQUA + displayName);

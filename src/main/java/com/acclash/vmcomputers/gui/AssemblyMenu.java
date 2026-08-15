@@ -5,6 +5,8 @@ import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.computer.ComputerBuilder;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.MonitorSize;
+import com.acclash.vmcomputers.emu.QemuBinary;
+import com.acclash.vmcomputers.emu.VmSpec;
 import com.acclash.vmcomputers.computer.PendingCase;
 import com.acclash.vmcomputers.parts.ComponentSlot;
 import com.acclash.vmcomputers.parts.ComponentType;
@@ -75,7 +77,7 @@ public class AssemblyMenu extends Menu {
                         ChatColor.YELLOW + "Click to remove");
                 set(index, stack);
             } else {
-                set(index, button(slot.emptyIcon(),
+                set(index, button(slot.emptyStack(),
                         (slot.required() ? ChatColor.RED : ChatColor.GRAY) + slot.label()
                                 + (slot.required() ? " (required)" : " (optional)"),
                         slot.description(),
@@ -224,6 +226,20 @@ public class AssemblyMenu extends Menu {
             return;
         }
 
+        // Architecture defaults to X86_64 on a bare Computer, which is wrong everywhere it is not
+        // also the host's. On an ARM host that machine gets qemu-system-x86_64 with no
+        // acceleration, and an arm64 install image will not boot on it at all -- so an assembled
+        // computer silently refused every ISO in the folder. It follows the host for the same
+        // reason /vmcomputers create does: only a matching guest can be hardware accelerated.
+        VmSpec.Architecture architecture = QemuBinary.nativeArchitecture();
+        saved.setArchitecture(architecture);
+        try {
+            VMComputers.getPlugin().getComputerDao().updateArchitecture(saved.id(), architecture);
+        } catch (SQLException e) {
+            VMComputers.getPlugin().getLogger()
+                    .severe("Could not save architecture: " + e.getMessage());
+        }
+
         for (Map.Entry<ComponentSlot, ComponentType> entry
                 : pending.installedComponents().entrySet()) {
             saved.install(entry.getKey(), entry.getValue());
@@ -259,7 +275,7 @@ public class AssemblyMenu extends Menu {
 
         viewer.closeInventory();
         viewer.sendMessage(ChatColor.GREEN + "Assembled computer #" + saved.id() + " - "
-                + size.describe() + ".");
+                + size.describe() + ", " + architecture + ".");
         viewer.sendMessage(ChatColor.GRAY + "Right-click the tower to power it on, "
                 + "sneak-right-click to open it up.");
         viewer.playSound(viewer.getLocation(), Sound.BLOCK_ANVIL_USE, 0.8f, 1.2f);
