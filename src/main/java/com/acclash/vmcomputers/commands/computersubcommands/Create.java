@@ -8,6 +8,8 @@ import com.acclash.vmcomputers.display.MonitorSize;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.emu.QemuBinary;
 import com.acclash.vmcomputers.emu.VmSpec;
+import com.acclash.vmcomputers.parts.ComponentSlot;
+import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.parts.Furniture;
 import com.acclash.vmcomputers.parts.PartModel;
 import com.acclash.vmcomputers.parts.PartRenderer;
@@ -148,6 +150,21 @@ public class Create extends ComputerSubCommand {
             VMComputers.getPlugin().getComputerDao().savePanels(saved.id(), mapIds);
         } catch (SQLException e) {
             VMComputers.getPlugin().getLogger().severe("Could not save panel maps: " + e.getMessage());
+        }
+
+        // A computer built by this command arrives assembled: it builds the whole machine, desk
+        // and all, so handing back an empty case that cannot boot would be a strange result. The
+        // ordering route is where parts get fitted one at a time.
+        for (java.util.Map.Entry<ComponentSlot, ComponentType> entry
+                : ComponentType.defaultLoadout().entrySet()) {
+            saved.install(entry.getKey(), entry.getValue());
+            try {
+                VMComputers.getPlugin().getComputerDao()
+                        .saveComponent(saved.id(), entry.getKey().name(), entry.getValue().id());
+            } catch (SQLException e) {
+                VMComputers.getPlugin().getLogger()
+                        .severe("Could not save components: " + e.getMessage());
+            }
         }
 
         saved.setArchitecture(architecture);

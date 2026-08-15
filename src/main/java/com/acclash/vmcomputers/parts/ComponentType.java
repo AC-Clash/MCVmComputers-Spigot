@@ -62,68 +62,69 @@ public final class ComponentType {
     // ---- the catalogue ---------------------------------------------------
 
     public static final ComponentType PC_CASE = register(new ComponentType(
-            "pc_case", "PC Case", Material.BLACK_SHULKER_BOX, 6, Category.PARTS,
+            "pc_case", "PC Case", Material.BLACK_SHULKER_BOX, 6, Category.PARTS, null,
             "pc_case_sidepanel", "Houses the machine. Right-click to open it."));
 
     public static final ComponentType CASE_SIDE_PANEL = register(new ComponentType(
             "case_side_panel", "Case Side Panel", Material.GRAY_STAINED_GLASS_PANE, 2,
-            Category.PARTS, "pc_case_only_glass_sidepanel", "Tinted window for the case."));
+            Category.PARTS, null, "pc_case_only_glass_sidepanel", "Tinted window for the case."));
 
     public static final ComponentType MOTHERBOARD = register(new ComponentType(
-            "motherboard", "Motherboard", Material.REPEATER, 4, Category.PARTS,
+            "motherboard", "Motherboard", Material.REPEATER, 4, Category.PARTS, ComponentSlot.MOTHERBOARD,
             "motherboard", "32-bit board. Takes one CPU and one stick of RAM."));
 
     public static final ComponentType MOTHERBOARD_64 = register(new ComponentType(
             "motherboard64", "64-bit Motherboard", Material.COMPARATOR, 8, Category.PARTS,
-            "motherboard64", "Required for a 64-bit guest."));
+            ComponentSlot.MOTHERBOARD, "motherboard64", "Required for a 64-bit guest."));
 
     public static final ComponentType CPU_2 = register(new ComponentType(
-            "cpu2", "CPU (2 cores)", Material.NETHERITE_SCRAP, 10, Category.PARTS,
-            "cpu_divided_by_2", "Half the host's cores."));
+            "cpu2", "CPU (host cores / 2)", Material.NETHERITE_SCRAP, 10, Category.PARTS, ComponentSlot.CPU,
+            "cpu_divided_by_2", "Half the host's cores.", 2));
 
     public static final ComponentType CPU_4 = register(new ComponentType(
-            "cpu4", "CPU (4 cores)", Material.NETHERITE_SCRAP, 8, Category.PARTS,
-            "cpu_divided_by_4", "A quarter of the host's cores."));
+            "cpu4", "CPU (host cores / 4)", Material.NETHERITE_SCRAP, 8, Category.PARTS, ComponentSlot.CPU,
+            "cpu_divided_by_4", "A quarter of the host's cores.", 4));
 
     public static final ComponentType CPU_6 = register(new ComponentType(
-            "cpu6", "CPU (6 cores)", Material.NETHERITE_SCRAP, 6, Category.PARTS,
-            "cpu_divided_by_6", "A sixth of the host's cores."));
+            "cpu6", "CPU (host cores / 6)", Material.NETHERITE_SCRAP, 6, Category.PARTS, ComponentSlot.CPU,
+            "cpu_divided_by_6", "A sixth of the host's cores.", 6));
 
     public static final ComponentType GPU = register(new ComponentType(
-            "gpu", "Graphics Card", Material.DAYLIGHT_DETECTOR, 12, Category.PARTS,
+            "gpu", "Graphics Card", Material.DAYLIGHT_DETECTOR, 12, Category.PARTS, ComponentSlot.GPU,
             "gpu", "Drives the monitor."));
 
-    public static final ComponentType RAM_64M = register(ram("ram64m", "64 MB", 2));
-    public static final ComponentType RAM_128M = register(ram("ram128m", "128 MB", 2));
-    public static final ComponentType RAM_256M = register(ram("ram256m", "256 MB", 3));
-    public static final ComponentType RAM_512M = register(ram("ram512m", "512 MB", 4));
-    public static final ComponentType RAM_1G = register(ram("ram1g", "1 GB", 6));
-    public static final ComponentType RAM_2G = register(ram("ram2g", "2 GB", 8));
-    public static final ComponentType RAM_4G = register(ram("ram4g", "4 GB", 14));
+    public static final ComponentType RAM_64M = register(ram("ram64m", "64 MB", 2, 64));
+    public static final ComponentType RAM_128M = register(ram("ram128m", "128 MB", 2, 128));
+    public static final ComponentType RAM_256M = register(ram("ram256m", "256 MB", 3, 256));
+    public static final ComponentType RAM_512M = register(ram("ram512m", "512 MB", 4, 512));
+    public static final ComponentType RAM_1G = register(ram("ram1g", "1 GB", 6, 1024));
+    public static final ComponentType RAM_2G = register(ram("ram2g", "2 GB", 8, 2048));
+    public static final ComponentType RAM_4G = register(ram("ram4g", "4 GB", 14, 4096));
 
     public static final ComponentType HARD_DRIVE = register(new ComponentType(
-            "harddrive", "Hard Drive", Material.IRON_BLOCK, 6, Category.PARTS,
+            "harddrive", "Hard Drive", Material.IRON_BLOCK, 6, Category.PARTS, ComponentSlot.HARD_DRIVE,
             "harddrive", "Where the guest operating system lives."));
 
     public static final ComponentType KEYBOARD = register(new ComponentType(
             "keyboard", "Keyboard", Material.POLISHED_BLACKSTONE_PRESSURE_PLATE, 4,
-            Category.PERIPHERALS, "keyboard", "Sits on the desk."));
+            Category.PERIPHERALS, null, "keyboard", "Sits on the desk."));
 
     public static final ComponentType MOUSE = register(new ComponentType(
-            "mouse", "Mouse", Material.QUARTZ, 4, Category.PERIPHERALS,
+            "mouse", "Mouse", Material.QUARTZ, 4, Category.PERIPHERALS, null,
             "mouse", "Sits on the desk."));
 
     public static final ComponentType MONITOR = register(new ComponentType(
-            "monitor", "Monitor", Material.ITEM_FRAME, 10, Category.PERIPHERALS,
+            "monitor", "Monitor", Material.ITEM_FRAME, 10, Category.PERIPHERALS, null,
             "flatscreen", "The screen itself. Size is chosen when the computer is built."));
 
     /**
      * RAM is one shape in seven capacities, so it is one icon in seven names. A thin gold bar is
      * about as close as vanilla gets to a stick of memory, and the tier is in the name anyway.
      */
-    private static ComponentType ram(String id, String capacity, int price) {
+    private static ComponentType ram(String id, String capacity, int price, int megabytes) {
         return new ComponentType(id, capacity + " RAM", Material.LIGHT_WEIGHTED_PRESSURE_PLATE,
-                price, Category.PARTS, id, "Guest memory.");
+                price, Category.PARTS, ComponentSlot.RAM, id,
+                "Guest memory. A modern desktop needs 4 GB.", megabytes);
     }
 
     // ---- instance --------------------------------------------------------
@@ -133,18 +134,29 @@ public final class ComponentType {
     private final Material icon;
     private final int price;
     private final Category category;
+    private final ComponentSlot slot;
+    private final int rating;
     private final String modelName;
     private final String description;
 
     private ComponentType(String id, String displayName, Material icon, int price,
-                          Category category, String modelName, String description) {
+                          Category category, ComponentSlot slot, String modelName,
+                          String description) {
+        this(id, displayName, icon, price, category, slot, modelName, description, 0);
+    }
+
+    private ComponentType(String id, String displayName, Material icon, int price,
+                          Category category, ComponentSlot slot, String modelName,
+                          String description, int rating) {
         this.id = id;
         this.displayName = displayName;
         this.icon = icon;
         this.price = price;
         this.category = category;
+        this.slot = slot;
         this.modelName = modelName;
         this.description = description;
+        this.rating = rating;
     }
 
     private static ComponentType register(ComponentType type) {
@@ -172,6 +184,31 @@ public final class ComponentType {
 
     public Category category() {
         return category;
+    }
+
+    /**
+     * The number that makes this tier different from its siblings: megabytes for RAM, and for a
+     * CPU the divisor applied to the host's core count (the mod's "divided by N" naming). Zero for
+     * anything with only one tier.
+     */
+    public int rating() {
+        return rating;
+    }
+
+    /** Which bay this installs into, or null for a peripheral that is never installed. */
+    public ComponentSlot slot() {
+        return slot;
+    }
+
+    /** Every component that fits a given bay, cheapest tier first as declared. */
+    public static List<ComponentType> forSlot(ComponentSlot slot) {
+        List<ComponentType> out = new ArrayList<ComponentType>();
+        for (ComponentType type : REGISTRY.values()) {
+            if (type.slot == slot) {
+                out.add(type);
+            }
+        }
+        return out;
     }
 
     /** Name of the {@link PartModel} that draws this in the world, or null if it is never placed. */
@@ -227,6 +264,25 @@ public final class ComponentType {
 
     public static ComponentType byId(String id) {
         return REGISTRY.get(id);
+    }
+
+    /**
+     * What a computer built by {@code /vmcomputers create} comes fitted with.
+     *
+     * <p>That command builds an entire machine in one go, so it produces a working one rather than
+     * an empty case; the ordering and assembly route is the piecemeal path. It is also what legacy
+     * computers are backfilled with, since they predate components entirely and used to boot with
+     * 4 GB hardcoded -- which is what the 4 GB stick here preserves.
+     */
+    public static Map<ComponentSlot, ComponentType> defaultLoadout() {
+        Map<ComponentSlot, ComponentType> loadout =
+                new LinkedHashMap<ComponentSlot, ComponentType>();
+        loadout.put(ComponentSlot.MOTHERBOARD, MOTHERBOARD_64);
+        loadout.put(ComponentSlot.CPU, CPU_4);
+        loadout.put(ComponentSlot.RAM, RAM_4G);
+        loadout.put(ComponentSlot.GPU, GPU);
+        loadout.put(ComponentSlot.HARD_DRIVE, HARD_DRIVE);
+        return loadout;
     }
 
     public static List<ComponentType> all() {

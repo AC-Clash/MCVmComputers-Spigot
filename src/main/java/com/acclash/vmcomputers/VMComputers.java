@@ -4,6 +4,9 @@ import com.acclash.vmcomputers.commands.ComputerCM;
 import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.computer.ComputerRegistry;
 import com.acclash.vmcomputers.display.MapColorLut;
+import com.acclash.vmcomputers.gui.MenuListener;
+import com.acclash.vmcomputers.parts.ComponentSlot;
+import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.parts.PartModels;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenPump;
@@ -98,6 +101,47 @@ public final class VMComputers extends JavaPlugin {
         return registry;
     }
 
+    /**
+     * Puts a computer's stored components back in their bays.
+     *
+     * <p>Rows naming a slot or a component that no longer exists are dropped rather than fatal: a
+     * renamed component should cost that one part, not the whole machine.
+     */
+    private void restoreComponents(Computer computer, java.util.Map<String, String> stored) {
+        if (stored == null || stored.isEmpty()) {
+            // No rows at all means this computer predates components. It used to boot with a
+            // hardcoded 4 GB and no notion of parts, so it is backfilled with the standard loadout
+            // and written back -- otherwise every machine already in the world would refuse to
+            // power on, with no way to get parts into it.
+            for (java.util.Map.Entry<ComponentSlot, ComponentType> entry
+                    : ComponentType.defaultLoadout().entrySet()) {
+                computer.install(entry.getKey(), entry.getValue());
+                try {
+                    computerDao.saveComponent(computer.id(), entry.getKey().name(),
+                            entry.getValue().id());
+                } catch (SQLException e) {
+                    getLogger().warning("Could not backfill components for computer #"
+                            + computer.id() + ": " + e.getMessage());
+                }
+            }
+            return;
+        }
+        for (java.util.Map.Entry<String, String> entry : stored.entrySet()) {
+            ComponentType type = ComponentType.byId(entry.getValue());
+            if (type == null) {
+                getLogger().warning("Computer #" + computer.id() + " has unknown component '"
+                        + entry.getValue() + "'; dropped.");
+                continue;
+            }
+            try {
+                computer.install(ComponentSlot.valueOf(entry.getKey()), type);
+            } catch (IllegalArgumentException e) {
+                getLogger().warning("Computer #" + computer.id() + " has unknown slot '"
+                        + entry.getKey() + "'; dropped.");
+            }
+        }
+    }
+
     @Override
     public void onEnable() {
         plugin = this;
@@ -121,9 +165,13 @@ public final class VMComputers extends JavaPlugin {
             // Map renderers do not survive a restart -- the default world-map renderer comes back
             // on every map -- so they have to be reinstalled from the stored panel ids.
             java.util.Map<Integer, List<Integer>> panels = computerDao.loadAllPanels();
+            java.util.Map<Integer, java.util.Map<String, String>> components =
+                    computerDao.loadAllComponents();
             int reattached = 0;
             byte black = mapPalette.match(0, 0, 0);
             for (Computer computer : loaded) {
+                restoreComponents(computer, components.get(Integer.valueOf(computer.id())));
+
                 List<Integer> ids = panels.get(Integer.valueOf(computer.id()));
                 if (ids == null) {
                     continue;
@@ -143,6 +191,7 @@ public final class VMComputers extends JavaPlugin {
 
         getCommand("vmcomputers").setExecutor(new ComputerCM());
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
+        getServer().getPluginManager().registerEvents(new MenuListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(), this);
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
         this.pointerListener = new PointerListener();
