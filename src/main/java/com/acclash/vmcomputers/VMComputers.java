@@ -5,6 +5,7 @@ import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.computer.ComputerRegistry;
 import com.acclash.vmcomputers.display.MapColorLut;
 import com.acclash.vmcomputers.display.MonitorScreen;
+import com.acclash.vmcomputers.display.ScreenPump;
 import com.acclash.vmcomputers.listeners.ClickListener;
 import com.acclash.vmcomputers.listeners.PlayerListener;
 import com.acclash.vmcomputers.listeners.PointerListener;
@@ -32,6 +33,7 @@ public final class VMComputers extends JavaPlugin {
     private final ComputerRegistry registry = new ComputerRegistry();
     private MapColorLut mapPalette;
     private PointerListener pointerListener;
+    private ScreenPump screenPump;
     /** Read from the server tick and written from a command; both are the main thread, but be safe. */
     private volatile boolean pointerDebug;
 
@@ -53,6 +55,9 @@ public final class VMComputers extends JavaPlugin {
 
     public void unregisterScreen(int computerId) {
         screens.remove(Integer.valueOf(computerId));
+        if (screenPump != null) {
+            screenPump.forget(computerId);
+        }
     }
 
     /** Every live screen. Only the debug cursor needs this; everything else works one screen at a time. */
@@ -141,6 +146,11 @@ public final class VMComputers extends JavaPlugin {
         // Aim is sampled on the tick rather than driven by PlayerMoveEvent, which CraftBukkit does
         // not raise until the look has swung ten degrees. See PointerListener.tick().
         pointerListener.start(this);
+
+        // Frames are pushed by us, not by the server, which only updates a map in an item frame
+        // every ten ticks. See ScreenPump -- that interval was the entire frame rate.
+        this.screenPump = new ScreenPump(this);
+        screenPump.start(this);
     }
 
     @Override
@@ -153,8 +163,11 @@ public final class VMComputers extends JavaPlugin {
             if (pointerListener != null) {
                 pointerListener.stop();
             }
+            if (screenPump != null) {
+                screenPump.stop();
+            }
         } catch (Throwable t) {
-            getLogger().log(Level.SEVERE, "Failed to stop pointer tracking during shutdown", t);
+            getLogger().log(Level.SEVERE, "Failed to stop screen tasks during shutdown", t);
         }
 
         try {

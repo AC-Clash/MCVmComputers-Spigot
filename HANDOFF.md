@@ -49,7 +49,7 @@ QEMU process ──QMP (JSON/TCP)──▶  emu/    lifecycle: start, stop, medi
 |---|---|---|
 | `emu/` | QEMU process + control. **No Bukkit** except `VmService`. | `VmSpec` (config→argv), `QemuProcess`, `QmpClient`, `QemuBinary`, `VmService` (orchestrates), `VirtualMachine` (the seam) |
 | `rfb/` | RFB 3.8 client. **No Bukkit.** | `RfbClient` |
-| `display/` | Guest pixels → Minecraft maps | `MonitorScreen`, `PanelRenderer`, `MapColorLut`, `ImageScaler`, `ScreenGeometry`, `MonitorSize` |
+| `display/` | Guest pixels → Minecraft maps | `MonitorScreen`, `PanelRenderer`, `ScreenPump` (sends frames), `MapColorLut`, `ImageScaler`, `ScreenGeometry`, `MonitorSize` |
 | `computer/` | The in-world model | `ComputerLayout` (pure offsets), `Computer`, `ComputerRegistry` (O(1) block index) |
 | `sql/` | Persistence | `ComputerDao` |
 | `listeners/` | Game events | `PointerListener`, `PreventionListener`, `ClickListener`, `PlayerListener` |
@@ -100,6 +100,24 @@ is, client-side and free. So the guest gets the position and the player gets the
 ## 5. Hard-won facts (verified, not assumed)
 
 These cost experiments. Don't re-discover them.
+
+**The server only updates a framed map every 10 ticks. This was the entire frame rate.** In
+`ServerEntity.sendChanges()`, the map of an item frame is pushed only when
+`tickCount % itemFrameCursorUpdateInterval == 0`. Vanilla and Spigot hardcode 10; Paper made it
+configurable (`maps.item-frame-cursor-update-interval`) and kept 10 as the default. Ten ticks is
+half a second, so **a screen of item frames repaints at 2 fps** no matter how fast anything else is.
+Emulator speed, transport, quantization and panel count were all irrelevant next to it.
+
+**The fix is `Player.sendMap`, which is plain Bukkit** — it renders one map and sends it to one
+player immediately. `ScreenPump` drives it every tick, so the ceiling becomes 20 fps (one frame per
+tick, the most a map can be redrawn at all) on Spigot and Paper alike, with no server config to get
+right. **NMS was never the obstacle here** — the updates simply were not being driven.
+
+**`sendMap` always sends a full 128×128 patch**, so it gives up the dirty-rectangle saving below.
+That is why `ScreenPump` sends a panel only when its pixels genuinely differ (`PanelRenderer.blit`
+compares before it copies, via `Arrays.mismatch`), only to players within 64 blocks, and only within
+a per-player budget. The one thing still on the table is sub-panel patches, which *would* need NMS —
+but that would cut bytes, not add frames, since the rate is already one tick.
 
 **Dirty rectangles come free through the Bukkit API — NMS is not needed.** Confirmed by reading
 Paper 26.2 bytecode: `CraftMapCanvas.setPixel` compares the new colour against the existing one and
@@ -174,21 +192,34 @@ defaults to the host CPU.
 The bottleneck is **Minecraft's map protocol**, not the emulator or transport. One map = 128×128 =
 16,384 bytes of palette indices, no inter-frame coding.
 
+**The ceiling is now one frame per tick — 20 fps.** It used to be 2 fps, and not for any reason
+worth optimising against: the server simply refused to push a framed map more than once every ten
+ticks (§5). Since `ScreenPump` drives the sends, the rate is the tick.
+
+Cost is per *changed* panel, since unchanged ones are never sent:
+
 ```
-fps ≈ byte_budget_per_second / (map_count × 16400)
+bytes_per_second ≈ changed_panels_per_tick × viewers × 16,400 × 20
 ```
 
-Real measurement: an idle guest's blinking text cursor is **32 changed pixels out of 288,000**. Idle
-screens cost essentially nothing.
+Real measurement: an idle guest's blinking text cursor is **32 changed pixels out of 288,000**,
+touching one panel and changing it about twice a second. Idle screens still cost essentially
+nothing. The expensive case is a panel that genuinely changes every tick, and there a full send is
+proportionate — which is why the budget in `ScreenPump` exists rather than a byte-level trick.
 
 **Rules that follow from this:**
 - Never `MapPalette.matchColor` (linear palette scan per pixel) — use `MapColorLut`.
 - **Ordered (Bayer) dithering only.** Error diffusion would let one changed pixel alter every pixel
   after it, defeating the per-pixel comparison that keeps traffic small.
 - Scale in **RGB before quantization** — averaging palette indices is meaningless.
-- `PanelRenderer.render()` runs per map, per tick, per viewer. Skip unchanged panels (it does).
-  Marking all panels dirty on every small change was what made the old drawn cursor unusable:
-  ~393,000 `setPixel` calls per tick for a 24-panel projector, to move a 10×16 arrow.
+- `PanelRenderer.render()` is **not** called on a timer. It runs from `CraftMapView.render()`, which
+  only happens when a packet is being built — so once per panel per tick that `ScreenPump` decides
+  to send, not once per tick per viewer as previously written here. Skipping unchanged panels still
+  matters, and it does. Marking all panels dirty on every small change was what made the old drawn
+  cursor unusable: ~393,000 `setPixel` calls for a 24-panel projector, to move a 10×16 arrow.
+- **Compare before you copy.** `PanelRenderer.blit` uses `Arrays.mismatch` per row, which is a
+  vectorised intrinsic and cheaper than the `arraycopy` it skips. It is also what decides whether a
+  panel is worth 16 KB of a player's bandwidth, so it pays for itself twice.
 - **Nothing driven by player input should touch the framebuffer.** The map protocol's latency is the
   reason: anything drawn in response to a player's own movement arrives after they have already
   moved again.
@@ -204,6 +235,7 @@ screens cost essentially nothing.
 | Boot (`QemuBinary.discover`, QMP + RFB connect) | async task |
 | Power off / remove / plugin disable | async task |
 | Frame decode → scale → quantize → panel buffers | RFB pump thread |
+| Sending panels to viewers (`ScreenPump`) | server tick — `sendMap` touches connections |
 | Pointer / key / scroll sends | per-VM single input thread (ordering matters) |
 | Map render | server tick (Bukkit's own work) |
 

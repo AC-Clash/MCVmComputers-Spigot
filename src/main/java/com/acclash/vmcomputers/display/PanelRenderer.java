@@ -26,6 +26,7 @@ public final class PanelRenderer extends MapRenderer {
 
     private final byte[] buffer = new byte[SIZE * SIZE];
     private volatile boolean dirty = true;
+    private volatile long generation = 1;
 
     public PanelRenderer() {
         super(false);
@@ -35,8 +36,24 @@ public final class PanelRenderer extends MapRenderer {
     public void fill(byte colour) {
         synchronized (buffer) {
             java.util.Arrays.fill(buffer, colour);
+            generation++;
         }
         dirty = true;
+    }
+
+    /**
+     * Counts changes to the picture, so a sender can tell what a given viewer is still missing.
+     *
+     * <p>A flag would not do. Viewers are served under a per-player budget, so one tick can send a
+     * panel to one player and not another, and a flag cleared after the first would strand the
+     * second on a stale picture until something happened to change it again. Comparing a number
+     * each viewer was last given has no such gap.
+     *
+     * <p>Distinct from {@link #isDirty()}, which only asks whether the canvas needs repainting and
+     * is cleared by the render itself.
+     */
+    public long generation() {
+        return generation;
     }
 
     /**
@@ -51,14 +68,27 @@ public final class PanelRenderer extends MapRenderer {
      */
     public void blit(byte[] source, int sourceWidth, int sourceX, int sourceY,
                      int destX, int destY, int width, int height) {
+        boolean altered = false;
         synchronized (buffer) {
             for (int row = 0; row < height; row++) {
                 int from = (sourceY + row) * sourceWidth + sourceX;
                 int to = (destY + row) * SIZE + destX;
+                // Compare before copying. Arrays.mismatch is a vectorised intrinsic, so a row that
+                // has not changed costs less than the copy this skips -- and the answer is worth
+                // far more than the copy, because it is what stops an unchanged panel being sent.
+                if (java.util.Arrays.mismatch(source, from, from + width, buffer, to, to + width) < 0) {
+                    continue;
+                }
                 System.arraycopy(source, from, buffer, to, width);
+                altered = true;
+            }
+            if (altered) {
+                generation++;
             }
         }
-        dirty = true;
+        if (altered) {
+            dirty = true;
+        }
     }
 
     public void setPixel(int x, int y, byte colour) {
@@ -66,7 +96,11 @@ public final class PanelRenderer extends MapRenderer {
             return;
         }
         synchronized (buffer) {
+            if (buffer[y * SIZE + x] == colour) {
+                return;
+            }
             buffer[y * SIZE + x] = colour;
+            generation++;
         }
         dirty = true;
     }

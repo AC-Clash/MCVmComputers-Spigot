@@ -61,6 +61,8 @@ public final class MonitorScreen {
     private final MonitorSize size;
     private final List<PanelRenderer> panels;
     private final List<Integer> mapIds;
+    /** Resolved once, because the sender needs them every tick and Bukkit.getMap is a lookup. */
+    private final List<MapView> mapViews;
 
     private final byte[] framebuffer;
     private int guestWidth;
@@ -89,11 +91,13 @@ public final class MonitorScreen {
     private byte cursorFill;
     private byte cursorOutline;
 
-    private MonitorScreen(Computer computer, List<PanelRenderer> panels, List<Integer> mapIds) {
+    private MonitorScreen(Computer computer, List<PanelRenderer> panels, List<Integer> mapIds,
+                          List<MapView> mapViews) {
         this.computer = computer;
         this.size = computer.monitorSize();
         this.panels = Collections.unmodifiableList(panels);
         this.mapIds = Collections.unmodifiableList(mapIds);
+        this.mapViews = Collections.unmodifiableList(mapViews);
         this.framebuffer = new byte[size.pixelWidth() * size.pixelHeight()];
         this.guestWidth = size.guestWidth();
         this.guestHeight = size.guestHeight();
@@ -112,11 +116,13 @@ public final class MonitorScreen {
             return null;
         }
         List<PanelRenderer> panels = new ArrayList<PanelRenderer>(mapIds.size());
+        List<MapView> views = new ArrayList<MapView>(mapIds.size());
         for (Integer id : mapIds) {
             MapView view = Bukkit.getMap(id.intValue());
             if (view == null) {
                 return null;
             }
+            views.add(view);
             // Drop whatever is there, including the default world-map renderer restored on restart.
             for (MapRenderer existing : new ArrayList<MapRenderer>(view.getRenderers())) {
                 view.removeRenderer(existing);
@@ -125,7 +131,16 @@ public final class MonitorScreen {
             view.addRenderer(panel);
             panels.add(panel);
         }
-        return new MonitorScreen(computer, panels, new ArrayList<Integer>(mapIds));
+        return new MonitorScreen(computer, panels, new ArrayList<Integer>(mapIds), views);
+    }
+
+    /** The panels, row-major from the top-left. Same order as {@link #mapViews()}. */
+    public List<PanelRenderer> panels() {
+        return panels;
+    }
+
+    public List<MapView> mapViews() {
+        return mapViews;
     }
 
     public Computer computer() {
