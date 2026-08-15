@@ -8,14 +8,19 @@ import org.bukkit.map.MapView;
 /**
  * Draws one 128x128 panel of a monitor.
  *
- * <p>Holds its own palette-index buffer and copies it onto the canvas. Writing every pixel each
- * pass looks wasteful but is not: {@code CraftMapCanvas.setPixel} compares against the existing
- * value and returns without marking anything dirty when they match, and the server then transmits
- * only the bounding box of what genuinely changed. So an unchanged panel costs a memory scan and no
- * network traffic at all, and this class does not need damage tracking of its own.
+ * <p>Holds its own palette-index buffer and copies it onto the canvas. {@code CraftMapCanvas.setPixel}
+ * compares against the existing value and marks nothing dirty when they match, and the server sends
+ * only the bounding box of what genuinely changed -- so correctness never depended on writing less
+ * than everything. Speed does: this tracks the rectangle it has not handed the canvas yet, and
+ * repaints only that. A blinking cursor is then a few dozen {@code setPixel} calls rather than
+ * 16,384, and that difference lands on the main thread, once per changed panel per viewer.
+ *
+ * <p>The rectangle starts as the whole panel, which is not an optimisation but a requirement: a
+ * fresh canvas is entirely "unset", and any pixel never written would merge as transparent.
  *
  * <p>Non-contextual on purpose: every viewer sees the same screen, so there is no reason to render
- * per player.
+ * per player. Whichever viewer is served first does the painting, and the canvas keeps its buffer,
+ * so the rest still merge a complete picture.
  */
 public final class PanelRenderer extends MapRenderer {
 
@@ -25,8 +30,14 @@ public final class PanelRenderer extends MapRenderer {
     private static final int SIZE = 128;
 
     private final byte[] buffer = new byte[SIZE * SIZE];
-    private volatile boolean dirty = true;
     private volatile long generation = 1;
+
+    // The part of the canvas that has not been given the current picture yet. Empty when paintMaxX
+    // is negative; starts as the whole panel, since a fresh canvas holds nothing.
+    private int paintMinX;
+    private int paintMinY;
+    private int paintMaxX = SIZE - 1;
+    private int paintMaxY = SIZE - 1;
 
     public PanelRenderer() {
         super(false);
@@ -36,9 +47,25 @@ public final class PanelRenderer extends MapRenderer {
     public void fill(byte colour) {
         synchronized (buffer) {
             java.util.Arrays.fill(buffer, colour);
+            growPaint(0, 0, SIZE - 1, SIZE - 1);
             generation++;
         }
-        dirty = true;
+    }
+
+    /** Widens the region the canvas still owes. Caller holds the buffer lock. */
+    private void growPaint(int minX, int minY, int maxX, int maxY) {
+        if (minX < paintMinX) {
+            paintMinX = minX;
+        }
+        if (minY < paintMinY) {
+            paintMinY = minY;
+        }
+        if (maxX > paintMaxX) {
+            paintMaxX = maxX;
+        }
+        if (maxY > paintMaxY) {
+            paintMaxY = maxY;
+        }
     }
 
     /**
@@ -49,8 +76,8 @@ public final class PanelRenderer extends MapRenderer {
      * second on a stale picture until something happened to change it again. Comparing a number
      * each viewer was last given has no such gap.
      *
-     * <p>Distinct from {@link #isDirty()}, which only asks whether the canvas needs repainting and
-     * is cleared by the render itself.
+     * <p>Distinct from the paint rectangle, which asks only what the canvas still needs and is
+     * emptied by the render itself.
      */
     public long generation() {
         return generation;
@@ -76,18 +103,23 @@ public final class PanelRenderer extends MapRenderer {
                 // Compare before copying. Arrays.mismatch is a vectorised intrinsic, so a row that
                 // has not changed costs less than the copy this skips -- and the answer is worth
                 // far more than the copy, because it is what stops an unchanged panel being sent.
-                if (java.util.Arrays.mismatch(source, from, from + width, buffer, to, to + width) < 0) {
+                int first = java.util.Arrays.mismatch(source, from, from + width, buffer, to, to + width);
+                if (first < 0) {
                     continue;
                 }
-                System.arraycopy(source, from, buffer, to, width);
+                // Walk in from the far end too, so the repaint covers the characters that changed
+                // rather than the whole scanline they sit on.
+                int last = width - 1;
+                while (last > first && source[from + last] == buffer[to + last]) {
+                    last--;
+                }
+                System.arraycopy(source, from + first, buffer, to + first, last - first + 1);
+                growPaint(destX + first, destY + row, destX + last, destY + row);
                 altered = true;
             }
             if (altered) {
                 generation++;
             }
-        }
-        if (altered) {
-            dirty = true;
         }
     }
 
@@ -100,33 +132,27 @@ public final class PanelRenderer extends MapRenderer {
                 return;
             }
             buffer[y * SIZE + x] = colour;
+            growPaint(x, y, x, y);
             generation++;
         }
-        dirty = true;
     }
 
     @Override
     public void render(MapView map, MapCanvas canvas, Player player) {
-        // render() is invoked for every map, every tick, per viewer. A 24-panel projector would
-        // otherwise cost ~393k setPixel calls per tick even while the guest sits idle. The canvas
-        // keeps its buffer between renders, so skipping an unchanged panel leaves the correct
-        // image on screen.
-        if (!dirty) {
-            return;
-        }
-
         synchronized (buffer) {
-            int i = 0;
-            for (int y = 0; y < SIZE; y++) {
-                for (int x = 0; x < SIZE; x++) {
-                    canvas.setPixel(x, y, buffer[i++]);
+            if (paintMaxX < 0) {
+                return;
+            }
+            for (int y = paintMinY; y <= paintMaxY; y++) {
+                int row = y * SIZE;
+                for (int x = paintMinX; x <= paintMaxX; x++) {
+                    canvas.setPixel(x, y, buffer[row + x]);
                 }
             }
+            paintMinX = SIZE;
+            paintMinY = SIZE;
+            paintMaxX = -1;
+            paintMaxY = -1;
         }
-        dirty = false;
-    }
-
-    public boolean isDirty() {
-        return dirty;
     }
 }

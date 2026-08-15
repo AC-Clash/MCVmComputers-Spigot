@@ -239,14 +239,10 @@ public final class ComputerDao {
         }
     }
 
-    public void updateState(int id, Computer.State state) throws SQLException {
-        String sql = "UPDATE computers SET state = ? WHERE id = ?";
-        try (PreparedStatement statement = database.getSQLConnection().prepareStatement(sql)) {
-            statement.setString(1, state.name());
-            statement.setInt(2, id);
-            statement.executeUpdate();
-        }
-    }
+    // No updateState: state is deliberately never written back. Nothing survives a restart -- the
+    // QEMU processes are gone and the map renderers with them -- so a computer must load as the
+    // state it was stored with, and persisting RUNNING would bring one back claiming to be running
+    // with no process behind it.
 
     public boolean delete(int id) throws SQLException {
         try (PreparedStatement statement =

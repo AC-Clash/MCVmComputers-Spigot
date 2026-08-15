@@ -60,7 +60,6 @@ public final class MonitorScreen {
     private final Computer computer;
     private final MonitorSize size;
     private final List<PanelRenderer> panels;
-    private final List<Integer> mapIds;
     /** Resolved once, because the sender needs them every tick and Bukkit.getMap is a lookup. */
     private final List<MapView> mapViews;
 
@@ -76,6 +75,8 @@ public final class MonitorScreen {
     // back to the guest pixel underneath it.
     private int lastImageWidth;
     private int lastImageHeight;
+    /** Colour the letterbox border was last painted, so an unchanged one is not repainted. */
+    private byte lastBorder;
 
     /**
      * The pixels the debug cursor is covering, so they can be put back when it moves.
@@ -91,12 +92,10 @@ public final class MonitorScreen {
     private byte cursorFill;
     private byte cursorOutline;
 
-    private MonitorScreen(Computer computer, List<PanelRenderer> panels, List<Integer> mapIds,
-                          List<MapView> mapViews) {
+    private MonitorScreen(Computer computer, List<PanelRenderer> panels, List<MapView> mapViews) {
         this.computer = computer;
         this.size = computer.monitorSize();
         this.panels = Collections.unmodifiableList(panels);
-        this.mapIds = Collections.unmodifiableList(mapIds);
         this.mapViews = Collections.unmodifiableList(mapViews);
         this.framebuffer = new byte[size.pixelWidth() * size.pixelHeight()];
         this.guestWidth = size.guestWidth();
@@ -131,7 +130,7 @@ public final class MonitorScreen {
             view.addRenderer(panel);
             panels.add(panel);
         }
-        return new MonitorScreen(computer, panels, new ArrayList<Integer>(mapIds), views);
+        return new MonitorScreen(computer, panels, views);
     }
 
     /** The panels, row-major from the top-left. Same order as {@link #mapViews()}. */
@@ -149,10 +148,6 @@ public final class MonitorScreen {
 
     public MonitorSize size() {
         return size;
-    }
-
-    public List<Integer> mapIds() {
-        return mapIds;
     }
 
     /**
@@ -342,10 +337,22 @@ public final class MonitorScreen {
         int screenWidth = size.pixelWidth();
 
         synchronized (framebuffer) {
+            // The border only needs painting when the letterbox actually moves. The image area is
+            // overwritten below either way, so an unconditional fill would rewrite the whole
+            // framebuffer every frame -- 393 KB of it on a projector -- to change nothing.
+            //
+            // The debug cursor is the exception, and has to force it. A cursor near the edge of the
+            // image hangs over the border, where the copy below does not reach; without the fill
+            // those pixels would survive into saveCursorArea, and the arrow would smear a trail
+            // behind itself as it moved.
+            if (imageWidth != lastImageWidth || imageHeight != lastImageHeight
+                    || border != lastBorder || cursorX >= 0) {
+                java.util.Arrays.fill(framebuffer, border);
+                lastBorder = border;
+            }
             lastImageWidth = imageWidth;
             lastImageHeight = imageHeight;
 
-            java.util.Arrays.fill(framebuffer, border);
             int copyWidth = Math.min(imageWidth, screenWidth - offsetX);
             int copyHeight = Math.min(imageHeight, size.pixelHeight() - offsetY);
             for (int row = 0; row < copyHeight; row++) {
