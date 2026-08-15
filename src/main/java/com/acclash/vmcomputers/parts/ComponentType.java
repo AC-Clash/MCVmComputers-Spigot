@@ -1,6 +1,7 @@
 package com.acclash.vmcomputers.parts;
 
 import com.acclash.vmcomputers.VMComputers;
+import com.acclash.vmcomputers.display.MonitorSize;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -12,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -107,15 +109,36 @@ public final class ComponentType {
 
     public static final ComponentType KEYBOARD = register(new ComponentType(
             "keyboard", "Keyboard", Material.POLISHED_BLACKSTONE_PRESSURE_PLATE, 4,
-            Category.PERIPHERALS, null, "keyboard", "Sits on the desk."));
+            Category.PERIPHERALS, ComponentSlot.KEYBOARD, "keyboard", "Sits on the desk."));
 
     public static final ComponentType MOUSE = register(new ComponentType(
-            "mouse", "Mouse", Material.QUARTZ, 4, Category.PERIPHERALS, null,
+            "mouse", "Mouse", Material.QUARTZ, 4, Category.PERIPHERALS, ComponentSlot.MOUSE,
             "mouse", "Sits on the desk."));
 
-    public static final ComponentType MONITOR = register(new ComponentType(
-            "monitor", "Monitor", Material.ITEM_FRAME, 10, Category.PERIPHERALS, null,
-            "flatscreen", "The screen itself. Size is chosen when the computer is built."));
+    // Monitors are the one component whose tier changes the shape of the build rather than a
+    // number inside it: the size fitted is the size the screen is assembled at. Prices climb with
+    // panel count, since a bigger screen is genuinely more of the plugin's frame budget.
+    public static final ComponentType MONITOR_SMALL = register(monitor(
+            "monitor_small", MonitorSize.SMALL, 10));
+    public static final ComponentType MONITOR_MEDIUM = register(monitor(
+            "monitor_medium", MonitorSize.MEDIUM, 16));
+    public static final ComponentType MONITOR_LARGE = register(monitor(
+            "monitor_large", MonitorSize.LARGE, 24));
+    public static final ComponentType MONITOR_XLARGE = register(monitor(
+            "monitor_xlarge", MonitorSize.XLARGE, 40));
+
+    private static ComponentType monitor(String id, MonitorSize size, int price) {
+        return new ComponentType(id, size.name().charAt(0) + size.name().substring(1).toLowerCase(
+                Locale.ROOT) + " Monitor", Material.ITEM_FRAME, price, Category.PERIPHERALS,
+                ComponentSlot.MONITOR,
+                size.form() == MonitorSize.Form.PROJECTOR ? "walltv" : "flatscreen",
+                size.describe() + ".", size.ordinal());
+    }
+
+    /** The monitor size this component builds, or null if it is not a monitor. */
+    public MonitorSize monitorSize() {
+        return slot == ComponentSlot.MONITOR ? MonitorSize.values()[rating] : null;
+    }
 
     /**
      * RAM is one shape in seven capacities, so it is one icon in seven names. A thin gold bar is
@@ -274,7 +297,7 @@ public final class ComponentType {
      * computers are backfilled with, since they predate components entirely and used to boot with
      * 4 GB hardcoded -- which is what the 4 GB stick here preserves.
      */
-    public static Map<ComponentSlot, ComponentType> defaultLoadout() {
+    public static Map<ComponentSlot, ComponentType> defaultLoadout(MonitorSize size) {
         Map<ComponentSlot, ComponentType> loadout =
                 new LinkedHashMap<ComponentSlot, ComponentType>();
         loadout.put(ComponentSlot.MOTHERBOARD, MOTHERBOARD_64);
@@ -282,7 +305,20 @@ public final class ComponentType {
         loadout.put(ComponentSlot.RAM, RAM_4G);
         loadout.put(ComponentSlot.GPU, GPU);
         loadout.put(ComponentSlot.HARD_DRIVE, HARD_DRIVE);
+        loadout.put(ComponentSlot.KEYBOARD, KEYBOARD);
+        loadout.put(ComponentSlot.MOUSE, MOUSE);
+        loadout.put(ComponentSlot.MONITOR, forMonitorSize(size));
         return loadout;
+    }
+
+    /** The monitor component that builds a given size. */
+    public static ComponentType forMonitorSize(MonitorSize size) {
+        for (ComponentType type : REGISTRY.values()) {
+            if (type.slot == ComponentSlot.MONITOR && type.monitorSize() == size) {
+                return type;
+            }
+        }
+        return MONITOR_LARGE;
     }
 
     public static List<ComponentType> all() {

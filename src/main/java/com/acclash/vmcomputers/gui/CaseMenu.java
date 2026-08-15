@@ -2,6 +2,7 @@ package com.acclash.vmcomputers.gui;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.computer.ComputerBuilder;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.emu.VmService;
 import com.acclash.vmcomputers.parts.ComponentSlot;
@@ -65,7 +66,7 @@ public class CaseMenu extends Menu {
         fillRow(2);
 
         ComponentSlot[] slots = ComponentSlot.values();
-        int start = SLOT_ROW * ROW + (ROW - slots.length) / 2;
+        int start = SLOT_ROW * ROW + Math.max(0, (ROW - slots.length) / 2);
         for (int i = 0; i < slots.length; i++) {
             ComponentSlot slot = slots[i];
             ComponentType fitted = computer.installedIn(slot);
@@ -178,6 +179,9 @@ public class CaseMenu extends Menu {
 
         computer.install(bay, type);
         persist(bay, type);
+        if (bay.isDeskPeripheral()) {
+            ComputerBuilder.redrawPeripherals(viewer.getWorld(), computer);
+        }
         viewer.sendMessage(ChatColor.GREEN + "Fitted " + type.displayName() + ".");
         viewer.playSound(viewer.getLocation(), Sound.BLOCK_PISTON_CONTRACT, 0.6f, 1.4f);
         refresh();
@@ -187,6 +191,15 @@ public class CaseMenu extends Menu {
     private void remove(ComponentSlot bay) {
         ComponentType type = computer.installedIn(bay);
         if (type == null) {
+            return;
+        }
+        if (bay == ComponentSlot.MONITOR) {
+            // The screen was built at this monitor's size and the desk was sized to match it.
+            // Taking it out would leave a wall of maps belonging to a machine that no longer
+            // claims to have a screen, so the only way to change it is to remove the computer.
+            viewer.sendMessage(ChatColor.RED
+                    + "The screen is built around this monitor. Remove the computer to change it.");
+            viewer.playSound(viewer.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f);
             return;
         }
         if (VmService.isRunning(computer.id())) {
@@ -202,6 +215,9 @@ public class CaseMenu extends Menu {
         computer.install(bay, null);
         persist(bay, null);
         viewer.getInventory().addItem(type.toItemStack(1));
+        if (bay.isDeskPeripheral()) {
+            ComputerBuilder.redrawPeripherals(viewer.getWorld(), computer);
+        }
         viewer.sendMessage(ChatColor.YELLOW + "Removed " + type.displayName() + ".");
         viewer.playSound(viewer.getLocation(), Sound.BLOCK_PISTON_EXTEND, 0.6f, 1.4f);
         refresh();
