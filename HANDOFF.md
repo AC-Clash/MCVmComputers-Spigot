@@ -12,8 +12,11 @@ A **Spigot plugin** that runs real virtual machines inside vanilla Minecraft. A 
 it. Vanilla clients only — no client mod, which is the whole point of the project and constrains
 every design decision below.
 
-**Repo:** `AC-Clash/MCVmComputers-Spigot` (PUBLIC). Working branch: **`qemu-overhaul`** (14 commits
-ahead of `main`, tree clean).
+**Repo:** `AC-Clash/MCVmComputers-Spigot` (PUBLIC). The overhaul is **merged into `main`**.
+
+`nms-map-packets` is parked, not dead: it branches off the overhaul and sends the map packet
+directly, which lifts frames off the server tick and cuts them to the changed rectangle. It costs
+Spigot support, so it waits for a reason to spend that. See §4 and §5.
 
 ---
 
@@ -377,8 +380,8 @@ code.
 
 ## 13. Working agreements
 
-- Commit to `qemu-overhaul`, not `main`. Git identity is set **repo-locally** to
-  `Anston Sorensen <ansorensen1118@gmail.com>` (matches all prior commits).
+- Git identity is set **repo-locally** to `Anston Sorensen <ansorensen1118@gmail.com>` (matches all
+  prior commits). Work on a branch and merge to `main`, rather than committing to it directly.
 - Anston prefers testing on the real server over building extra classes to test things outside it.
   Unit tests are for **pure logic only** (`ComputerLayout`, `ScreenGeometry`, `ImageScaler`, `Json`,
   `MapColorLut`) — don't contort Bukkit-coupled code for testability.
