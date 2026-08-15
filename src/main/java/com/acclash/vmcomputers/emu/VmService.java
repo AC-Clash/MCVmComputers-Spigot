@@ -83,7 +83,16 @@ public final class VmService {
                 // Every computer gets its own disk so anything installed survives a power cycle.
                 // It is created on first boot rather than at build time, so a computer that is only
                 // ever used with live media costs no disk space.
-                java.nio.file.Path disk = VmPaths.diskFor(computer.id());
+                // No hard drive fitted, no disk attached. The bay is the only optional one, and
+                // this is what makes it mean anything: a machine without one boots live media and
+                // forgets everything when it stops, exactly as the bay's description promises.
+                java.nio.file.Path disk =
+                        computer.installedIn(ComponentSlot.HARD_DRIVE) != null
+                                ? VmPaths.diskFor(computer.id())
+                                : null;
+                if (disk == null) {
+                    post(feedback, "No hard drive fitted: nothing will survive a power cycle.");
+                }
                 java.nio.file.Path iso = VmPaths.resolveIso(computer.isoName());
                 if (computer.isoName() != null && iso == null) {
                     post(feedback, "ISO '" + computer.isoName() + "' is missing; booting without it.");
