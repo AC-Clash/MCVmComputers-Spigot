@@ -11,10 +11,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -34,6 +33,18 @@ public class OrderMenu extends Menu {
 
     /** How long a delivery takes. Long enough to feel like one, short enough not to be a chore. */
     private static final long DELIVERY_TICKS = 60L;
+
+    private static final int CART_SLOT = TAB_ROW * ROW + 4;
+    private static final int CLEAR_SLOT = TAB_ROW * ROW + 5;
+
+    /**
+     * What the player has picked out but not yet ordered.
+     *
+     * <p>The mod's tablet has one too, and it is the reason an order is a single delivery: without
+     * it, buying five parts meant five boxes, and five boxes land on the same spot in front of the
+     * player, each one hiding the last.
+     */
+    private final List<ComponentType> cart = new ArrayList<ComponentType>();
 
     private ComponentType.Category category;
 
@@ -67,10 +78,15 @@ public class OrderMenu extends Menu {
         for (int i = 0; i < items.size() && i < TAB_ROW * ROW; i++) {
             ComponentType type = items.get(i);
             ItemStack icon = type.toItemStack(1);
-            boolean affordable = ironHeld() >= type.price();
-            withLore(icon, "", affordable
-                    ? ChatColor.GREEN + "Click to order"
-                    : ChatColor.RED + "You need " + (type.price() - ironHeld()) + " more iron");
+            int inCart = count(type);
+            if (inCart > 0) {
+                icon.setAmount(Math.min(64, inCart));
+                withLore(icon, "", ChatColor.AQUA + "In cart: " + inCart,
+                        ChatColor.GREEN + "Left-click to add another",
+                        ChatColor.YELLOW + "Right-click to take one out");
+            } else {
+                withLore(icon, "", ChatColor.GREEN + "Left-click to add to cart");
+            }
             set(i, icon);
             offers.put(Integer.valueOf(i), type);
         }
@@ -86,14 +102,56 @@ public class OrderMenu extends Menu {
 
         set(TAB_ROW * ROW + 8, button(Material.IRON_INGOT,
                 ChatColor.GOLD + "Your iron: " + ironHeld(),
-                "Paid from your inventory when",
-                "you order. Parts arrive in a",
-                "package a few seconds later."));
+                "Paid when you place the order."));
+
+        drawCart();
+    }
+
+    private void drawCart() {
+        int total = cartTotal();
+        if (cart.isEmpty()) {
+            set(CART_SLOT, button(Material.CHEST, ChatColor.GRAY + "Cart is empty",
+                    "Pick out some parts first."));
+            return;
+        }
+
+        List<String> lines = new ArrayList<String>();
+        for (ComponentType type : ComponentType.all()) {
+            int n = count(type);
+            if (n > 0) {
+                lines.add(n + "x " + type.displayName());
+            }
+        }
+        lines.add("");
+        lines.add(total <= ironHeld()
+                ? ChatColor.GOLD + "Total: " + total + " iron"
+                : ChatColor.RED + "Total: " + total + " iron (you have " + ironHeld() + ")");
+        lines.add("");
+        lines.add(total <= ironHeld()
+                ? ChatColor.GREEN + "Click to place the order"
+                : ChatColor.RED + "Not enough iron");
+
+        set(CART_SLOT, button(Material.CHEST,
+                ChatColor.AQUA + "Cart (" + cart.size() + " item"
+                        + (cart.size() == 1 ? ")" : "s)"),
+                lines.toArray(new String[0])));
+        set(CLEAR_SLOT, button(Material.BARRIER, ChatColor.YELLOW + "Empty the cart",
+                "Puts everything back."));
     }
 
     @Override
     public void onClick(int slot, ClickType click) {
-        // Tabs first: their slots are in the same range the offers map is keyed on.
+        if (slot == CART_SLOT) {
+            placeOrder();
+            return;
+        }
+        if (slot == CLEAR_SLOT && !cart.isEmpty()) {
+            cart.clear();
+            refresh();
+            return;
+        }
+
+        // Tabs next: their slots are in the same range the offers map is keyed on.
         if (slot >= TAB_ROW * ROW && slot < SIZE) {
             int index = slot - TAB_ROW * ROW;
             ComponentType.Category[] tabs = ComponentType.Category.values();
@@ -108,21 +166,50 @@ public class OrderMenu extends Menu {
         if (type == null) {
             return;
         }
-        buy(type);
+        if (click.isRightClick()) {
+            cart.remove(type);
+        } else {
+            cart.add(type);
+        }
+        refresh();
     }
 
-    private void buy(ComponentType type) {
-        int held = ironHeld();
-        if (held < type.price()) {
-            viewer.sendMessage(ChatColor.RED + "You need " + type.price() + " iron for a "
-                    + type.displayName() + "; you have " + held + ".");
+    private int count(ComponentType type) {
+        int n = 0;
+        for (ComponentType entry : cart) {
+            if (entry == type) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private int cartTotal() {
+        int total = 0;
+        for (ComponentType type : cart) {
+            total += type.price();
+        }
+        return total;
+    }
+
+    private void placeOrder() {
+        if (cart.isEmpty()) {
+            return;
+        }
+        int total = cartTotal();
+        if (ironHeld() < total) {
+            viewer.sendMessage(ChatColor.RED + "That comes to " + total + " iron; you have "
+                    + ironHeld() + ".");
             viewer.playSound(viewer.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f);
             return;
         }
 
-        takeIron(type.price());
-        viewer.sendMessage(ChatColor.GOLD + "Steve: " + ChatColor.WHITE + "ONE "
-                + type.displayName().toUpperCase(Locale.ROOT) + "! IT'S ON THE TRUCK!");
+        takeIron(total);
+        final List<ComponentType> ordered = new ArrayList<ComponentType>(cart);
+        cart.clear();
+
+        viewer.sendMessage(ChatColor.GOLD + "Steve: " + ChatColor.WHITE + ordered.size()
+                + " ITEMS! IT'S ON THE TRUCK!");
         viewer.playSound(viewer.getLocation(), Sound.ENTITY_VILLAGER_YES, 0.7f, 1.2f);
         refresh();
 
@@ -134,9 +221,11 @@ public class OrderMenu extends Menu {
             if (!recipient.isOnline()) {
                 return;
             }
-            Delivery.drop(recipient, Collections.singletonList(type));
-            recipient.sendMessage(ChatColor.GREEN + "A package lands nearby. "
-                    + ChatColor.GRAY + "Right-click it to open it.");
+            boolean fresh = Delivery.send(recipient, ordered);
+            recipient.sendMessage(fresh
+                    ? ChatColor.GREEN + "A package lands nearby. "
+                            + ChatColor.GRAY + "Right-click it to open it."
+                    : ChatColor.GREEN + "The courier adds it to the box you already have.");
         }, DELIVERY_TICKS);
     }
 

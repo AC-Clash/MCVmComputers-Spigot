@@ -1,10 +1,12 @@
 package com.acclash.vmcomputers.parts;
 
 import com.acclash.vmcomputers.VMComputers;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -44,6 +46,31 @@ public final class BrickPhone {
             stack.setItemMeta(meta);
         }
         return stack;
+    }
+
+    /**
+     * Registers the crafting recipe, replacing any left from a previous load.
+     *
+     * <p>{@code removeRecipe} first because {@code addRecipe} refuses a key that already exists,
+     * and a plugin reload runs this a second time in the same server.
+     *
+     * <p>Cheap on purpose. The phone is the only way into the ordering loop -- nothing can be
+     * bought, and therefore no computer can be built from parts, until a player has one -- so its
+     * cost should be a formality rather than a gate. Everything expensive is in the catalogue.
+     */
+    public static void registerRecipe() {
+        NamespacedKey key = new NamespacedKey(VMComputers.getPlugin(), "brick_phone");
+        Bukkit.removeRecipe(key);
+
+        ShapedRecipe recipe = new ShapedRecipe(key, create());
+        recipe.shape(
+                " N ",
+                "IRI",
+                "IRI");
+        recipe.setIngredient('N', Material.IRON_NUGGET);
+        recipe.setIngredient('I', Material.IRON_INGOT);
+        recipe.setIngredient('R', Material.REDSTONE);
+        Bukkit.addRecipe(recipe);
     }
 
     public static boolean is(ItemStack stack) {
