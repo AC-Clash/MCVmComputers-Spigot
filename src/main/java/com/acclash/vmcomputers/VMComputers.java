@@ -1,5 +1,6 @@
 package com.acclash.vmcomputers;
 
+import com.acclash.vmcomputers.audio.AudioService;
 import com.acclash.vmcomputers.commands.ComputerCM;
 import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.computer.ComputerRegistry;
@@ -34,6 +35,12 @@ public final class VMComputers extends JavaPlugin {
     private MapColorLut mapPalette;
     private PointerListener pointerListener;
     private ScreenPump screenPump;
+    private AudioService audioService;
+
+    /** Serves guest audio to browsers, because the game protocol cannot carry it. */
+    public AudioService getAudioService() {
+        return audioService;
+    }
     /** Read from the server tick and written from a command; both are the main thread, but be safe. */
     private volatile boolean pointerDebug;
 
@@ -100,6 +107,7 @@ public final class VMComputers extends JavaPlugin {
     @Override
     public void onEnable() {
         plugin = this;
+        saveDefaultConfig();
 
         long lutStart = System.nanoTime();
         this.mapPalette = MapColorLut.build(MapColorLut.DEFAULT_BITS);
@@ -151,6 +159,9 @@ public final class VMComputers extends JavaPlugin {
         // every ten ticks. See ScreenPump -- that interval was the entire frame rate.
         this.screenPump = new ScreenPump(this);
         screenPump.start(this);
+
+        this.audioService = new AudioService(this);
+        audioService.start();
     }
 
     @Override
@@ -165,6 +176,9 @@ public final class VMComputers extends JavaPlugin {
             }
             if (screenPump != null) {
                 screenPump.stop();
+            }
+            if (audioService != null) {
+                audioService.stop();
             }
         } catch (Throwable t) {
             getLogger().log(Level.SEVERE, "Failed to stop screen tasks during shutdown", t);

@@ -29,6 +29,15 @@ public interface VirtualMachine extends Closeable {
         /** The guest changed video mode; the framebuffer has been reallocated. */
         default void onResize(int width, int height) {
         }
+
+        /**
+         * A block of guest audio, interleaved little-endian 16-bit PCM.
+         *
+         * <p>Only ever called between {@link #setAudioEnabled} being switched on and off again.
+         * The array is reused, so copy anything that must outlive the call.
+         */
+        default void onAudio(byte[] pcm, int length) {
+        }
     }
 
     /** Database id of the computer this VM belongs to. */
@@ -36,6 +45,14 @@ public interface VirtualMachine extends Closeable {
 
     /** Boots the machine and connects the display. Blocks until the framebuffer is available. */
     void start() throws IOException;
+
+    /**
+     * Turns the guest's audio stream on or off.
+     *
+     * <p>Off unless somebody is listening: an enabled stream is QEMU pushing about 170 KB a second
+     * down the display connection, and that connection is also carrying the picture.
+     */
+    void setAudioEnabled(boolean enabled, int sampleRate, int channels) throws IOException;
 
     boolean isRunning();
 

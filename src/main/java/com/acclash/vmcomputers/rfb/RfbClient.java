@@ -111,6 +111,7 @@ public final class RfbClient implements Closeable {
     private static final int QEMU_AUDIO_BEGIN = 1;
     private static final int QEMU_AUDIO_DATA = 2;
     private static final int QEMU_AUDIO_ENABLE = 0;
+    private static final int QEMU_AUDIO_DISABLE = 1;
     private static final int QEMU_AUDIO_SET_FORMAT = 2;
     /** Sample format 3 is signed 16-bit; QEMU sends it little-endian. */
     private static final int QEMU_AUDIO_FORMAT_S16 = 3;
@@ -357,6 +358,16 @@ public final class RfbClient implements Closeable {
             out.writeByte(MSG_QEMU);
             out.writeByte(QEMU_SUB_AUDIO);
             out.writeShort(QEMU_AUDIO_ENABLE);
+            out.flush();
+        }
+    }
+
+    /** Stops the audio stream. Safe to call when it was never started. */
+    public void disableAudio() throws IOException {
+        synchronized (out) {
+            out.writeByte(MSG_QEMU);
+            out.writeByte(QEMU_SUB_AUDIO);
+            out.writeShort(QEMU_AUDIO_DISABLE);
             out.flush();
         }
     }

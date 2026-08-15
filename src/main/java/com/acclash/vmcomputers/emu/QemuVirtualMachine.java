@@ -118,6 +118,14 @@ public final class QemuVirtualMachine implements VirtualMachine {
                 }
 
                 @Override
+                public void onAudio(byte[] pcm, int length) {
+                    FrameListener l = frameListener;
+                    if (l != null) {
+                        l.onAudio(pcm, length);
+                    }
+                }
+
+                @Override
                 public void onDisconnect(IOException cause) {
                     logger.accept("[vm " + computerId + "] display disconnected: " + cause);
                 }
@@ -128,6 +136,19 @@ public final class QemuVirtualMachine implements VirtualMachine {
             // Never leave a stray QEMU process behind when startup fails partway.
             shutdown();
             throw e;
+        }
+    }
+
+    @Override
+    public void setAudioEnabled(boolean enabled, int sampleRate, int channels) throws IOException {
+        RfbClient client = rfb;
+        if (client == null) {
+            return;
+        }
+        if (enabled) {
+            client.enableAudio(sampleRate, channels);
+        } else {
+            client.disableAudio();
         }
     }
 

@@ -426,6 +426,11 @@ public class PointerListener implements Listener {
     public void onQuit(PlayerQuitEvent e) {
         lastClick.remove(e.getPlayer().getUniqueId());
         poses.remove(e.getPlayer().getUniqueId());
+        // A listening link is tied to being on the server, so a tab left open goes quiet rather
+        // than streaming a machine to someone who has walked away for good.
+        if (VMComputers.getPlugin().getAudioService() != null) {
+            VMComputers.getPlugin().getAudioService().revokeTokens(e.getPlayer().getUniqueId());
+        }
     }
 
     /** The hotbar becomes the scroll wheel, which is the only wheel vanilla can offer. */
