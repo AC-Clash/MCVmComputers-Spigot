@@ -1,0 +1,465 @@
+package com.acclash.vmcomputers.emu;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Immutable description of one virtual machine, and the translation of it into a QEMU command line.
+ *
+ * <p>Defaults lean hard towards guest compatibility rather than raw speed, because the whole point
+ * is that a player can boot an arbitrary ISO: {@code std} VGA and IDE disks work on everything from
+ * DOS to current Linux, whereas virtio needs drivers the guest may not have. Faster options are
+ * available for guests known to support them, which is what a per-OS profile in the image catalog
+ * will eventually select.
+ *
+ * <p>The default resolution is 640x480 so it sits 1:1 inside a 6x4 grid of Minecraft maps
+ * (768x512), letterboxed rather than scaled -- scaling is what actually destroys text legibility on
+ * a map display. That grid also holds 720x400 VGA text mode 1:1, which is what guests use during
+ * BIOS, bootloaders and installers.
+ */
+public final class VmSpec {
+
+    /**
+     * Guest CPU architecture.
+     *
+     * <p>Worth choosing deliberately: hardware virtualization only works when the guest matches the
+     * host CPU. On Apple Silicon an aarch64 guest runs under HVF at native speed while an x86_64
+     * guest is interpreted instruction by instruction, which is roughly two orders of magnitude
+     * slower.
+     */
+    public enum Architecture {
+        X86_64("qemu-system-x86_64", "q35"),
+        /** ARM64. Uses UEFI and virtio throughout -- no BIOS, no VGA, no IDE. */
+        AARCH64("qemu-system-aarch64", "virt");
+
+        private final String binaryName;
+        private final String defaultMachine;
+
+        Architecture(String binaryName, String defaultMachine) {
+            this.binaryName = binaryName;
+            this.defaultMachine = defaultMachine;
+        }
+
+        public String binaryName() {
+            return binaryName;
+        }
+
+        public String defaultMachine() {
+            return defaultMachine;
+        }
+    }
+
+    /** Guest display adapter. */
+    public enum Vga {
+        /** Bochs/standard VGA. Works everywhere, supports EDID resolution hints. */
+        STD("VGA", true),
+        /** virtio-gpu. Fastest, but needs guest drivers. */
+        VIRTIO("virtio-vga", true),
+        /** For very old guests (Win9x era). No EDID. */
+        CIRRUS("cirrus-vga", false),
+        /** VMware SVGA II; some older guests have drivers for this. */
+        VMWARE("vmware-svga", false);
+
+        private final String deviceName;
+        private final boolean supportsEdid;
+
+        Vga(String deviceName, boolean supportsEdid) {
+            this.deviceName = deviceName;
+            this.supportsEdid = supportsEdid;
+        }
+
+        public String deviceName() {
+            return deviceName;
+        }
+
+        public boolean supportsEdid() {
+            return supportsEdid;
+        }
+    }
+
+    /** How disks attach to the guest. */
+    public enum DiskInterface {
+        /** AHCI/SATA on q35, plain IDE on the {@code pc} machine. Universally supported. */
+        IDE("ide"),
+        /** Needs virtio-blk drivers in the guest. */
+        VIRTIO("virtio");
+
+        private final String value;
+
+        DiskInterface(String value) {
+            this.value = value;
+        }
+
+        public String value() {
+            return value;
+        }
+    }
+
+    private final String name;
+    private final Architecture architecture;
+    private final int memoryMb;
+    private final int cpus;
+    private final String machine;
+    private final String accelerator;
+    private final Vga vga;
+    private final int width;
+    private final int height;
+    private final List<Path> disks;
+    private final DiskInterface diskInterface;
+    private final Path cdrom;
+    private final String bootOrder;
+    private final boolean rtcLocaltime;
+    private final boolean absolutePointer;
+    private final boolean networking;
+    private final Path uefiVars;
+    private final List<String> extraArgs;
+
+    private VmSpec(Builder b) {
+        this.name = b.name;
+        this.architecture = b.architecture;
+        this.memoryMb = b.memoryMb;
+        this.cpus = b.cpus;
+        this.machine = b.machine != null ? b.machine : b.architecture.defaultMachine();
+        this.accelerator = b.accelerator;
+        this.vga = b.vga;
+        this.width = b.width;
+        this.height = b.height;
+        this.disks = Collections.unmodifiableList(new ArrayList<Path>(b.disks));
+        this.diskInterface = b.diskInterface;
+        this.cdrom = b.cdrom;
+        this.bootOrder = b.bootOrder;
+        this.rtcLocaltime = b.rtcLocaltime;
+        this.absolutePointer = b.absolutePointer;
+        this.networking = b.networking;
+        this.uefiVars = b.uefiVars;
+        this.extraArgs = Collections.unmodifiableList(new ArrayList<String>(b.extraArgs));
+    }
+
+    public static Builder builder(String name) {
+        return new Builder(name);
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public Architecture architecture() {
+        return architecture;
+    }
+
+    public int width() {
+        return width;
+    }
+
+    public int height() {
+        return height;
+    }
+
+    public int memoryMb() {
+        return memoryMb;
+    }
+
+    public int cpus() {
+        return cpus;
+    }
+
+    public String accelerator() {
+        return accelerator;
+    }
+
+    /**
+     * Builds the full argument vector.
+     *
+     * <p>QMP and VNC both go over loopback TCP rather than Unix sockets. Unix sockets would be
+     * marginally faster, but AF_UNIX support in QEMU's Windows builds is not something to bet
+     * cross-platform behaviour on, and at these data rates the difference is unmeasurable.
+     *
+     * @param qemu       probed binaries
+     * @param qmpPort    loopback port QEMU should listen on for QMP
+     * @param vncDisplay VNC display number; the actual port is 5900 + this
+     */
+    public List<String> toArgv(QemuBinary qemu, int qmpPort, int vncDisplay) {
+        String accel = accelerator != null ? accelerator : qemu.bestAccelerator();
+
+        List<String> a = new ArrayList<String>();
+        a.add(qemu.systemBinary().toString());
+        a.add("-name");
+        a.add(name);
+        a.add("-machine");
+        a.add(machine + ",accel=" + accel);
+        a.add("-m");
+        a.add(Integer.toString(memoryMb));
+        a.add("-smp");
+        a.add(Integer.toString(cpus));
+
+        if (architecture == Architecture.AARCH64) {
+            appendAarch64(a, qemu, accel);
+        } else {
+            appendX86(a);
+        }
+
+        // RFB PointerEvent carries absolute coordinates. Without an absolute input device QEMU has
+        // to synthesise relative deltas from them and the guest cursor drifts out of sync with
+        // where we think it is, which breaks aiming the pointer by looking at the monitor.
+        if (absolutePointer) {
+            a.add("-device");
+            a.add("qemu-xhci,id=usb");
+            a.add("-device");
+            a.add("usb-tablet,bus=usb.0");
+            if (architecture == Architecture.AARCH64) {
+                // The virt machine has no PS/2 controller, so without this there is no keyboard.
+                a.add("-device");
+                a.add("usb-kbd,bus=usb.0");
+            }
+        }
+
+        if (networking) {
+            // -nic rather than -netdev, because -netdev alone leaves QEMU's implicit default card
+            // in place and the guest would come up with two.
+            a.add("-nic");
+            a.add("user,model=" + (architecture == Architecture.AARCH64
+                    ? "virtio-net-pci" : "e1000"));
+        } else {
+            a.add("-nic");
+            a.add("none");
+        }
+
+        a.add("-vnc");
+        a.add("127.0.0.1:" + vncDisplay);
+        a.add("-qmp");
+        a.add("tcp:127.0.0.1:" + qmpPort + ",server=on,wait=off");
+        a.add("-monitor");
+        a.add("none");
+
+        if (rtcLocaltime && architecture == Architecture.X86_64) {
+            a.add("-rtc");
+            a.add("base=localtime");
+        }
+
+        String diskInterfaceValue =
+                architecture == Architecture.AARCH64 ? "virtio" : diskInterface.value();
+        for (Path disk : disks) {
+            a.add("-drive");
+            a.add("file=" + disk.toAbsolutePath() + ",format=qcow2,if=" + diskInterfaceValue);
+        }
+
+        if (cdrom != null) {
+            if (architecture == Architecture.AARCH64) {
+                // virt has no IDE, and UEFI boots happily from USB storage.
+                a.add("-drive");
+                a.add("if=none,id=cd0,format=raw,readonly=on,media=cdrom,file="
+                        + cdrom.toAbsolutePath());
+                a.add("-device");
+                a.add("usb-storage,bus=usb.0,drive=cd0");
+            } else {
+                // An explicit drive rather than -cdrom, so the medium can be swapped over QMP.
+                a.add("-drive");
+                a.add("id=cd0,file=" + cdrom.toAbsolutePath() + ",media=cdrom,if="
+                        + diskInterface.value());
+            }
+        }
+
+        if (bootOrder != null && architecture == Architecture.X86_64) {
+            // UEFI decides its own boot order; -boot order only applies to BIOS machines.
+            a.add("-boot");
+            a.add("order=" + bootOrder);
+        }
+
+        a.addAll(extraArgs);
+        return a;
+    }
+
+    private void appendX86(List<String> a) {
+        // Suppress the implicit adapter so the explicit -device below is the only one.
+        a.add("-vga");
+        a.add("none");
+        a.add("-device");
+        a.add(vgaDeviceArg());
+    }
+
+    private void appendAarch64(List<String> a, QemuBinary qemu, String accel) {
+        // There is no default CPU on virt, and hvf can only run the host's own core.
+        a.add("-cpu");
+        a.add("hvf".equals(accel) || "kvm".equals(accel) ? "host" : "max");
+
+        // No BIOS on ARM: firmware is UEFI, supplied as a pair of pflash images. The code half is
+        // read-only and shared; the variable half must be a private writable copy or boot entries
+        // written by an installed system would be lost.
+        Path code = qemu.firmware("edk2-aarch64-code.fd");
+        if (code != null) {
+            a.add("-drive");
+            a.add("if=pflash,format=raw,readonly=on,file=" + code.toAbsolutePath());
+            if (uefiVars != null) {
+                a.add("-drive");
+                a.add("if=pflash,format=raw,file=" + uefiVars.toAbsolutePath());
+            }
+        }
+
+        a.add("-device");
+        StringBuilder gpu = new StringBuilder("virtio-gpu-pci");
+        gpu.append(",edid=on,xres=").append(width).append(",yres=").append(height);
+        a.add(gpu.toString());
+    }
+
+    private String vgaDeviceArg() {
+        StringBuilder sb = new StringBuilder(vga.deviceName());
+        if (vga.supportsEdid()) {
+            // EDID is how the guest is told which mode to prefer; without it most guests come up
+            // at whatever their default is and we would have to scale.
+            sb.append(",edid=on,xres=").append(width).append(",yres=").append(height);
+        }
+        return sb.toString();
+    }
+
+    @Override
+    public String toString() {
+        return "VmSpec{" + name + ", " + width + "x" + height + ", " + memoryMb + "MB, "
+                + cpus + "cpu, " + machine + ", vga=" + vga + ", disks=" + disks.size()
+                + (cdrom != null ? ", cdrom" : "") + "}";
+    }
+
+    /** Mutable builder. */
+    public static final class Builder {
+        private final String name;
+        private int memoryMb = 2048;
+        private int cpus = 2;
+        private Architecture architecture = Architecture.X86_64;
+        private String machine;
+        private String accelerator;
+        private Vga vga = Vga.STD;
+        private int width = 640;
+        private int height = 480;
+        private final List<Path> disks = new ArrayList<Path>();
+        private DiskInterface diskInterface = DiskInterface.IDE;
+        private Path cdrom;
+        private String bootOrder = "dc";
+        private boolean rtcLocaltime = true;
+        private boolean absolutePointer = true;
+        private boolean networking = true;
+        private Path uefiVars;
+        private final List<String> extraArgs = new ArrayList<String>();
+
+        private Builder(String name) {
+            if (name == null || name.isEmpty()) {
+                throw new IllegalArgumentException("name is required");
+            }
+            this.name = name;
+        }
+
+        public Builder memoryMb(int mb) {
+            if (mb < 16) {
+                throw new IllegalArgumentException("memoryMb too small: " + mb);
+            }
+            this.memoryMb = mb;
+            return this;
+        }
+
+        public Builder cpus(int n) {
+            if (n < 1) {
+                throw new IllegalArgumentException("cpus must be >= 1");
+            }
+            this.cpus = n;
+            return this;
+        }
+
+        public Builder architecture(Architecture architecture) {
+            this.architecture = architecture;
+            return this;
+        }
+
+        /** Overrides the architecture default; {@code pc} for DOS and other very old x86 guests. */
+        public Builder machine(String machine) {
+            this.machine = machine;
+            return this;
+        }
+
+        /** Overrides accelerator selection; normally leave unset and let the probe decide. */
+        public Builder accelerator(String accel) {
+            this.accelerator = accel;
+            return this;
+        }
+
+        public Builder vga(Vga vga) {
+            this.vga = vga;
+            return this;
+        }
+
+        /** Guest resolution. Match this to the map grid so no scaling is needed. */
+        public Builder resolution(int width, int height) {
+            if (width < 64 || height < 64) {
+                throw new IllegalArgumentException("resolution too small: " + width + "x" + height);
+            }
+            this.width = width;
+            this.height = height;
+            return this;
+        }
+
+        public Builder addDisk(Path qcow2) {
+            this.disks.add(qcow2);
+            return this;
+        }
+
+        public Builder diskInterface(DiskInterface di) {
+            this.diskInterface = di;
+            return this;
+        }
+
+        public Builder cdrom(Path iso) {
+            this.cdrom = iso;
+            return this;
+        }
+
+        /** QEMU boot order string, e.g. {@code "dc"} for disk-then-cdrom. */
+        public Builder bootOrder(String order) {
+            this.bootOrder = order;
+            return this;
+        }
+
+        public Builder rtcLocaltime(boolean localtime) {
+            this.rtcLocaltime = localtime;
+            return this;
+        }
+
+        /**
+         * Whether to attach a USB tablet for absolute pointing. Leave on for anything modern;
+         * turn it off for pre-USB guests (DOS, Win9x), which need a relative PS/2 mouse instead.
+         */
+        /** Private writable copy of the UEFI variable store; aarch64 only. */
+        public Builder uefiVars(Path varsFile) {
+            this.uefiVars = varsFile;
+            return this;
+        }
+
+        /**
+         * Whether the guest gets a network card with NAT to the outside world.
+         *
+         * <p>Needed to install anything from network media, but worth an admin's attention: NAT
+         * lets a guest reach whatever the host can reach, including other machines on the host's
+         * LAN. On a shared server that is a way for a player's virtual machine to probe the
+         * network around it.
+         */
+        public Builder networking(boolean enabled) {
+            this.networking = enabled;
+            return this;
+        }
+
+        public Builder absolutePointer(boolean absolute) {
+            this.absolutePointer = absolute;
+            return this;
+        }
+
+        /** Escape hatch for flags this class does not model. */
+        public Builder extraArgs(String... args) {
+            for (String s : args) {
+                this.extraArgs.add(s);
+            }
+            return this;
+        }
+
+        public VmSpec build() {
+            return new VmSpec(this);
+        }
+    }
+}

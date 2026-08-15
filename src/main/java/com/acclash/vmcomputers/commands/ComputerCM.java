@@ -1,7 +1,11 @@
 package com.acclash.vmcomputers.commands;
 
 import com.acclash.vmcomputers.commands.computersubcommands.Create;
+import com.acclash.vmcomputers.commands.computersubcommands.Debug;
+import com.acclash.vmcomputers.commands.computersubcommands.Iso;
 import com.acclash.vmcomputers.commands.computersubcommands.Remove;
+import com.acclash.vmcomputers.commands.computersubcommands.TestDisplay;
+import com.acclash.vmcomputers.commands.computersubcommands.Type;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -22,6 +26,10 @@ public class ComputerCM implements TabExecutor {
     public ComputerCM() {
         subCommands.add(new Create());
         subCommands.add(new Remove());
+        subCommands.add(new Iso());
+        subCommands.add(new Type());
+        subCommands.add(new TestDisplay());
+        subCommands.add(new Debug());
     }
 
 

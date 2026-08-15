@@ -1,7 +1,13 @@
 name: VMComputers
 version: '${version}'
 main: com.acclash.vmcomputers.VMComputers
-api-version: '1.20'
+api-version: '26.2'
 authors: [ Anston_Sorensen ]
 description: Control virtual machines inside of vanilla Minecraft
 website: www.acclash.com
+
+commands:
+  vmcomputers:
+    description: Create, remove and manage VM computers.
+    usage: /vmcomputers <create|remove> ...
+    aliases: [ vmc, computer ]

@@ -4,7 +4,13 @@ import com.acclash.vmcomputers.VMComputers;
 
 import java.io.File;
 import java.io.IOException;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.logging.Level;
 
 public class SQLite extends Database {
@@ -34,7 +40,6 @@ public class SQLite extends Database {
         File isoFolder =  new File(newFolder, "isos");
         File hddFolder =  new File(newFolder, "hdds");
         File dataFile = new File(newFolder, dbname + ".db");
-        System.out.println(dataFolder);
         if (!newFolder.exists()) {
             newFolder.mkdir();
         }
