@@ -11,6 +11,7 @@ import com.acclash.vmcomputers.parts.PartModels;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenPump;
 import com.acclash.vmcomputers.listeners.ClickListener;
+import com.acclash.vmcomputers.listeners.OrderingListener;
 import com.acclash.vmcomputers.listeners.PlayerListener;
 import com.acclash.vmcomputers.listeners.PointerListener;
 import com.acclash.vmcomputers.listeners.PreventionListener;
@@ -192,6 +193,7 @@ public final class VMComputers extends JavaPlugin {
         getCommand("vmcomputers").setExecutor(new ComputerCM());
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
         getServer().getPluginManager().registerEvents(new MenuListener(), this);
+        getServer().getPluginManager().registerEvents(new OrderingListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(), this);
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
         this.pointerListener = new PointerListener();

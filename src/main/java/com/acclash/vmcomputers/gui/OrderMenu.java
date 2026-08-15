@@ -1,6 +1,9 @@
 package com.acclash.vmcomputers.gui;
 
+import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.parts.ComponentType;
+import com.acclash.vmcomputers.parts.Delivery;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -8,18 +11,19 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
- * The parts shop, standing in for the mod's ordering tablet.
+ * The parts shop: what you get when you call Steve on the brick phone.
  *
- * <p>The mod wraps buying in a good deal of theatre: the tablet waits to find a satellite, a
- * payment chest falls out of the sky, you load it with iron, and a second chest arrives with the
- * order. None of that is here yet. This is the transaction underneath it -- pick a part, pay iron
- * from your inventory, receive the part -- so that the theatre can be layered on later without the
- * catalogue or the pricing moving.
+ * <p>Stands in for the mod's ordering tablet. The mod acquires a satellite, drops a payment chest
+ * for you to load with iron, then delivers a second chest with the order. Here the iron comes
+ * straight out of your inventory when you order and the parts arrive in a package a few seconds
+ * later -- one delivery rather than two, and no waiting on a satellite.
  *
  * <p>Prices are the mod's own, in iron ingots, from {@link ComponentType}.
  */
@@ -27,6 +31,9 @@ public class OrderMenu extends Menu {
 
     private static final int SIZE = 54;
     private static final int TAB_ROW = 5;
+
+    /** How long a delivery takes. Long enough to feel like one, short enough not to be a chore. */
+    private static final long DELIVERY_TICKS = 60L;
 
     private ComponentType.Category category;
 
@@ -62,7 +69,7 @@ public class OrderMenu extends Menu {
             ItemStack icon = type.toItemStack(1);
             boolean affordable = ironHeld() >= type.price();
             withLore(icon, "", affordable
-                    ? ChatColor.GREEN + "Click to buy"
+                    ? ChatColor.GREEN + "Click to order"
                     : ChatColor.RED + "You need " + (type.price() - ironHeld()) + " more iron");
             set(i, icon);
             offers.put(Integer.valueOf(i), type);
@@ -79,8 +86,9 @@ public class OrderMenu extends Menu {
 
         set(TAB_ROW * ROW + 8, button(Material.IRON_INGOT,
                 ChatColor.GOLD + "Your iron: " + ironHeld(),
-                "Parts are paid for from your",
-                "inventory when you buy them."));
+                "Paid from your inventory when",
+                "you order. Parts arrive in a",
+                "package a few seconds later."));
     }
 
     @Override
@@ -112,22 +120,24 @@ public class OrderMenu extends Menu {
             return;
         }
 
-        // The part is created before the iron is taken, and the iron is only taken if there is
-        // somewhere to put the part. Taking payment first would charge a player whose inventory is
-        // full and give them nothing.
-        ItemStack part = type.toItemStack(1);
-        if (viewer.getInventory().firstEmpty() == -1) {
-            viewer.sendMessage(ChatColor.RED + "Your inventory is full.");
-            viewer.playSound(viewer.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f);
-            return;
-        }
-
         takeIron(type.price());
-        viewer.getInventory().addItem(part);
-        viewer.sendMessage(ChatColor.GREEN + "Bought " + ChatColor.WHITE + type.displayName()
-                + ChatColor.GREEN + " for " + type.price() + " iron.");
+        viewer.sendMessage(ChatColor.GOLD + "Steve: " + ChatColor.WHITE + "ONE "
+                + type.displayName().toUpperCase(Locale.ROOT) + "! IT'S ON THE TRUCK!");
         viewer.playSound(viewer.getLocation(), Sound.ENTITY_VILLAGER_YES, 0.7f, 1.2f);
         refresh();
+
+        // Delivered rather than handed over, so an order is a thing that arrives. The player is
+        // captured rather than the menu: they are free to close it, walk off and get on with
+        // something else while it comes.
+        final Player recipient = viewer;
+        Bukkit.getScheduler().runTaskLater(VMComputers.getPlugin(), () -> {
+            if (!recipient.isOnline()) {
+                return;
+            }
+            Delivery.drop(recipient, Collections.singletonList(type));
+            recipient.sendMessage(ChatColor.GREEN + "A package lands nearby. "
+                    + ChatColor.GRAY + "Right-click it to open it.");
+        }, DELIVERY_TICKS);
     }
 
     private int ironHeld() {
