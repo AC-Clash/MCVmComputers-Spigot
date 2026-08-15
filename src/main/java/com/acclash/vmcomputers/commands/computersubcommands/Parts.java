@@ -1,6 +1,9 @@
 package com.acclash.vmcomputers.commands.computersubcommands;
 
 import com.acclash.vmcomputers.commands.ComputerSubCommand;
+import com.acclash.vmcomputers.computer.ComputerLayout;
+import com.acclash.vmcomputers.display.MonitorSize;
+import com.acclash.vmcomputers.parts.Furniture;
 import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.parts.PartModel;
 import com.acclash.vmcomputers.parts.PartModels;
@@ -71,7 +74,13 @@ public class Parts extends ComputerSubCommand {
         }
 
         String name = args[1].toLowerCase(Locale.ROOT);
-        PartModel model = PartModels.get(name);
+
+        // The desk is generated per computer rather than loaded from parts.json, so it is not in
+        // PartModels. Previewing it needs a size to build against; LARGE is the one the geometry
+        // was tuned for.
+        PartModel model = name.equals("desk")
+                ? Furniture.desk(ComputerLayout.of(MonitorSize.LARGE))
+                : PartModels.get(name);
         if (model == null) {
             player.sendMessage(ChatColor.RED + "No model named '" + args[1] + "'.");
             player.sendMessage(ChatColor.GRAY + "Try /vmcomputers parts list");
@@ -137,6 +146,7 @@ public class Parts extends ComputerSubCommand {
     public List<String> onTabComplete(CommandSender sender, String[] args) {
         if (args.length == 2) {
             List<String> options = new ArrayList<String>(PartModels.names());
+            options.add("desk");
             options.add("list");
             options.add("clear");
             return options;

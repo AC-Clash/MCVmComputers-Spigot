@@ -8,6 +8,8 @@ import com.acclash.vmcomputers.display.MonitorSize;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.emu.QemuBinary;
 import com.acclash.vmcomputers.emu.VmSpec;
+import com.acclash.vmcomputers.parts.Furniture;
+import com.acclash.vmcomputers.parts.PartModel;
 import com.acclash.vmcomputers.parts.PartRenderer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -186,8 +188,16 @@ public class Create extends ComputerSubCommand {
         for (ComputerLayout.Offset offset : layout.backingBlocks()) {
             computer.locationOf(world, offset).getBlock().setType(Material.SMOOTH_STONE, false);
         }
+        // The desk is drawn by display entities, so its blocks exist only to stop players walking
+        // through it. BARRIER because it is invisible: a slab would show as a solid mass beneath
+        // the desktop and hide the legs, which is the whole difference between a desk and a bench.
         for (ComputerLayout.Offset offset : layout.deskBlocks()) {
-            computer.locationOf(world, offset).getBlock().setType(Material.SMOOTH_STONE_SLAB, false);
+            computer.locationOf(world, offset).getBlock().setType(Material.BARRIER, false);
+        }
+        PartModel desk = Furniture.desk(layout);
+        if (desk != null) {
+            PartRenderer.spawn(computer.anchorLocation(world).add(0.5, 0.0, 0.5),
+                    computer.facing(), desk, 1.0f, computer.id());
         }
 
         // One map per panel, row-major from the top-left so tile order matches the framebuffer.
