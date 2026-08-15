@@ -53,9 +53,9 @@ QEMU process ──QMP (JSON/TCP)──▶  emu/    lifecycle: start, stop, medi
 | `emu/` | QEMU process + control. **No Bukkit** except `VmService`. | `VmSpec` (config→argv), `QemuProcess`, `QmpClient`, `QemuBinary`, `VmService` (orchestrates), `VirtualMachine` (the seam) |
 | `rfb/` | RFB 3.8 client. **No Bukkit.** | `RfbClient` |
 | `display/` | Guest pixels → Minecraft maps | `MonitorScreen`, `PanelRenderer`, `ScreenPump` (sends frames), `MapColorLut`, `ImageScaler`, `ScreenGeometry`, `MonitorSize` |
-| `computer/` | The in-world model | `ComputerLayout` (pure offsets), `Computer`, `ComputerRegistry` (O(1) block index) |
+| `computer/` | The in-world model | `ComputerLayout` (pure offsets), `Computer`, `ComputerRegistry` (O(1) block index), `ComputerBuilder` (puts one in the world), `PendingCase` (placed, not yet assembled) |
 | `parts/` | Component appearance + catalogue | `PartModel`/`PartModels` (geometry from `parts.json`), `PartRenderer` (transforms + spawning), `Furniture` (generated desk), `ComponentType`/`ComponentSlot` |
-| `gui/` | Chest menus | `Menu` (base, holder-identified), `MenuListener`, `OrderMenu` (shop), `CaseMenu` (shift-click the tower), `IsoMenu` |
+| `gui/` | Chest menus | `Menu` (base, holder-identified), `MenuListener`, `OrderMenu` (shop), `CaseMenu` (shift-click the tower), `AssemblyMenu` (click a placed case), `IsoMenu` |
 | `sql/` | Persistence | `ComputerDao` |
 | `listeners/` | Game events | `PointerListener`, `PreventionListener`, `ClickListener`, `PlayerListener` |
 | `bench/` | Standalone harness, no Minecraft needed | `RfbDump` |
@@ -309,6 +309,7 @@ java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --o
 /vmcomputers testdisplay [clear]      # ItemDisplay diagnostic (answer: doesn't work)
 /vmcomputers debug                    # toggle: draws the pointer on screen, for testing
 /vmcomputers order                    # parts shop, paid in iron
+/vmcomputers phone                    # hands you a brick phone
 /vmcomputers parts list               # component models and their piece counts
 /vmcomputers parts <model> [scale]    # preview one where you stand, facing you
 /vmcomputers parts clear              # remove previews within 32 blocks
@@ -377,14 +378,18 @@ code.
   architecture. Anston's call, noted 2026-08-14.
 - **No size-selection GUI** — user asked for "both" (command arg *and* chest GUI); only the arg
   exists. `Create.perform` has a TODO where the menu should open.
-- **The ordering GUI has no delivery theatre.** The mod makes you wait for a satellite, drops a
-  payment chest, then an order chest. Here `/vmcomputers order` opens the catalogue and pays iron
-  straight out of your inventory. The transaction underneath is the same, so the theatre can be
-  layered on without the catalogue or the prices moving.
-- **No ordering tablet item.** The shop is a command. The mod reaches it through a held tablet.
-- **Assembly has no in-world build route.** `/vmcomputers create` still builds a whole machine and
-  fits it with the default loadout. There is no "place an empty case and build it up" path, so
-  ordering parts is currently only useful for *changing* a machine, not creating one.
+- **No recipe for the brick phone.** `/vmcomputers phone` is the only way to get one, which makes
+  it the single thing standing between a fresh server and the whole ordering loop.
+- **No payment-on-delivery.** The mod drops a payment chest first; here iron is taken when you
+  order and the package only carries goods.
+- **The 32-bit motherboard does nothing.** Both supported architectures are 64-bit, so it can never
+  be the right choice. Either give it a real limitation (a RAM cap is the honest one) or cut it.
+- **The GPU does nothing but be required.** No tiers, no effect on the guest.
+- **Peripherals on computers built before the monitor bay existed** are drawn on the desk but have
+  no component fitted, so their case menu shows those bays empty. Cosmetic, and only affects
+  machines that predate this work.
+- **No permissions.** Any player can order, assemble, and `remove` someone else's computer. The
+  shop makes this worse than it was: griefing now has a payoff.
 - **Parts that carry their detail in a texture come out flat.** The keyboard is one cuboid whose
   mod texture draws the key rows, and the motherboard's traces and capacitors are painted on;
   neither survives the conversion to blocks. The fix is to add geometry the mod never needed —

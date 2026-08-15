@@ -3,14 +3,15 @@ package com.acclash.vmcomputers.parts;
 import org.bukkit.Material;
 
 /**
- * The bays inside a case, one component each.
+ * The bays on a computer, one component each.
  *
  * <p>Deliberately a small fixed set rather than a free-form list. A computer in the mod takes one
- * board, one chip, one stick and one card, and modelling it that way means an installed machine is
- * five nullable references instead of an inventory that has to be validated on every read.
+ * board, one chip, one stick and one card, and modelling it that way means an assembled machine is
+ * a handful of nullable references instead of an inventory that has to be validated on every read.
  *
- * <p>Peripherals are not here. A keyboard, a mouse and a monitor sit on the desk rather than in the
- * case, and their {@link ComponentType}s have no slot.
+ * <p>Peripherals are bays too, even though they hang off the outside rather than sitting in the
+ * case. It is the same question -- what is fitted, and what does it do -- and giving them their own
+ * mechanism would mean two ways to ask it.
  */
 public enum ComponentSlot {
 
@@ -22,8 +23,19 @@ public enum ComponentSlot {
             "How much memory the guest gets."),
     GPU("Graphics", Material.DAYLIGHT_DETECTOR, true,
             "Drives the monitor."),
+    /**
+     * Required, and the one that decides the shape of the whole machine: its tier sets the monitor
+     * size, and fitting it is what turns a bare case into a built computer with a desk and a
+     * screen. Nothing can be assembled without knowing how big the screen is.
+     */
+    MONITOR("Monitor", Material.ITEM_FRAME, true,
+            "Sets the screen size. Needed to assemble."),
     HARD_DRIVE("Storage", Material.IRON_BLOCK, false,
-            "Optional. Without one, nothing survives a power cycle.");
+            "Optional. Without one, nothing survives a power cycle."),
+    KEYBOARD("Keyboard", Material.POLISHED_BLACKSTONE_PRESSURE_PLATE, false,
+            "Optional. Sits on the desk."),
+    MOUSE("Mouse", Material.QUARTZ, false,
+            "Optional. Sits on the desk.");
 
     private final String label;
     private final Material emptyIcon;
@@ -46,12 +58,17 @@ public enum ComponentSlot {
         return emptyIcon;
     }
 
-    /** Whether the machine refuses to power on without it. */
+    /** Whether the machine refuses to run without it. */
     public boolean required() {
         return required;
     }
 
     public String description() {
         return description;
+    }
+
+    /** Bays that sit on the desk and are drawn there when fitted. */
+    public boolean isDeskPeripheral() {
+        return this == KEYBOARD || this == MOUSE;
     }
 }

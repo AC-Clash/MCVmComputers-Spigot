@@ -1,6 +1,9 @@
 package com.acclash.vmcomputers.sql;
 
 import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.computer.PendingCase;
+import com.acclash.vmcomputers.parts.ComponentSlot;
+import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.display.MonitorSize;
 import org.bukkit.block.BlockFace;
 
@@ -43,6 +46,25 @@ public final class ComputerDao {
                     + "UNIQUE (world, x, y, z)"
                     + ")";
 
+    private static final String CREATE_CASES =
+            "CREATE TABLE IF NOT EXISTS pending_cases ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    + "world TEXT NOT NULL,"
+                    + "x INTEGER NOT NULL,"
+                    + "y INTEGER NOT NULL,"
+                    + "z INTEGER NOT NULL,"
+                    + "facing TEXT NOT NULL,"
+                    + "UNIQUE (world, x, y, z)"
+                    + ")";
+
+    private static final String CREATE_CASE_COMPONENTS =
+            "CREATE TABLE IF NOT EXISTS pending_case_components ("
+                    + "case_id INTEGER NOT NULL,"
+                    + "slot TEXT NOT NULL,"
+                    + "component_id TEXT NOT NULL,"
+                    + "PRIMARY KEY (case_id, slot)"
+                    + ")";
+
     private static final String CREATE_COMPONENTS =
             "CREATE TABLE IF NOT EXISTS computer_components ("
                     + "computer_id INTEGER NOT NULL,"
@@ -81,6 +103,8 @@ public final class ComputerDao {
             statement.executeUpdate(CREATE_TABLE);
             statement.executeUpdate(CREATE_PANELS);
             statement.executeUpdate(CREATE_COMPONENTS);
+            statement.executeUpdate(CREATE_CASES);
+            statement.executeUpdate(CREATE_CASE_COMPONENTS);
             // Added after the table shipped, so existing databases need it bolted on.
             if (!hasColumn(connection, "computers", "iso")) {
                 statement.executeUpdate("ALTER TABLE computers ADD COLUMN iso TEXT");
@@ -270,6 +294,108 @@ public final class ComputerDao {
             }
         }
         return out;
+    }
+
+    // ---- pending cases ---------------------------------------------------
+
+    /** Inserts a placed case and returns it with the id the database assigned. */
+    public PendingCase insertCase(PendingCase pending) throws SQLException {
+        Connection connection = database.getSQLConnection();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO pending_cases (world, x, y, z, facing) VALUES (?, ?, ?, ?, ?)",
+                Statement.RETURN_GENERATED_KEYS)) {
+            statement.setString(1, pending.worldName());
+            statement.setInt(2, pending.x());
+            statement.setInt(3, pending.y());
+            statement.setInt(4, pending.z());
+            statement.setString(5, pending.facing().name());
+            statement.executeUpdate();
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                if (keys.next()) {
+                    return new PendingCase(keys.getInt(1), pending.worldName(), pending.x(),
+                            pending.y(), pending.z(), pending.facing());
+                }
+            }
+        }
+        throw new SQLException("pending case insert returned no id");
+    }
+
+    public List<PendingCase> loadAllCases() throws SQLException {
+        List<PendingCase> out = new ArrayList<PendingCase>();
+        Map<Integer, Map<String, String>> parts = loadAllCaseComponents();
+        try (PreparedStatement statement = database.getSQLConnection().prepareStatement(
+                "SELECT id, world, x, y, z, facing FROM pending_cases");
+             ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) {
+                try {
+                    PendingCase pending = new PendingCase(rs.getInt("id"), rs.getString("world"),
+                            rs.getInt("x"), rs.getInt("y"), rs.getInt("z"),
+                            BlockFace.valueOf(rs.getString("facing")));
+                    Map<String, String> fitted = parts.get(Integer.valueOf(pending.id()));
+                    if (fitted != null) {
+                        for (Map.Entry<String, String> entry : fitted.entrySet()) {
+                            ComponentType type = ComponentType.byId(entry.getValue());
+                            if (type != null) {
+                                pending.install(ComponentSlot.valueOf(entry.getKey()), type);
+                            }
+                        }
+                    }
+                    out.add(pending);
+                } catch (IllegalArgumentException ignored) {
+                    // Unknown facing or slot name: skip the row rather than refuse to start.
+                }
+            }
+        }
+        return out;
+    }
+
+    private Map<Integer, Map<String, String>> loadAllCaseComponents() throws SQLException {
+        Map<Integer, Map<String, String>> out = new HashMap<Integer, Map<String, String>>();
+        try (PreparedStatement statement = database.getSQLConnection().prepareStatement(
+                "SELECT case_id, slot, component_id FROM pending_case_components");
+             ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) {
+                out.computeIfAbsent(Integer.valueOf(rs.getInt("case_id")),
+                                k -> new HashMap<String, String>())
+                        .put(rs.getString("slot"), rs.getString("component_id"));
+            }
+        }
+        return out;
+    }
+
+    public void saveCaseComponent(int caseId, String slot, String componentId) throws SQLException {
+        Connection connection = database.getSQLConnection();
+        if (componentId == null) {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM pending_case_components WHERE case_id = ? AND slot = ?")) {
+                statement.setInt(1, caseId);
+                statement.setString(2, slot);
+                statement.executeUpdate();
+            }
+            return;
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT OR REPLACE INTO pending_case_components (case_id, slot, component_id) "
+                        + "VALUES (?, ?, ?)")) {
+            statement.setInt(1, caseId);
+            statement.setString(2, slot);
+            statement.setString(3, componentId);
+            statement.executeUpdate();
+        }
+    }
+
+    public void deleteCase(int caseId) throws SQLException {
+        Connection connection = database.getSQLConnection();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM pending_case_components WHERE case_id = ?")) {
+            statement.setInt(1, caseId);
+            statement.executeUpdate();
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM pending_cases WHERE id = ?")) {
+            statement.setInt(1, caseId);
+            statement.executeUpdate();
+        }
     }
 
     public void deleteComponents(int computerId) throws SQLException {
