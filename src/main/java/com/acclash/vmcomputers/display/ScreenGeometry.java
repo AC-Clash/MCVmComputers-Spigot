@@ -187,20 +187,6 @@ public final class ScreenGeometry {
         return new Hit(gridX, gridY, imageX, imageY, onImage, t * length);
     }
 
-    /**
-     * Convenience wrapper taking Minecraft's yaw and pitch in degrees.
-     *
-     * <p>Yaw is measured clockwise from south, and pitch is negative when looking up, which is why
-     * this conversion is easy to get subtly wrong by hand.
-     */
-    public Hit traceLook(double[] eye, float yawDegrees, float pitchDegrees) {
-        double yaw = Math.toRadians(yawDegrees);
-        double pitch = Math.toRadians(pitchDegrees);
-        double cosPitch = Math.cos(pitch);
-        return trace(eye[0], eye[1], eye[2],
-                -cosPitch * Math.sin(yaw), -Math.sin(pitch), cosPitch * Math.cos(yaw));
-    }
-
     private static int clamp(int value, int min, int max) {
         return value < min ? min : (value > max ? max : value);
     }

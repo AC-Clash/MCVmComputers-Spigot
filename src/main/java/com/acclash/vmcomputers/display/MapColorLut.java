@@ -206,16 +206,4 @@ public final class MapColorLut {
         }
     }
 
-    /**
-     * Reference implementation using Bukkit's per-pixel matcher. Only here so the benchmark can
-     * show the difference; never use this on a live framebuffer.
-     */
-    @SuppressWarnings("deprecation")
-    public static void quantizeWithMapPalette(int[] argb, int width, int height, byte[] out) {
-        int count = width * height;
-        for (int i = 0; i < count; i++) {
-            int p = argb[i];
-            out[i] = MapPalette.matchColor(new Color(p >> 16 & 0xFF, p >> 8 & 0xFF, p & 0xFF));
-        }
-    }
 }

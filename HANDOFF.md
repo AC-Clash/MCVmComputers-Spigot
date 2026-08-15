@@ -326,10 +326,6 @@ code.
   exists. `Create.perform` has a TODO where the menu should open.
 - **No OS catalog / downloader.** ISOs are dropped in a folder by hand. Plan: port `quickget`'s
   catalog concept to a JSON manifest.
-- `MagishaMapRenderer`, `Serialization`, `Calculator`, `ProgressBar` in `utils/` are **leftovers**
-  from the old design, largely unused. `Calculator` can mostly be deleted (`player.getFacing()` and
-  `BlockFace.getOppositeFace()` replace it); its `Tuple<BlockFace, Integer>` declares *type
-  parameters* shadowing the real types.
 - **Security:** guests get user-mode NAT, which reaches whatever the host can reach including its
   LAN. `VmSpec.Builder.networking(false)` turns it off. Worth an admin config knob.
 
@@ -371,7 +367,11 @@ code.
    click-to-position model; must work in a BIOS, so it can't be guest-side.
 4. **Size-selection GUI** for `create`.
 5. **OS catalog + downloader.**
-6. Delete the `utils/` leftovers.
+6. **Resource pack** — it exists for audio and possible computer textures, and the URL in
+   `PlayerListener` is a dead Dropbox link served with `force = true`, which kicks anyone whose
+   download fails. Needs rehosting and rethinking, not deleting.
+7. **Permissions** — `plugin.yml` declares none, so any player can `create` and, worse, `remove`
+   someone else's computer.
 
 ---
 
