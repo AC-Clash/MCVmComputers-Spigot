@@ -41,6 +41,17 @@ public final class AudioService {
     private static final int STREAM_CHUNK = 8192;
     /** How long a stream waits for audio before checking whether it should still be running. */
     private static final long IDLE_POLL_MILLIS = 500L;
+    /**
+     * Silence written when the guest has nothing to say. Ten milliseconds of it, stereo.
+     *
+     * <p>Two jobs, both essential. It flushes the response headers: {@code fetch} in the browser
+     * does not resolve until headers arrive, and a guest that happens to be quiet when someone
+     * connects would otherwise leave the page saying "connecting" forever -- which is exactly what
+     * it did. And it is the only way to notice a listener has gone: a closed tab is invisible until
+     * a write to it fails, so a stream that never writes never ends, and its thread never comes
+     * back.
+     */
+    private static final byte[] SILENCE = new byte[1764];
 
     private final VMComputers plugin;
     private final int port;
@@ -90,9 +101,11 @@ public final class AudioService {
             server.createContext("/listen", this::handlePage);
             server.createContext("/stream", this::handleStream);
             server.createContext("/worklet.js", this::handleWorklet);
-            // A streaming response holds its thread for as long as the listener stays, so this is
-            // a listener limit as much as a thread pool.
-            server.setExecutor(Executors.newFixedThreadPool(16, runnable -> {
+            // Cached rather than fixed. A streaming response holds its thread for as long as the
+            // listener stays, so a fixed pool is really a listener limit -- and once it is full,
+            // even the page and the worklet cannot be served, which looks to everyone like the
+            // server has hung. Threads are reclaimed when a stream ends, and streams now end.
+            server.setExecutor(Executors.newCachedThreadPool(runnable -> {
                 Thread thread = new Thread(runnable, "vm-audio-http");
                 thread.setDaemon(true);
                 return thread;
@@ -189,18 +202,25 @@ public final class AudioService {
         // Length 0 means chunked, which is what makes this a live stream rather than a download.
         exchange.sendResponseHeaders(200, 0);
 
-        boolean firstListener;
         try (AudioBus.Reader reader = bus.openReader();
              OutputStream body = exchange.getResponseBody()) {
-            firstListener = true;
             setGuestAudio(computerId, true);
+            // Straight away, before waiting on the guest: this is what gets the headers to the
+            // browser so its fetch resolves and the page stops saying "connecting".
+            body.write(SILENCE);
+            body.flush();
+
             byte[] chunk = new byte[STREAM_CHUNK];
             while (buses.containsKey(Integer.valueOf(computerId))) {
                 int count = reader.read(chunk, IDLE_POLL_MILLIS);
                 if (count > 0) {
                     body.write(chunk, 0, count);
-                    body.flush();
+                } else {
+                    // Nothing from the guest. Write anyway, or a listener who closed their tab
+                    // during a quiet moment would hold this thread until the machine powered off.
+                    body.write(SILENCE);
                 }
+                body.flush();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

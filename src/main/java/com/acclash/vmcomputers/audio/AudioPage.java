@@ -107,6 +107,12 @@ final class AudioPage {
                 <script>
                 const BUTTON = document.getElementById('go');
                 const STATE = document.getElementById('state');
+                let current = null;
+
+                // Browsers allow only about six connections to one origin, and a stream holds one
+                // open for as long as it plays. Without this, listening twice in a tab leaves the
+                // old stream running and the new one queued behind it forever.
+                window.addEventListener('pagehide', () => current && current.abort());
 
                 // Browsers refuse to start audio without a gesture, so this cannot run on load.
                 BUTTON.addEventListener('click', async () => {
@@ -119,7 +125,9 @@ final class AudioPage {
                     node.connect(ctx.destination);
                     await ctx.resume();
 
-                    const response = await fetch('%s');
+                    if (current) { current.abort(); }
+                    current = new AbortController();
+                    const response = await fetch('%s', { signal: current.signal });
                     if (!response.ok) {
                       throw new Error('server said ' + response.status);
                     }
