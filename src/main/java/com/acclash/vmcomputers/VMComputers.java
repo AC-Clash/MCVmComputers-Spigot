@@ -10,6 +10,7 @@ import com.acclash.vmcomputers.parts.BrickPhone;
 import com.acclash.vmcomputers.parts.ComponentSlot;
 import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.parts.Currency;
+import com.acclash.vmcomputers.parts.DeliveryTruck;
 import com.acclash.vmcomputers.parts.PartModels;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenPump;
@@ -204,6 +205,14 @@ public final class VMComputers extends JavaPlugin {
         BrickPhone.registerRecipe();
         Currency.registerRecipe();
 
+        // A delivery's truck and courier are scenery for nine seconds and are spawned
+        // non-persistent, so a crash loses them on its own. A /reload does not unload chunks,
+        // which would leave a truck parked in someone's garden forever.
+        int stranded = DeliveryTruck.sweep();
+        if (stranded > 0) {
+            getLogger().info("Cleared " + stranded + " leftover delivery entit(ies).");
+        }
+
         this.db = new SQLite(this);
         this.db.load();
         this.computerDao = new ComputerDao(this.db);
@@ -277,6 +286,14 @@ public final class VMComputers extends JavaPlugin {
             }
         } catch (Throwable t) {
             getLogger().log(Level.SEVERE, "Failed to stop screen tasks during shutdown", t);
+        }
+
+        try {
+            // Hands over anything still on the road before tearing the truck down. The parts have
+            // been paid for; a server restart must not be a way to lose them.
+            DeliveryTruck.stopAll();
+        } catch (Throwable t) {
+            getLogger().log(Level.SEVERE, "Failed to finish deliveries during shutdown", t);
         }
 
         try {

@@ -1,18 +1,21 @@
 package com.acclash.vmcomputers.parts;
 
 import com.acclash.vmcomputers.VMComputers;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
-import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,7 +51,44 @@ public final class Delivery {
     /** Owner id for delivery decoration, so it is never mistaken for part of a computer. */
     private static final int DELIVERY_OWNER = -2;
 
+    /** How long a delivery takes when there is no road and no truck. */
+    private static final long PLAIN_DELIVERY_TICKS = 60L;
+
     private Delivery() {
+    }
+
+    /**
+     * Delivers an order, by truck where there is room for one.
+     *
+     * <p>The truck brings its own pacing -- it is nine seconds of driving and walking -- so only
+     * the plain route waits on a timer. {@link DeliveryTruck#dispatch} declines when there is
+     * nowhere to drive, which is often: caves, small rooms, rooftops and boats all fail it, and
+     * every one of those still has to end with the player getting what they paid for.
+     */
+    public static void deliver(Player player, List<ComponentType> contents) {
+        if (DeliveryTruck.dispatch(player, contents)) {
+            return;
+        }
+
+        player.sendMessage(ChatColor.GRAY
+                + "Steve can't get the truck in here. He'll leave it by the door.");
+
+        // Where they were when they ordered, so an order is never swallowed by a disconnect.
+        final Location ordered = player.getLocation();
+        final UUID owner = player.getUniqueId();
+        final BlockFace facing = player.getFacing().getOppositeFace();
+        Bukkit.getScheduler().runTaskLater(VMComputers.getPlugin(), () -> {
+            Player recipient = Bukkit.getPlayer(owner);
+            if (recipient == null || !recipient.isOnline()) {
+                dropAt(ordered, owner, facing, contents);
+                return;
+            }
+            boolean fresh = send(recipient, contents);
+            recipient.sendMessage(fresh
+                    ? ChatColor.GREEN + "A package lands nearby. "
+                            + ChatColor.GRAY + "Right-click it to open it."
+                    : ChatColor.GREEN + "The courier adds it to the box you already have.");
+        }, PLAIN_DELIVERY_TICKS);
     }
 
     /**
@@ -71,18 +111,42 @@ public final class Delivery {
     }
 
     private static void drop(Player player, List<ComponentType> contents) {
-        Location spot = landingSpot(player);
+        dropAt(landingSpot(player), player.getUniqueId(),
+                player.getFacing().getOppositeFace(), contents);
+    }
+
+    /**
+     * Puts a package at a point in the world.
+     *
+     * <p>Split out from {@link #drop} so a delivery can still land when there is no {@link Player}
+     * to hang it off -- a player who disconnects mid-delivery has already paid, and the box has to
+     * go somewhere.
+     *
+     * @param spot   where the box sits; its bottom centre
+     * @param owner  who may merge later orders into it
+     * @param facing which way the box is turned
+     */
+    public static void dropAt(Location spot, UUID owner, BlockFace facing,
+                              List<ComponentType> contents) {
         World world = spot.getWorld();
 
-        List<BlockDisplay> displays = PartRenderer.spawnNamedDisplays(
-                spot, player.getFacing().getOppositeFace(), "package", 1.0f, DELIVERY_OWNER);
+        List<Entity> pieces = new ArrayList<Entity>(
+                PartRenderer.spawnNamedDisplays(spot, facing, "package", 1.0f, DELIVERY_OWNER));
+
+        // The company's name on both long sides. Short form: the whole name scaled to fit a
+        // 0.81-block face is unreadable.
+        Quaternionf turn = new Quaternionf().rotateY(PartRenderer.yawFor(facing));
+        for (Branding.Face face : new Branding.Face[]{Branding.Face.RIGHT, Branding.Face.LEFT}) {
+            pieces.add(Branding.sign(spot, Branding.COMPANY_SHORT,
+                    new Vector3f(face == Branding.Face.RIGHT ? 0.26f : -0.26f, 0.24f, 0f),
+                    turn, face, 0.5f));
+        }
 
         StringBuilder ids = new StringBuilder();
-        for (BlockDisplay display : displays) {
-            ids.append(ids.length() == 0 ? "" : ",").append(display.getUniqueId());
+        for (Entity piece : pieces) {
+            ids.append(ids.length() == 0 ? "" : ",").append(piece.getUniqueId());
         }
         final String displayIds = ids.toString();
-        final UUID owner = player.getUniqueId();
 
         world.spawn(spot, Interaction.class, interaction -> {
             // Sized to the package model, which is roughly half a block across and a bit under
@@ -211,8 +275,12 @@ public final class Delivery {
      *
      * <p>Falls back to their own feet if the spot in front is obstructed, which is better than a
      * package inside a wall.
+     *
+     * <p>Public because the delivery truck throws the box rather than setting it down, and the
+     * thrown one has to land exactly where the real one appears. Aiming at anything else puts a
+     * visible jump at the moment they swap.
      */
-    private static Location landingSpot(Player player) {
+    public static Location landingSpot(Player player) {
         Location base = player.getLocation();
         Vector forward = base.getDirection().setY(0);
         Location candidate = forward.lengthSquared() < 1.0e-6

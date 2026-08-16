@@ -1,10 +1,8 @@
 package com.acclash.vmcomputers.gui;
 
-import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.parts.Currency;
 import com.acclash.vmcomputers.parts.Delivery;
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -31,9 +29,6 @@ public class OrderMenu extends Menu {
 
     private static final int SIZE = 54;
     private static final int TAB_ROW = 5;
-
-    /** How long a delivery takes. Long enough to feel like one, short enough not to be a chore. */
-    private static final long DELIVERY_TICKS = 60L;
 
     private static final int CART_SLOT = TAB_ROW * ROW + 4;
     private static final int CLEAR_SLOT = TAB_ROW * ROW + 5;
@@ -216,20 +211,10 @@ public class OrderMenu extends Menu {
         viewer.playSound(viewer.getLocation(), Sound.ENTITY_VILLAGER_YES, 0.7f, 1.2f);
         refresh();
 
-        // Delivered rather than handed over, so an order is a thing that arrives. The player is
-        // captured rather than the menu: they are free to close it, walk off and get on with
-        // something else while it comes.
-        final Player recipient = viewer;
-        Bukkit.getScheduler().runTaskLater(VMComputers.getPlugin(), () -> {
-            if (!recipient.isOnline()) {
-                return;
-            }
-            boolean fresh = Delivery.send(recipient, ordered);
-            recipient.sendMessage(fresh
-                    ? ChatColor.GREEN + "A package lands nearby. "
-                            + ChatColor.GRAY + "Right-click it to open it."
-                    : ChatColor.GREEN + "The courier adds it to the box you already have.");
-        }, DELIVERY_TICKS);
+        // Delivered rather than handed over, so an order is a thing that arrives. Timing, routing
+        // and the messages that go with them belong to Delivery, which knows whether a truck can
+        // get here; the shop's job ends at taking the money.
+        Delivery.deliver(viewer, ordered);
     }
 
     private int held() {

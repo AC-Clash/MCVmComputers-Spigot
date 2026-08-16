@@ -35,15 +35,21 @@ public final class PartModel {
         /** Rotation angle in radians. */
         private final float angle;
         private final Vector3f pivot;
+        /** Where this box sits when stowed, or null if it does not move. */
+        private final Piece folded;
+        /** True for a box that turns about its own centre while the fans are running. */
+        private final boolean spins;
 
         Piece(BlockData block, Vector3f size, Vector3f centre, Vector3f axis, float angle,
-              Vector3f pivot) {
+              Vector3f pivot, Piece folded, boolean spins) {
             this.block = block;
             this.size = size;
             this.centre = centre;
             this.axis = axis;
             this.angle = angle;
             this.pivot = pivot;
+            this.folded = folded;
+            this.spins = spins;
         }
 
         public BlockData block() {
@@ -74,6 +80,31 @@ public final class PartModel {
 
         public Vector3f pivot() {
             return pivot == null ? new Vector3f() : new Vector3f(pivot);
+        }
+
+        /**
+         * The same box in its stowed pose, or null if this box never moves.
+         *
+         * <p>A second pose rather than an animation: a display interpolates between whatever
+         * transformation it has and the next one it is given, so two authored poses and a
+         * duration are the whole of a moving part. The truck's landing gear is the only user --
+         * the wheels lie flat under the body in flight and swing down to land.
+         *
+         * <p>Authored in the model file rather than computed, because the alternative is fold
+         * geometry hardcoded in Java against box positions that live in JSON, which drift apart
+         * silently the moment either is edited.
+         */
+        public Piece folded() {
+            return folded;
+        }
+
+        public boolean folds() {
+            return folded != null;
+        }
+
+        /** A fan blade. Its centre is also where the downwash is drawn from. */
+        public boolean spins() {
+            return spins;
         }
     }
 
