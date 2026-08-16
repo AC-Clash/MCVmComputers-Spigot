@@ -117,6 +117,6 @@ public final class Furniture {
                                        float x1, float y1, float z1) {
         Vector3f size = new Vector3f(x1 - x0, y1 - y0, z1 - z0);
         Vector3f centre = new Vector3f((x0 + x1) / 2f, (y0 + y1) / 2f, (z0 + z1) / 2f);
-        return new PartModel.Piece(block, size, centre, null, 0f, null);
+        return new PartModel.Piece(block, size, centre, null, 0f, null, null, false);
     }
 }
