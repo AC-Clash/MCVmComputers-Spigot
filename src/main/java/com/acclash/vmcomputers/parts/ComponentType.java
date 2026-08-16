@@ -20,8 +20,8 @@ import java.util.Map;
  * The catalogue of orderable components: what they are called, what they cost, what they look like
  * in an inventory, and which {@link PartModel} draws them in the world.
  *
- * <p>Prices and tiers come from the mod's {@code ItemList}, in iron ingots, so a player who knows
- * the mod pays what they expect.
+ * <p>Prices and tiers are the mod's own numbers from its {@code ItemList}, so a player who knows
+ * the mod pays what they expect. The mod charges them in iron; here they are {@link Currency}.
  *
  * <h2>Why the icons are ordinary vanilla items</h2>
  *
@@ -278,7 +278,7 @@ public final class ComponentType {
         return value != null && !value.isEmpty();
     }
 
-    /** Price in iron ingots, as in the mod. */
+    /** Price in Auros. The number is the mod's; only the currency differs. */
     public int price() {
         return price;
     }
@@ -343,7 +343,7 @@ public final class ComponentType {
             List<String> lore = new ArrayList<String>();
             lore.add(ChatColor.GRAY + description);
             lore.add("");
-            lore.add(ChatColor.GOLD + "Price: " + price + " iron");
+            lore.add(ChatColor.GOLD + "Price: " + Currency.format(price));
             meta.setLore(lore);
             meta.getPersistentDataContainer().set(key(), PersistentDataType.STRING, id);
             stack.setItemMeta(meta);

@@ -2,6 +2,7 @@ package com.acclash.vmcomputers.gui;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.parts.ComponentType;
+import com.acclash.vmcomputers.parts.Currency;
 import com.acclash.vmcomputers.parts.Delivery;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -20,11 +21,11 @@ import java.util.Map;
  * The parts shop: what you get when you call Steve on the brick phone.
  *
  * <p>Stands in for the mod's ordering tablet. The mod acquires a satellite, drops a payment chest
- * for you to load with iron, then delivers a second chest with the order. Here the iron comes
+ * for you to load with payment, then delivers a second chest with the order. Here the money comes
  * straight out of your inventory when you order and the parts arrive in a package a few seconds
  * later -- one delivery rather than two, and no waiting on a satellite.
  *
- * <p>Prices are the mod's own, in iron ingots, from {@link ComponentType}.
+ * <p>Prices are the mod's own numbers, charged in {@link Currency}.
  */
 public class OrderMenu extends Menu {
 
@@ -100,8 +101,8 @@ public class OrderMenu extends Menu {
                     active ? "Showing this section" : "Click to view"));
         }
 
-        set(TAB_ROW * ROW + 8, button(Material.IRON_INGOT,
-                ChatColor.GOLD + "Your iron: " + ironHeld(),
+        set(TAB_ROW * ROW + 8, button(Currency.ITEM,
+                ChatColor.GOLD + "Your balance: " + Currency.format(held()),
                 "Paid when you place the order."));
 
         drawCart();
@@ -123,13 +124,14 @@ public class OrderMenu extends Menu {
             }
         }
         lines.add("");
-        lines.add(total <= ironHeld()
-                ? ChatColor.GOLD + "Total: " + total + " iron"
-                : ChatColor.RED + "Total: " + total + " iron (you have " + ironHeld() + ")");
+        lines.add(total <= held()
+                ? ChatColor.GOLD + "Total: " + Currency.format(total)
+                : ChatColor.RED + "Total: " + Currency.format(total)
+                        + " (you have " + held() + ")");
         lines.add("");
-        lines.add(total <= ironHeld()
+        lines.add(total <= held()
                 ? ChatColor.GREEN + "Click to place the order"
-                : ChatColor.RED + "Not enough iron");
+                : ChatColor.RED + "Not enough Auros");
 
         set(CART_SLOT, button(Material.CHEST,
                 ChatColor.AQUA + "Cart (" + cart.size() + " item"
@@ -197,14 +199,14 @@ public class OrderMenu extends Menu {
             return;
         }
         int total = cartTotal();
-        if (ironHeld() < total) {
-            viewer.sendMessage(ChatColor.RED + "That comes to " + total + " iron; you have "
-                    + ironHeld() + ".");
+        if (held() < total) {
+            viewer.sendMessage(ChatColor.RED + "That comes to " + Currency.format(total)
+                    + "; you have " + held() + ".");
             viewer.playSound(viewer.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f);
             return;
         }
 
-        takeIron(total);
+        Currency.take(viewer, total);
         final List<ComponentType> ordered = new ArrayList<ComponentType>(cart);
         cart.clear();
 
@@ -229,32 +231,8 @@ public class OrderMenu extends Menu {
         }, DELIVERY_TICKS);
     }
 
-    private int ironHeld() {
-        int total = 0;
-        for (ItemStack stack : viewer.getInventory().getContents()) {
-            if (stack != null && stack.getType() == Material.IRON_INGOT) {
-                total += stack.getAmount();
-            }
-        }
-        return total;
+    private int held() {
+        return Currency.heldBy(viewer);
     }
 
-    /** Removes exactly {@code amount} iron ingots. Only called once the player is known to have it. */
-    private void takeIron(int amount) {
-        int remaining = amount;
-        ItemStack[] contents = viewer.getInventory().getContents();
-        for (int i = 0; i < contents.length && remaining > 0; i++) {
-            ItemStack stack = contents[i];
-            if (stack == null || stack.getType() != Material.IRON_INGOT) {
-                continue;
-            }
-            int take = Math.min(remaining, stack.getAmount());
-            remaining -= take;
-            if (take >= stack.getAmount()) {
-                viewer.getInventory().setItem(i, null);
-            } else {
-                stack.setAmount(stack.getAmount() - take);
-            }
-        }
-    }
 }
