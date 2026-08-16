@@ -65,7 +65,7 @@ public final class QemuVirtualMachine implements VirtualMachine {
                                                  VmSpec.DiskImage disk, boolean createDisk, Path iso,
                                                  int memoryMb, int cpus,
                                                  boolean networking, GuestProfile profile,
-                                                 Consumer<String> logger)
+                                                 VmSpec.Vga vga, Consumer<String> logger)
             throws IOException {
         VmSpec.Builder builder = VmSpec.builder("vmcomputer-" + computerId)
                 .architecture(qemu.architecture())
@@ -80,6 +80,11 @@ public final class QemuVirtualMachine implements VirtualMachine {
         GuestProfile era = (profile != null ? profile : GuestProfile.AUTO)
                 .resolve(qemu.architecture(), qemu.hasHardwareAcceleration());
         era.applyTo(builder);
+        // Applied after the profile, so a card a player deliberately bought beats the era default.
+        // The plain graphics card passes null and keeps the era's choice.
+        if (vga != null && qemu.architecture() != VmSpec.Architecture.AARCH64) {
+            builder.vga(vga);
+        }
         builder.memoryMb(era.clampMemory(memoryMb));
         if (era.wantsSharedFolder()) {
             // No network drivers, no clipboard: a folder on a fake disk is how anything gets in or

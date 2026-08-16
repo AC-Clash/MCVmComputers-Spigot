@@ -301,6 +301,12 @@ themselves — they just look like the guest is broken.
 | `MODERN_WINDOWS` | Windows 10 / 11 | Like the above without virtio, which Windows cannot see. |
 | `MODERN_ARM` | anything on ARM | UEFI and virtio. The only kind of ARM guest there is. |
 
+The graphics bay overrides the profile's choice, so a player who buys a **Cirrus Logic Card**, **VGA
+Card**, **SVGA Card** or **Virtio GPU** gets that adapter. The plain **Graphics Card** names nothing
+and leaves the decision to the profile — which is what every machine built before the tiers existed
+has fitted, so none of them change. ARM machines ignore the bay: virtio is the only adapter their
+firmware and guests can use, and fitting anything else says so rather than going black.
+
 `AUTO` is what every existing machine has, and it keeps them working. It reads the architecture
 together with the accelerator: on a host that runs x86 natively an x86 guest is assumed modern, and
 on one that cannot — Apple Silicon, say — x86 is assumed to mean something old, because nobody runs

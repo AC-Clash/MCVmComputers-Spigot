@@ -173,6 +173,7 @@ public final class VmService {
                 QemuVirtualMachine machine = QemuVirtualMachine.forComputer(
                         computer.id(), binary, computer.monitorSize(),
                         disk, createDisk, iso, memoryMb, cores, networking, computer.profile(),
+                        vgaFor(computer, feedback),
                         line -> plugin.getLogger().info(line));
 
                 MapColorLut palette = plugin.getMapPalette();
@@ -270,6 +271,28 @@ public final class VmService {
      * <p>Falls back to 2048 only if a machine somehow starts with no RAM; power-on requires the
      * bay to be filled, so in practice this always reads a real component.
      */
+    /**
+     * The adapter the fitted graphics card asks for, or null to leave the profile's choice.
+     *
+     * <p>Says so when it cannot be honoured. An ARM machine has exactly one adapter that works --
+     * the UEFI firmware and every ARM guest expect virtio-gpu and nothing else -- so a Cirrus card
+     * fitted there is a black screen rather than an old-looking one, and silently ignoring it would
+     * leave a player staring at a card they bought and a screen that never lights up.
+     */
+    private static VmSpec.Vga vgaFor(Computer computer, Consumer<String> feedback) {
+        ComponentType gpu = computer.installedIn(ComponentSlot.GPU);
+        if (gpu == null || gpu.vga() == null) {
+            return null;
+        }
+        if (computer.architecture() == VmSpec.Architecture.AARCH64
+                && gpu.vga() != VmSpec.Vga.VIRTIO) {
+            post(feedback, gpu.displayName() + " does not work on an ARM machine; using the "
+                    + "virtio adapter instead. Fit a Virtio GPU to match.");
+            return null;
+        }
+        return gpu.vga();
+    }
+
     private static int memoryFor(Computer computer) {
         ComponentType ram = computer.installedIn(ComponentSlot.RAM);
         return ram != null && ram.rating() > 0 ? ram.rating() : 2048;

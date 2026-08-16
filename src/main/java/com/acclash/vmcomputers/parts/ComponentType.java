@@ -153,9 +153,39 @@ public final class ComponentType {
             "cpu6", "CPU (host cores / 6)", Material.NETHERITE_SCRAP, 6, Category.PARTS, ComponentSlot.CPU,
             "cpu_divided_by_6", "A sixth of the host's cores.", 6));
 
+    /**
+     * The plain card, and deliberately still a card rather than a particular one.
+     *
+     * <p>Every machine built before the tiers below has this fitted, so it has to keep meaning
+     * "whatever the guest profile wants". The named cards override that; this one defers.
+     */
     public static final ComponentType GPU = register(new ComponentType(
             "gpu", "Graphics Card", Material.DAYLIGHT_DETECTOR, 12, Category.PARTS, ComponentSlot.GPU,
-            "gpu", "Drives the monitor."));
+            "gpu", "Drives the monitor. Leaves the choice to the guest profile.", 0, null));
+
+    public static final ComponentType GPU_CIRRUS = register(new ComponentType(
+            "gpu_cirrus", "Cirrus Logic Card", Material.DAYLIGHT_DETECTOR, 6, Category.PARTS,
+            ComponentSlot.GPU, "gpu",
+            "The card Windows 95 and 98 have drivers for. No use to anything newer.",
+            0, com.acclash.vmcomputers.emu.VmSpec.Vga.CIRRUS));
+
+    public static final ComponentType GPU_VGA = register(new ComponentType(
+            "gpu_vga", "VGA Card", Material.DAYLIGHT_DETECTOR, 10, Category.PARTS,
+            ComponentSlot.GPU, "gpu",
+            "Works on everything, and can be asked for a resolution.",
+            0, com.acclash.vmcomputers.emu.VmSpec.Vga.STD));
+
+    public static final ComponentType GPU_SVGA = register(new ComponentType(
+            "gpu_svga", "SVGA Card", Material.DAYLIGHT_DETECTOR, 12, Category.PARTS,
+            ComponentSlot.GPU, "gpu",
+            "VMware SVGA II. Windows 2000 and XP know this one.",
+            0, com.acclash.vmcomputers.emu.VmSpec.Vga.VMWARE));
+
+    public static final ComponentType GPU_VIRTIO = register(new ComponentType(
+            "gpu_virtio", "Virtio GPU", Material.DAYLIGHT_DETECTOR, 16, Category.PARTS,
+            ComponentSlot.GPU, "gpu",
+            "The fast one. Needs a guest new enough to have virtio drivers.",
+            0, com.acclash.vmcomputers.emu.VmSpec.Vga.VIRTIO));
 
     public static final ComponentType RAM_64M = register(ram("ram64m", "64 MB", 2, 64));
     public static final ComponentType RAM_128M = register(ram("ram128m", "128 MB", 2, 128));
@@ -223,6 +253,7 @@ public final class ComponentType {
     private final int rating;
     private final String modelName;
     private final String description;
+    private final com.acclash.vmcomputers.emu.VmSpec.Vga vga;
 
     private ComponentType(String id, String displayName, Material icon, int price,
                           Category category, ComponentSlot slot, String modelName,
@@ -233,6 +264,13 @@ public final class ComponentType {
     private ComponentType(String id, String displayName, Material icon, int price,
                           Category category, ComponentSlot slot, String modelName,
                           String description, int rating) {
+        this(id, displayName, icon, price, category, slot, modelName, description, rating, null);
+    }
+
+    private ComponentType(String id, String displayName, Material icon, int price,
+                          Category category, ComponentSlot slot, String modelName,
+                          String description, int rating,
+                          com.acclash.vmcomputers.emu.VmSpec.Vga vga) {
         this.id = id;
         this.displayName = displayName;
         this.icon = icon;
@@ -242,6 +280,19 @@ public final class ComponentType {
         this.modelName = modelName;
         this.description = description;
         this.rating = rating;
+        this.vga = vga;
+    }
+
+    /**
+     * The adapter this card gives the guest, or null to leave the profile's own choice alone.
+     *
+     * <p>Null is what the plain graphics card has, and it is why fitting one changes nothing: it is
+     * a card, not a particular card. The tiers below are particular, and picking the wrong one is
+     * visible immediately, which is the point -- a Windows 95 desktop stuck at sixteen colours is a
+     * problem a player can see and fix by buying a different card.
+     */
+    public com.acclash.vmcomputers.emu.VmSpec.Vga vga() {
+        return vga;
     }
 
     private static ComponentType register(ComponentType type) {

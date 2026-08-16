@@ -99,15 +99,26 @@ public class Profile extends ComputerSubCommand {
      * memory ceiling is worth saying out loud rather than silently applying at power-on.
      */
     private void warnAboutFittedParts(Player player, Computer computer, GuestProfile profile) {
-        if (profile.maxMemoryMb() <= 0) {
-            return;
-        }
         com.acclash.vmcomputers.parts.ComponentType ram =
                 computer.installedIn(com.acclash.vmcomputers.parts.ComponentSlot.RAM);
-        if (ram != null && ram.rating() > profile.maxMemoryMb()) {
+        if (profile.maxMemoryMb() > 0 && ram != null && ram.rating() > profile.maxMemoryMb()) {
             player.sendMessage(ChatColor.YELLOW + "Note: " + ram.displayName() + " is fitted, but "
                     + profile.label() + " cannot boot above " + profile.maxMemoryMb()
                     + " MB. It will be given " + profile.maxMemoryMb() + " MB.");
+        }
+
+        // The card wins over the era, so this is a note rather than a refusal -- fitting a Cirrus
+        // to a modern guest is a legitimate thing to want. It is worth saying out loud because the
+        // result is a machine that boots perfectly and then cannot change resolution, which reads
+        // as the plugin being broken rather than as the card being wrong.
+        com.acclash.vmcomputers.parts.ComponentType gpu =
+                computer.installedIn(com.acclash.vmcomputers.parts.ComponentSlot.GPU);
+        if (gpu != null && gpu.vga() != null && profile.vga() != null
+                && gpu.vga() != profile.vga()) {
+            player.sendMessage(ChatColor.YELLOW + "Note: " + gpu.displayName() + " is fitted, and "
+                    + profile.label() + " expects the " + profile.vga() + " adapter.");
+            player.sendMessage(ChatColor.GRAY + "  The fitted card wins. Fit a plain Graphics Card "
+                    + "to let the profile choose.");
         }
     }
 
