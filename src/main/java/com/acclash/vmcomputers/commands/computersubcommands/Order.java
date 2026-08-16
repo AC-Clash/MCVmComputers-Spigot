@@ -35,7 +35,7 @@ public class Order extends ComputerSubCommand {
     @Override
     public void perform(Player player, String[] args) {
         new OrderMenu(player).open();
-        player.sendMessage(ChatColor.GRAY + "Parts are paid for in Auros from your inventory.");
+        player.sendMessage(ChatColor.GRAY + "Parts are paid for in Auros, which are crafted from paper.");
     }
 
     @Override

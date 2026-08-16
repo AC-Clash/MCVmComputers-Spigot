@@ -308,7 +308,7 @@ java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --o
 /vmcomputers type @RETURN             # @TAB @ESC @BACKSPACE @UP..@F12
 /vmcomputers testdisplay [clear]      # ItemDisplay diagnostic (answer: doesn't work)
 /vmcomputers debug                    # toggle: draws the pointer on screen, for testing
-/vmcomputers order                    # parts shop, paid in Auros (blank maps)
+/vmcomputers order                    # parts shop, paid in Auros (3 paper each)
 /vmcomputers phone                    # hands you a brick phone (also craftable)
 /vmcomputers parts list               # component models and their piece counts
 /vmcomputers parts <model> [scale]    # preview one where you stand, facing you
