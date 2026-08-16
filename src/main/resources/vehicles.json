@@ -178,6 +178,23 @@
         "block": "light_gray_concrete",
         "size": [1.9, 1.5, 0.06],
         "centre": [0.0, 1.6, 2.27]
+      },
+      {
+        "_": "rear underride bar. Every box truck has one and this had a bare hole where it goes. It is also the only thing at the back of a truck that carries any lettering, since the cargo doors belong to the body builder rather than the chassis maker.",
+        "block": "polished_blackstone",
+        "size": [1.7, 0.14, 0.12],
+        "centre": [0.0, 0.42, 2.36]
+      },
+      {
+        "_": "the struts that hang it off the frame, so it is not floating",
+        "block": "gray_concrete",
+        "size": [0.10, 0.30, 0.10],
+        "centre": [-0.55, 0.52, 2.36]
+      },
+      {
+        "block": "gray_concrete",
+        "size": [0.10, 0.30, 0.10],
+        "centre": [0.55, 0.52, 2.36]
       }
     ]
   }

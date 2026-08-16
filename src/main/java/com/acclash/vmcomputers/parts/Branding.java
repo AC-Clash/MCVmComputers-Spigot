@@ -46,17 +46,20 @@ public final class Branding {
     public static final String COMPANY_SHORT = ChatColor.GOLD + "AURA\nCHARISMA";
 
     /**
-     * The truck's make, badged front and rear.
+     * The truck's make. Red, wherever it appears.
      *
-     * <p>Two colours for one badge because it is chrome on two different grounds: the front sits
-     * on a blackstone grille and wants light lettering, the rear on light grey doors and wants
-     * dark. The same grey on both would disappear against one of them.
+     * <p>Goes on the grille and on the rear underride bar, which is where a maker's name actually
+     * lives on a box truck. It does not go on the cargo doors: the box body is not the chassis,
+     * and nobody badges a door.
      */
-    public static final String MAKE_ON_DARK = ChatColor.GRAY + "R & S";
-    public static final String MAKE_ON_LIGHT = ChatColor.DARK_GRAY + "R & S";
+    public static final String MAKE = ChatColor.RED + "" + ChatColor.BOLD + "R & S";
 
-    /** The model name, on the rear doors under the badge. */
-    public static final String MODEL_NAME = ChatColor.DARK_GRAY + "bullet";
+    /**
+     * The model name, low and forward on the cab doors -- the fender badge position, which is the
+     * one place a truck carries its model at all. Ahead of the door's midpoint and down near the
+     * sill, not floating in the middle of the panel.
+     */
+    public static final String MODEL_NAME = ChatColor.GRAY + "" + ChatColor.BOLD + "BULLET";
 
     /** Marks a sign so cleanup can find it without knowing who spawned it. */
     private static final String SIGN_KEY = "vmcSign";
