@@ -21,12 +21,14 @@ every odd decision in the codebase, and it is not negotiable.
 (parked — sends map packets directly, would cut bytes but costs Spigot support; waiting for a
 reason). `guest-audio` is merged; the local branch is stale and safe to delete.
 
-Two reference documents exist and are worth reading before touching guest configuration:
+Two reference documents are worth reading before touching guest configuration:
 
+- **`README.md`** — the user-facing guide: requirements, installing QEMU per platform, hardware
+  acceleration, config, commands, permissions, troubleshooting. It lives in the repo so it stays
+  with the code. The Host Setup Manual artifact was folded into it and is now stale — don't consult
+  it, and update the README instead.
 - **Guest Hardware Manual** — what defines a VM, which hosts accelerate which guests, and what
   every OS era needs before it boots. https://claude.ai/code/artifact/1a8343ff-34e1-4ebb-9526-2a12fbfbef6a
-- **Host Setup Manual** — installing the plugin and QEMU on any platform.
-  https://claude.ai/code/artifact/fe0e794e-60e1-4d1a-b075-5d012636a9e9
 
 ---
 
