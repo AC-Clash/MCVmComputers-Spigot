@@ -121,6 +121,10 @@ public final class ComputerDao {
             if (!hasColumn(connection, "computers", "disk")) {
                 statement.executeUpdate("ALTER TABLE computers ADD COLUMN disk TEXT");
             }
+            // Null reads back as AUTO, which resolves to what these machines already did.
+            if (!hasColumn(connection, "computers", "profile")) {
+                statement.executeUpdate("ALTER TABLE computers ADD COLUMN profile TEXT");
+            }
         }
     }
 
@@ -179,6 +183,9 @@ public final class ComputerDao {
                     Computer.State.valueOf(rs.getString("state")));
             computer.setIsoName(rs.getString("iso"));
             computer.setDiskImage(rs.getString("disk"));
+            // An unknown name means the row predates a rename; AUTO still boots the machine.
+            computer.setProfile(com.acclash.vmcomputers.emu.GuestProfile.parse(
+                    rs.getString("profile")));
             String owner = rs.getString("owner");
             if (owner != null) {
                 try {
@@ -230,6 +237,7 @@ public final class ComputerDao {
                 saved.setOwner(computer.owner());
                 saved.setIsoName(computer.isoName());
                 saved.setDiskImage(computer.diskImage());
+                saved.setProfile(computer.profile());
                 saved.setArchitecture(computer.architecture());
                 return saved;
             }
@@ -445,6 +453,16 @@ public final class ComputerDao {
         try (PreparedStatement statement = database.getSQLConnection()
                 .prepareStatement("UPDATE computers SET iso = ? WHERE id = ?")) {
             statement.setString(1, isoName);
+            statement.setInt(2, id);
+            statement.executeUpdate();
+        }
+    }
+
+    public void updateProfile(int id, com.acclash.vmcomputers.emu.GuestProfile profile)
+            throws SQLException {
+        try (PreparedStatement statement = database.getSQLConnection()
+                .prepareStatement("UPDATE computers SET profile = ? WHERE id = ?")) {
+            statement.setString(1, profile == null ? null : profile.name());
             statement.setInt(2, id);
             statement.executeUpdate();
         }

@@ -45,6 +45,8 @@ public final class Computer {
     private volatile State state;
     private volatile String isoName;
     private volatile String diskImage;
+    private volatile com.acclash.vmcomputers.emu.GuestProfile profile =
+            com.acclash.vmcomputers.emu.GuestProfile.AUTO;
     private volatile VmSpec.Architecture architecture = VmSpec.Architecture.X86_64;
     /**
      * Who built it, or null for a machine from before computers had owners.
@@ -201,6 +203,22 @@ public final class Computer {
 
     public void setDiskImage(String diskImage) {
         this.diskImage = diskImage;
+    }
+
+    /**
+     * Which era of operating system this machine is set up for.
+     *
+     * <p>Decides the machine type, graphics, disk interface, pointer, sound and network cards --
+     * everything that used to follow from the architecture alone. Defaults to
+     * {@link com.acclash.vmcomputers.emu.GuestProfile#AUTO}, which is worked out at power-on
+     * rather than stored, so a machine built before profiles existed still boots.
+     */
+    public com.acclash.vmcomputers.emu.GuestProfile profile() {
+        return profile;
+    }
+
+    public void setProfile(com.acclash.vmcomputers.emu.GuestProfile profile) {
+        this.profile = profile != null ? profile : com.acclash.vmcomputers.emu.GuestProfile.AUTO;
     }
 
     /** Who may take this apart. Null on machines built before ownership was recorded. */

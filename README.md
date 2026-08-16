@@ -265,6 +265,7 @@ All are subcommands of `/vmcomputers`, aliased `/vmc` and `/computer`.
 | `/vmcomputers remove [id]` | Removes a computer and its disk. |
 | `/vmcomputers iso [<id> <file\|none>]` | Lists available ISOs, or inserts and ejects one. |
 | `/vmcomputers disk [<id> <file\|none>]` | Lists supplied disk images, or boots a computer from one. Admin-only. |
+| `/vmcomputers profile [<id> <name>]` | Sets which era of guest hardware a computer has. See below. |
 | `/vmcomputers type <text>` | Types into the guest. Supports `@RETURN @TAB @ESC @UP`..`@F12`. |
 | `/vmcomputers keys [game\|menu\|bind <input> <key>\|reset]` | Rebinds the chair's keys. |
 | `/vmcomputers audio [id]` | Private link to the guest's sound. |
@@ -276,6 +277,40 @@ All are subcommands of `/vmcomputers`, aliased `/vmc` and `/computer`.
 The pointer is tracked but deliberately never drawn — Minecraft's own crosshair is already exactly
 where it should be, and painting the framebuffer on every head movement costs frames. `debug` exists
 because "invisible and working" looks identical to "invisible and broken". Leave it off.
+
+## Guest profiles
+
+An operating system only has drivers for hardware that existed when it shipped, so the machine has
+to be built for the guest. A profile picks the board, graphics, disk interface, pointer, sound card,
+network card, CPU and memory ceiling in one go.
+
+This matters more than it sounds. The wrong graphics card is a desktop stuck at 640×480 forever; the
+wrong NIC is no network and no error message; the wrong sound card is silence. None of them announce
+themselves — they just look like the guest is broken.
+
+| Profile | For | Notably |
+|---|---|---|
+| `AUTO` | default | Works it out from the architecture and whether this host accelerates it. |
+| `DOS` | MS-DOS, FreeDOS | ISA everything, 64 MB ceiling, PS/2 mouse. |
+| `WIN9X` | Windows 95 / 98 | Cirrus graphics, Sound Blaster, 512 MB ceiling. |
+| `DELL_DIMENSION_L500R` | Windows 98 | A Pentium III 500 as sold in 2000. Boots 98 with no driver disk. |
+| `WINXP` | Windows 2000 / XP | USB pointer, AC'97 sound. |
+| `COMPAQ_PRESARIO` | Windows XP x64 Edition | Athlon 64 desktop. Plain VGA, because the Cirrus driver is 32-bit only. |
+| `LINUX_LEGACY` | Linux 2.4 / 2.6 | Predates virtio, has USB. |
+| `MODERN_LINUX` | current Linux on x86 | virtio throughout — the fast path. |
+| `MODERN_WINDOWS` | Windows 10 / 11 | Like the above without virtio, which Windows cannot see. |
+| `MODERN_ARM` | anything on ARM | UEFI and virtio. The only kind of ARM guest there is. |
+
+`AUTO` is what every existing machine has, and it keeps them working. It reads the architecture
+together with the accelerator: on a host that runs x86 natively an x86 guest is assumed modern, and
+on one that cannot — Apple Silicon, say — x86 is assumed to mean something old, because nobody runs
+a modern x86 guest at emulated speed on purpose.
+
+The two named machines are real models. Naming a profile "Windows 98" invites the question of *which*
+Windows 98 machine, and a real one answers every field at once. Where the model and compatibility
+disagree, compatibility wins: the real L500r had Intel 810e graphics and AC'97 audio, neither of
+which Windows 98 drives without the driver CD, so it gets Cirrus and a Sound Blaster — the two things
+98 detects by itself.
 
 ## Permissions
 

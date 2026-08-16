@@ -172,7 +172,7 @@ public final class VmService {
                 boolean networking = plugin.getConfig().getBoolean("guest.networking", true);
                 QemuVirtualMachine machine = QemuVirtualMachine.forComputer(
                         computer.id(), binary, computer.monitorSize(),
-                        disk, createDisk, iso, memoryMb, cores, networking,
+                        disk, createDisk, iso, memoryMb, cores, networking, computer.profile(),
                         line -> plugin.getLogger().info(line));
 
                 MapColorLut palette = plugin.getMapPalette();

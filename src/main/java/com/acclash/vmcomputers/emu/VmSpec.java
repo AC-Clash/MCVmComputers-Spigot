@@ -40,6 +40,11 @@ public final class VmSpec {
         HDA("intel-hda", "hda-output,audiodev=snd0"),
         /** Creative Sound Blaster 16. ISA, so x86 only -- and the only thing DOS and Win9x know. */
         SB16("sb16,audiodev=snd0"),
+        /**
+         * Intel AC'97. PCI, and the card Windows 98SE through XP and 2.4/2.6 Linux have drivers
+         * for in the box -- the era after Sound Blaster and before HD Audio.
+         */
+        AC97("AC97,audiodev=snd0"),
         NONE();
 
         private final String[] devices;
@@ -180,6 +185,8 @@ public final class VmSpec {
     private final boolean rtcLocaltime;
     private final boolean absolutePointer;
     private final boolean networking;
+    private final String networkModel;
+    private final String cpuModel;
     private final boolean audio;
     private final SoundCard soundCard;
     private final Path sharedFolder;
@@ -203,6 +210,8 @@ public final class VmSpec {
         this.rtcLocaltime = b.rtcLocaltime;
         this.absolutePointer = b.absolutePointer;
         this.networking = b.networking;
+        this.networkModel = b.networkModel;
+        this.cpuModel = b.cpuModel;
         this.audio = b.audio;
         this.soundCard = b.soundCard;
         this.sharedFolder = b.sharedFolder;
@@ -317,9 +326,13 @@ public final class VmSpec {
         if (networking) {
             // -nic rather than -netdev, because -netdev alone leaves QEMU's implicit default card
             // in place and the guest would come up with two.
+            //
+            // Which card matters more than it looks: a guest only has drivers for the cards that
+            // existed when it shipped, so an e1000 in Windows 95 is an unknown PCI device and the
+            // machine has no network at all. The profile picks the newest card the guest knows.
             a.add("-nic");
-            a.add("user,model=" + (architecture == Architecture.AARCH64
-                    ? "virtio-net-pci" : "e1000"));
+            a.add("user,model=" + (networkModel != null ? networkModel
+                    : architecture == Architecture.AARCH64 ? "virtio-net-pci" : "e1000"));
         } else {
             a.add("-nic");
             a.add("none");
@@ -404,6 +417,14 @@ public final class VmSpec {
     }
 
     private void appendX86(List<String> a) {
+        // Old guests need an old CPU, and not for authenticity. Windows 95 and 98 divide by the
+        // CPU speed while probing it and fault outright on anything fast enough to overflow that
+        // -- the "Windows protection error" that made Win9x unbootable on later hardware. Naming
+        // a period CPU sidesteps it. Left unset, QEMU's default is right for anything modern.
+        if (cpuModel != null) {
+            a.add("-cpu");
+            a.add(cpuModel);
+        }
         // Suppress the implicit adapter so the explicit -device below is the only one.
         a.add("-vga");
         a.add("none");
@@ -472,6 +493,8 @@ public final class VmSpec {
         private boolean audio = true;
         private SoundCard soundCard = SoundCard.HDA;
         private boolean networking = true;
+        private String networkModel;
+        private String cpuModel;
         private Path sharedFolder;
         private Path uefiVars;
         private final List<String> extraArgs = new ArrayList<String>();
@@ -577,6 +600,24 @@ public final class VmSpec {
          */
         public Builder networking(boolean enabled) {
             this.networking = enabled;
+            return this;
+        }
+
+        /**
+         * QEMU NIC model, e.g. {@code pcnet} or {@code rtl8139}. Null leaves the architecture
+         * default, which is the right card for anything modern and the wrong one for old guests.
+         */
+        public Builder networkModel(String model) {
+            this.networkModel = model;
+            return this;
+        }
+
+        /**
+         * QEMU x86 CPU model, e.g. {@code pentium3}. Null leaves QEMU's default. Only consulted on
+         * x86 -- aarch64 picks between {@code host} and {@code max} from the accelerator instead.
+         */
+        public Builder cpuModel(String model) {
+            this.cpuModel = model;
             return this;
         }
 

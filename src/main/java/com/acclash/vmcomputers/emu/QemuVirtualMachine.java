@@ -23,14 +23,6 @@ public final class QemuVirtualMachine implements VirtualMachine {
     private static final Duration VNC_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration GUEST_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
 
-    /**
-     * Memory an x86 guest is given, whatever the caller asked for.
-     *
-     * <p>Windows 95 will not start with much more than 512 MB, and DOS cannot reach past the first
-     * megabyte anyway. Handing such a guest 4 GB is not generous, it is fatal.
-     */
-    private static final int LEGACY_MEMORY_MB = 256;
-
     private final int computerId;
     private final QemuBinary qemu;
     private final VmSpec spec;
@@ -72,7 +64,8 @@ public final class QemuVirtualMachine implements VirtualMachine {
     public static QemuVirtualMachine forComputer(int computerId, QemuBinary qemu, MonitorSize monitor,
                                                  VmSpec.DiskImage disk, boolean createDisk, Path iso,
                                                  int memoryMb, int cpus,
-                                                 boolean networking, Consumer<String> logger)
+                                                 boolean networking, GuestProfile profile,
+                                                 Consumer<String> logger)
             throws IOException {
         VmSpec.Builder builder = VmSpec.builder("vmcomputer-" + computerId)
                 .architecture(qemu.architecture())
@@ -82,24 +75,16 @@ public final class QemuVirtualMachine implements VirtualMachine {
                 // guests get a network card is an admin's decision rather than an emulator one.
                 .networking(networking);
 
-        // TODO: all of this belongs in the parts selector, chosen per computer when it is built.
-        // Until that exists the architecture stands in for it, and it is a decent proxy: on an
-        // Apple Silicon host x86 has no accelerator, so nobody runs a modern x86 guest here by
-        // choice -- x86 means something old, and something old needs different hardware.
-        if (qemu.architecture() == VmSpec.Architecture.X86_64) {
-            // DOS and Windows 9x cannot cope with a modern machine:
-            //  - Win95 refuses to boot with much more than 512 MB and DOS cannot address it,
-            //  - neither has USB, so an absolute pointing device leaves the mouse dead and they
-            //    need a relative PS/2 one instead,
-            //  - and Sound Blaster 16 is the card they actually have drivers for.
-            builder.memoryMb(Math.min(memoryMb, LEGACY_MEMORY_MB))
-                    .absolutePointer(false)
-                    .soundCard(VmSpec.SoundCard.SB16)
-                    // No network drivers, no clipboard: a folder on a fake disk is how anything
-                    // gets in or out of a guest this old.
-                    .sharedFolder(VmPaths.sharedDirectory());
-        } else {
-            builder.memoryMb(memoryMb);
+        // The era the guest belongs to, which is what actually decides its hardware. AUTO is
+        // resolved rather than applied -- it is a question, not an answer.
+        GuestProfile era = (profile != null ? profile : GuestProfile.AUTO)
+                .resolve(qemu.architecture(), qemu.hasHardwareAcceleration());
+        era.applyTo(builder);
+        builder.memoryMb(era.clampMemory(memoryMb));
+        if (era.wantsSharedFolder()) {
+            // No network drivers, no clipboard: a folder on a fake disk is how anything gets in or
+            // out of a guest this old.
+            builder.sharedFolder(VmPaths.sharedDirectory());
         }
 
         if (qemu.architecture() == VmSpec.Architecture.AARCH64) {
