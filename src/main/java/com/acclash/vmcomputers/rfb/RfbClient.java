@@ -649,6 +649,22 @@ public final class RfbClient implements Closeable {
         }
 
         /**
+         * True for a character that is only reachable with shift held.
+         *
+         * <p>A keysym names a <em>character</em>, but a keyboard has keys. QEMU turns the keysym
+         * back into the key that carries it on the guest's layout and presses that -- so asking
+         * for {@code *} presses the {@code 8} key, and without a shift state the guest is told
+         * {@code 8}. A real VNC client holds shift around these; this is the list of when to.
+         *
+         * <p>US layout, which is what QEMU assumes by default. A guest configured for another
+         * layout would need a different table, and the symptom would be exactly this bug again
+         * with different characters.
+         */
+        public static boolean needsShift(char c) {
+            return (c >= 'A' && c <= 'Z') || "~!@#$%^&*()_+{}|:\"<>?".indexOf(c) >= 0;
+        }
+
+        /**
          * Every key a player can name, in the order they are offered for completion.
          *
          * <p>One table, shared by the typing command and by the chair's rebindable keys. Two
