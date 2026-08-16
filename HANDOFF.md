@@ -1,644 +1,295 @@
-# VM Computers — Overhaul Handoff
+# VM Computers — Handoff
 
-Read this first. Written so a fresh session can be productive without re-deriving anything.
+Read this first. It is deliberately **not** a description of how the plugin works — the code says
+that, and better. This is the working environment, the decisions already settled, and the facts
+that cost an evening each to learn.
 
-State as of **2026-08-16**. Three phases are described, and all three are **merged into `main`**:
-the **QEMU overhaul**, the **components layer**, and the **delivery truck**. Sections covering the
-later two are marked; everything else predates them and still holds.
-
----
-
-## 1. What this project is
-
-A **Spigot plugin** that runs real virtual machines inside vanilla Minecraft. A player builds a
-"computer" in the world; its screen is a grid of item-framed maps; they look at it and click to use
-it. Vanilla clients only — no client mod, which is the whole point of the project and constrains
-every design decision below.
-
-**Repo:** `AC-Clash/MCVmComputers-Spigot` (PUBLIC). Everything below is **merged into `main`**;
-work on a branch and open a PR rather than committing to `main` directly.
-
-Merged so far: the QEMU overhaul, the components layer (PR #5 -- how parts look, how they are
-bought, how a computer is built out of them), and the delivery truck (PR #6).
-
-`guest-audio` is an unmerged branch (4 commits off `main`); it owns
-`src/main/resources/config.yml`, so **do not add a config.yml** on any branch or the two will
-conflict over it.
-
-`nms-map-packets` is parked, not dead: it branches off the overhaul and sends the map packet
-directly, which lifts frames off the server tick and cuts them to the changed rectangle. It costs
-Spigot support, so it waits for a reason to spend that. See §4 and §5.
+State as of **2026-08-16**. Everything described is on `main` and pushed.
 
 ---
 
-## 2. What changed in this overhaul
+## 1. Orientation
 
-The plugin used to embed **jDOSBox** — an x86 emulator written in Java, running inside the server
-JVM. DOS-only, slow, 505 files and 210k lines vendored into the repo. It has been **deleted** and
-replaced by **QEMU as a separate OS process**, controlled over **QMP** and read over **RFB (VNC)**.
+A **Spigot plugin** that runs real virtual machines inside vanilla Minecraft. QEMU runs as a
+separate OS process, controlled over QMP, read over RFB/VNC, and painted onto a wall of
+item-framed maps. Players sit at a desk, look at the screen to aim, and click.
 
-Also in this overhaul: the build jumped ~2.5 years (Paper 1.20.4 → Spigot 26.2), NMS was removed
-entirely, and the storage/placement model was rewritten.
+**Vanilla clients only.** No client mod, no resource pack. That single constraint explains almost
+every odd decision in the codebase, and it is not negotiable.
 
-**It works end to end today.** A player can build a computer, insert an ISO, power it on, watch a
-real OS boot on a map wall, click things, and type.
+**Repo:** `AC-Clash/MCVmComputers-Spigot` (public). Branches: `main`, plus `nms-map-packets`
+(parked — sends map packets directly, would cut bytes but costs Spigot support; waiting for a
+reason). `guest-audio` is merged; the local branch is stale and safe to delete.
 
----
+Two reference documents exist and are worth reading before touching guest configuration:
 
-## 3. Architecture
-
-```
-QEMU process ──QMP (JSON/TCP)──▶  emu/    lifecycle: start, stop, media, disks
-     │
-     └────────RFB/VNC (TCP)─────▶  rfb/    frames out, input in
-                                     │
-                                     ▼
-                                  display/  quantize → scale → map panels
-                                  listeners/ clicks & keys → guest input
-```
-
-### Package map
-
-| Package | Role | Key files |
-|---|---|---|
-| `emu/` | QEMU process + control. **No Bukkit** except `VmService`. | `VmSpec` (config→argv), `QemuProcess`, `QmpClient`, `QemuBinary`, `VmService` (orchestrates), `VirtualMachine` (the seam) |
-| `rfb/` | RFB 3.8 client. **No Bukkit.** | `RfbClient` |
-| `display/` | Guest pixels → Minecraft maps | `MonitorScreen`, `PanelRenderer`, `ScreenPump` (sends frames), `MapColorLut`, `ImageScaler`, `ScreenGeometry`, `MonitorSize` |
-| `computer/` | The in-world model | `ComputerLayout` (pure offsets), `Computer`, `ComputerRegistry` (O(1) block index), `ComputerBuilder` (puts one in the world), `PendingCase` (placed, not yet assembled) |
-| `parts/` | Everything a component *is* | `PartModel`/`PartModels` (geometry from `parts.json` + `vehicles.json`), `PartRenderer` (transforms + spawning), `Furniture` (generated desk), `ComponentType`/`ComponentSlot` (the catalogue), `HeadTextures` (icons), `Currency` (Auros), `BrickPhone`, `Delivery` (packages), `DeliveryTruck` (the arrival), `Roadway` (somewhere to land), `Branding` (in-world lettering) |
-| `gui/` | Chest menus | `Menu` (base, holder-identified), `MenuListener`, `OrderMenu` (shop), `CaseMenu` (shift-click the tower), `AssemblyMenu` (click a placed case), `IsoMenu` |
-| `sql/` | Persistence | `ComputerDao` |
-| `listeners/` | Game events | `PointerListener`, `PreventionListener`, `ClickListener`, `PlayerListener`, `OrderingListener` (phone + packages), `PlacementListener` (placing/opening a case) |
-| `bench/` | Standalone harness, no Minecraft needed | `RfbDump` |
-
-### The build-and-buy loop (components layer)
-
-```
-craft brick phone ──▶ right-click it ──▶ OrderMenu (cart, priced in Auros)
-                                              │
-                                              ▼
-                                    package lands next to you
-                                       (Delivery, an Interaction
-                                        entity inside a box model)
-                                              │
-                                              ▼
-place a PC Case item ──▶ PendingCase in the world ──▶ right-click ──▶ AssemblyMenu
-                                                                          │
-                                                     required bays full ──┘
-                                                                          ▼
-                                                                    ComputerBuilder
-                                                                  (desk, screen, tower)
-                                                                          │
-                                        right-click tower ── power ───────┤
-                                        sneak-right-click ── CaseMenu ────┘
-```
-
-`/vmcomputers create` still builds a whole machine in one command and fits it with a default
-loadout. That is the admin path; the loop above is the survival one. Both end at the same
-`ComputerBuilder`, deliberately -- two build paths that drifted would be two different computers and
-only one would match what `Remove` tears down.
-
-### The core modelling idea
-
-**A computer is fully determined by `(anchor, facing, monitorSize)`.** Every component position —
-all 24 screen panels of a projector, the desk, chair, tower — is *derived* by `ComputerLayout`.
-Placement, removal and the click index all read that same function, so they cannot disagree.
-
-The only thing that can't be derived is **map IDs** (the server assigns them), so those are
-persisted in `computer_panels`.
+- **Guest Hardware Manual** — what defines a VM, which hosts accelerate which guests, and what
+  every OS era needs before it boots. https://claude.ai/code/artifact/1a8343ff-34e1-4ebb-9526-2a12fbfbef6a
+- **Host Setup Manual** — installing the plugin and QEMU on any platform.
+  https://claude.ai/code/artifact/fe0e794e-60e1-4d1a-b075-5d012636a9e9
 
 ---
 
-## 4. Decisions already made — do not re-litigate
-
-**QEMU over RFB/VNC, not libmks / D-Bus / SPICE.** Researched over years, confirmed by email with
-the maintainers:
-- SPICE: discontinued (told to Anston by a SPICE developer).
-- libmks / QEMU `-display dbus`: its author (Christian Hergert) said the D-Bus display driver is
-  fundamentally broken and needs replacing, libmks is "in a holding pattern," and **most distros
-  don't compile the D-Bus display driver at all** — fatal for a plugin admins install. Critically,
-  the DMA-BUF fast path's entire value is *never reading pixels back to the CPU*, and this project
-  must read every pixel to quantize it to Minecraft's palette. Hergert's own advice for that case
-  was to use the VNC backend.
-- RFB is also a genuinely good fit: **client-pull**, so requesting the next update only after the
-  consumer finishes gives free backpressure, and its dirty rectangles line up with Minecraft's
-  partial map updates.
-
-**Spigot API only, no NMS.** Paper runs Mojang-mapped, Spigot doesn't, so an NMS plugin can't be one
-jar for both; the Spigot server artifact is unpublished by licence, so NMS would force BuildTools on
-every developer and CI run. NMS turned out to be unnecessary anyway (see §5).
-
-**Loopback TCP, not Unix sockets**, for QMP and VNC — avoids betting cross-platform behaviour on
-AF_UNIX in QEMU's Windows builds. Unmeasurable difference at these data rates.
-
-**The pointer tracks the player's head, but is never drawn.** Tracking is what gives the guest
-hover — mouseover menus, button highlights, tooltips — which a click-only model cannot produce. But
-a host-drawn cursor has to be painted into the framebuffer, which dirties map panels for as long as
-anyone looks around and reaches the player a map-packet behind their own head, so the drawn arrow
-visibly lags the crosshair it is chasing. Minecraft's crosshair is already exactly where the pointer
-is, client-side and free. So the guest gets the position and the player gets the crosshair. See §5.
-
-**Components are display entities in the world and player heads in menus. No resource pack.**
-(Components layer.) The mod draws its parts as Blockbench item models — custom geometry on custom
-textures — which a pack could reproduce exactly, and the assets are GPLv3 like this repo so they
-could simply be reused. The pack was rejected anyway: it is one more thing an admin has to host, and
-this plugin's whole selling point is that a vanilla client needs nothing.
-
-That splits the problem in two, because **an inventory slot renders an `ItemStack` and nothing
-else** — a display entity cannot appear in a chest GUI at all. So the world gets display entities
-and the menus get player heads, which are the only vanilla item whose texture a server can choose.
-Heads were considered and rejected once, on the grounds that their skins live on Mojang's texture
-servers; that cost is real and unchanged, and the decision was later reversed anyway because the
-alternative was stand-in items that never stopped looking like stand-ins. `tools/heads/` holds a
-self-drawn set as insurance if a community texture ever disappears.
-
-What is left is geometry. A Blockbench element is a box with a size, a centre and an optional
-rotation about a pivot, and that is exactly what a `BlockDisplay` transformation expresses, so the
-shapes convert one-for-one — 27 models, 103 boxes, no hand modelling. `tools/generate_parts.py` does
-the conversion offline and commits `parts.json`, so the mod is a tool dependency and not a build
-dependency.
-
-**Colour is the part that is approximate, and it is good enough.** Each box takes the vanilla block
-nearest its texture's *dominant* colour — dominant, not mean, because the mean of a high-contrast
-texture is a colour that appears nowhere in it (cpu.png is 48% black with gold pins and averages to
-an olive that matches neither). Against the 26.2 client's own textures the auto-matched error is a
-median of 10.7 and a worst of 18.9 on a 0–441 RGB scale. The remaining weak spot is circuit-board
-green: vanilla's greens are all duller and more olive than a real PCB, and `green_concrete` is the
-best available at an error around 50.
-
-`OVERRIDES` in the generator is the tuning knob, and it exists mostly to keep *materials* consistent
-rather than colours close. Left alone the matcher gives the plain case and the windowed case
-different blacks and puts obsidian's purple sheen on the keyboard; boards and contacts are likewise
-forced to one green and one gold, so a motherboard and a RAM stick read as the same material.
-
-Every component still carries a vanilla `Material` as well, and it is not vestigial: it is the
-fallback when a head texture is missing, so a half-filled `HEAD_TEXTURES` still works and the set can
-be finished a part at a time.
-
-**Auros, not iron.** (Components layer.) The mod charges iron ingots and so did this. Iron is the
-most useful metal in the game, so spending it on a graphics card competes with everything else a
-player wants it for.
-
-Counting vanilla blank maps was tried and is a trap worth remembering: a blank map costs eight paper
-and a compass, a compass is four iron, so every unit was four iron plus change — a full machine came
-to roughly **344 iron against the mod's 86**, plus 688 paper. Nothing else in a normal game wants a
-map either, so no player has any and no farm makes them.
-
-So an Auro is its own item (`Currency`) with its own recipe, three paper, shapeless. That decoupling
-is the whole point: it lets the mod's price numbers keep meaning what they meant. The first instinct
-— that a custom currency has no source — was wrong, because a plugin can register a recipe that
-*produces* one.
-
-**No resource pack, for anything.** (2026-08-16.) One used to be pushed to every joining player
-from a Dropbox link dead for years, with `force = true`, which kicks anyone whose download fails.
-It existed for guest audio. Removed outright, and **do not add one back**: display entities, player
-heads and item-framed maps are all chosen precisely so a vanilla client needs nothing. Any feature
-that seems to want a pack needs a different answer.
-
-**The delivery truck's timings, easings and geometry are all tuning, not architecture.** Constants
-at the top of `DeliveryTruck`, boxes in `vehicles.json`. Change them freely — nothing waits on the
-flight legs, so no schedule change can strand an order.
-
----
-
-## 5. Hard-won facts (verified, not assumed)
-
-These cost experiments. Don't re-discover them.
-
-**The server only updates a framed map every 10 ticks. This was the entire frame rate.** In
-`ServerEntity.sendChanges()`, the map of an item frame is pushed only when
-`tickCount % itemFrameCursorUpdateInterval == 0`. Vanilla and Spigot hardcode 10; Paper made it
-configurable (`maps.item-frame-cursor-update-interval`) and kept 10 as the default. Ten ticks is
-half a second, so **a screen of item frames repaints at 2 fps** no matter how fast anything else is.
-Emulator speed, transport, quantization and panel count were all irrelevant next to it.
-
-**The fix is `Player.sendMap`, which is plain Bukkit** — it renders one map and sends it to one
-player immediately. `ScreenPump` drives it every tick, so the ceiling becomes 20 fps (one frame per
-tick, the most a map can be redrawn at all) on Spigot and Paper alike, with no server config to get
-right. **NMS was never the obstacle here** — the updates simply were not being driven.
-
-**`sendMap` always sends a full 128×128 patch**, so it gives up the dirty-rectangle saving below.
-That is why `ScreenPump` sends a panel only when its pixels genuinely differ (`PanelRenderer.blit`
-compares before it copies, via `Arrays.mismatch`), only to players within 64 blocks, and only within
-a per-player budget. The one thing still on the table is sub-panel patches, which *would* need NMS —
-but that would cut bytes, not add frames, since the rate is already one tick.
-
-**Dirty rectangles come free through the Bukkit API — NMS is not needed.** Confirmed by reading
-Paper 26.2 bytecode: `CraftMapCanvas.setPixel` compares the new colour against the existing one and
-returns early if unchanged (`if_icmpeq`), only then calling `setColorsDirty`.
-`MapItemSavedData$HoldingPlayer` keeps `minDirtyX/minDirtyY/maxDirtyX/maxDirtyY` **per viewing
-player**, and `createPatch()` builds a sub-rectangle. So writing the whole framebuffer every frame
-is fine — unchanged pixels cost nothing on the wire. Caveat: it's a bounding box per map, not per
-column.
-
-**Map colour index 0 is TRANSPARENT, not black.** A fresh `Bukkit.createMap()` is all zeros, so
-frames show the wall behind them. Screens must be explicitly filled black.
-
-**`MapView` renderers do NOT survive a restart** — the default world-map renderer comes back. Hence
-persisted map IDs and reattachment on enable.
-
-**`ItemDisplay` does NOT render map contents** — it shows the parchment item icon even with
-`ItemDisplayTransform.FIXED`. Only item frames reach the map-rendering path. So monitors are locked
-to **one map per block**; scaled/shrunken monitors are impossible.
-
-**QEMU does not composite the guest cursor into the VNC framebuffer.** It offers the shape
-separately via the Cursor pseudo-encoding, which this client doesn't request. A guest using a
-hardware cursor plane therefore looks like it has no pointer. **Resolution: don't care** — Minecraft's
-own crosshair is the pointer.
-
-**The screen's plane is the far face of the panel block, not the near one.** A panel is an item
-frame hanging in an *air* block, attached to the wall behind it, so the picture is ~0.97 blocks into
-that block (vanilla puts a frame 0.46875 from the block centre, away from its facing). Intersecting
-the look ray with the near face instead is not a small offset, it is **parallax**: the pointer falls
-short of wherever you aim, by an amount that grows with how far off to the side the target is and
-vanishes when you stand square in front of it. Reported as "the cursor only goes so far, it never
-reaches all the way I turn, unless I walk in front of the spot" — that is the signature, and it
-names the depth of the plane, nothing else. Measured on a LARGE desk before the fix: sweeping the aim
-across the whole picture moved the guest pointer 122 → 561 of 640, **69% of the width**, with the
-outer margins unreachable at both ends. `ScreenGeometry.wallMounted` owns this now and is pure, so
-it can be checked without a server.
-
-**`PlayerMoveEvent` cannot drive a pointer.** CraftBukkit gates it on
-`squaredPositionDelta > 1/256 || |Δyaw| + |Δpitch| > 10`, measured against the last *firing*, not the
-last packet. So turning your head raises no event at all until the look has swung a cumulative **ten
-degrees**, then it arrives in one jump — while walking clears the position term on nearly every
-packet. The symptom is unmistakable and was reported exactly this way: aiming by looking feels stuck
-and steppy, aiming by walking feels fine. Ten degrees is most of the width of a desk monitor at
-seating distance. Verified in Paper 26.2 bytecode (`ServerGamePacketListenerImpl.handleMovePlayer`,
-constants `0.00390625` and `10.0f`), not inferred. **Aim is therefore sampled on a 1-tick repeating
-task**, which is also the rate the client sends position at and the rate a map can be redrawn, so
-nothing is gained by going faster.
-
-**Pointer tracking itself is nearly free; *drawing* the pointer is what was expensive.** The two got
-conflated once and the tracking was removed along with the cursor. Tracking costs one plane
-intersection and a 6-byte RFB packet; it touches no map. The current `PointerListener` keeps the
-cost there: a move that cannot have changed the ray is dropped before any maths, a player who has not moved is
-skipped before any maths, the search runs over running machines rather than the whole registry, the
-ray allocates nothing, and a guest pixel the machine already has is never re-sent (deduped per *computer*, so two players aiming at one spot
-cost one event). `ScreenGeometry.trace` has a primitive-argument overload for exactly this path.
-
-**x86 vs ARM guest resolution behaviour differs fundamentally:**
-- x86 guests ignore EDID and come up in **720×400 VGA text mode** during BIOS/bootloader/installer.
-- **ARM UEFI honours the EDID request literally** — you get exactly what you ask for. This cuts both
-  ways: asking for 320×240 left the guest with *no usable mode at all*. Every size now requests
-  **640×480**, the one mode everything supports.
-
-**Apple Silicon can't accelerate x86.** `qemu-system-x86_64` gets only `tcg` (interpreted, ~100×
-slower); `qemu-system-aarch64` gets `hvf`. Architecture is chosen at build time per computer and
-defaults to the host CPU.
-
-**`MapColorLut` builds in ~103 ms and yields 244 usable colours** (61 base × 4 shades).
-
-The rest of this section is the components layer.
-
-**Filled maps stack to 64, and two tinted, named, id-less ones are `isSimilar`.** Checked on a live
-server with a throwaway probe before anything was built on it, because a currency that does not
-stack is unusable — forty Auros for a monitor would be forty inventory slots. `Material.getMaxStackSize()`
-cannot answer this offline; it needs a registry, so it needs a running server.
-
-**A `MapMeta` colour tint *does* show in an inventory slot, but the map's picture does not.** A
-filled map in a slot renders the generic parchment item texture plus a `filled_map_markings` overlay
-that the tint colours. So a gold Auro reads as money at a glance, while any artwork drawn onto the
-map would only be visible by holding one up. That is the entire reason Auros are a filled map with a
-tint and no drawn note.
-
-**A transparent pixel in a head skin's base layer is a hole through the model, not a silhouette.**
-Rounded corners are impossible on a cube face. `tools/generate_heads.py` refuses to write a skin
-containing one, because the first mouse drawn that way rendered as a chewed-up blob.
-
-**8×8 per face is the whole budget for a head, and shading is what sells it.** Deriving the six face
-brightnesses from one table rather than hand-drawing them is what stops a head looking like a sticker
-on a cube. Silhouette beats detail: a fan is a dark ring, not blades.
-
-**A display entity has no hitbox.** Anything a player must click needs either a real block behind it
-(the tower and placed cases use `BARRIER` — invisible, solid, unbreakable) or an `Interaction`
-entity (packages use one). This is why the desk is still made of blocks at all.
-
-**A `BlockDisplay`'s translation is applied after its rotation and is not itself rotated.** Rotating
-a part therefore means rotating each box's offset by hand as well. Forget it and every box spins in
-place while keeping its original offset, which scatters the part instead of turning it — and it
-still looks plausible enough in a screenshot to miss. `PartRenderer.transformFor` is pure so this can
-be checked against known bounds without a server.
-
----
-
-## 6. Performance model
-
-The bottleneck is **Minecraft's map protocol**, not the emulator or transport. One map = 128×128 =
-16,384 bytes of palette indices, no inter-frame coding.
-
-**The ceiling is now one frame per tick — 20 fps.** It used to be 2 fps, and not for any reason
-worth optimising against: the server simply refused to push a framed map more than once every ten
-ticks (§5). Since `ScreenPump` drives the sends, the rate is the tick.
-
-Cost is per *changed* panel, since unchanged ones are never sent:
-
-```
-bytes_per_second ≈ changed_panels_per_tick × viewers × 16,400 × 20
-```
-
-Real measurement: an idle guest's blinking text cursor is **32 changed pixels out of 288,000**,
-touching one panel and changing it about twice a second. Idle screens still cost essentially
-nothing. The expensive case is a panel that genuinely changes every tick, and there a full send is
-proportionate — which is why the budget in `ScreenPump` exists rather than a byte-level trick.
-
-**Rules that follow from this:**
-- Never `MapPalette.matchColor` (linear palette scan per pixel) — use `MapColorLut`.
-- **Ordered (Bayer) dithering only.** Error diffusion would let one changed pixel alter every pixel
-  after it, defeating the per-pixel comparison that keeps traffic small.
-- Scale in **RGB before quantization** — averaging palette indices is meaningless.
-- `PanelRenderer.render()` is **not** called on a timer. It runs from `CraftMapView.render()`, which
-  only happens when a packet is being built — so once per panel per tick that `ScreenPump` decides
-  to send, not once per tick per viewer as previously written here. Skipping unchanged panels still
-  matters, and it does. Marking all panels dirty on every small change was what made the old drawn
-  cursor unusable: ~393,000 `setPixel` calls for a 24-panel projector, to move a 10×16 arrow.
-- **Compare before you copy.** `PanelRenderer.blit` uses `Arrays.mismatch` per row, which is a
-  vectorised intrinsic and cheaper than the `arraycopy` it skips. It is also what decides whether a
-  panel is worth 16 KB of a player's bandwidth, so it pays for itself twice.
-- **Nothing driven by player input should touch the framebuffer.** The map protocol's latency is the
-  reason: anything drawn in response to a player's own movement arrives after they have already
-  moved again.
-
----
-
-## 7. Threading
-
-**Nothing that talks to QEMU runs on the server thread.**
-
-| Path | Thread |
-|---|---|
-| Boot (`QemuBinary.discover`, QMP + RFB connect) | async task |
-| Power off / remove / plugin disable | async task |
-| Frame decode → scale → quantize → panel buffers | RFB pump thread |
-| Sending panels to viewers (`ScreenPump`) | server tick — `sendMap` touches connections |
-| Pointer / key / scroll sends | per-VM single input thread (ordering matters) |
-| Map render | server tick (Bukkit's own work) |
-
-Graceful shutdown waits up to 10 s for ACPI; **removal and disable use `kill()`** instead, because a
-guest at a firmware prompt never answers and it froze the server for the full timeout.
-
----
-
-## 8. Dev workflow
+## 2. Environment
 
 ```bash
-./gradlew build          # JAVA_HOME must be a JDK 25+; toolchain auto-provisions via foojay
+./gradlew build          # compiles + runs tests
+./gradlew test           # 27 tests, all pure logic, ~1s
 ./gradlew runServer      # downloads + runs Paper 26.2 into run/ (gitignored)
 ```
 
 **The loop is stop → rebuild → start.** Rebuilding the jar under a live server causes
-`NoClassDefFoundError`, because `PluginClassLoader` reads classes lazily from the jar on disk.
+`NoClassDefFoundError` — `PluginClassLoader` reads classes lazily off the disk jar. This has bitten
+more than once; check for a running server before any gradle task that writes `build/libs`.
 
-Local env: SDKMAN JDK `26.0.2-amzn` (JDK 11 is also installed and is the default `javac` on PATH —
-it cannot read Paper's Java 25 bytecode). QEMU 11.0.3 via Homebrew. `run/eula.txt` is accepted.
+**Local machine:** macOS on Apple Silicon. JDK `26.0.2-amzn` via SDKMAN (JDK 11 is also installed
+and is the default `javac` on PATH — it cannot read Paper's bytecode). QEMU 11.0.3 via Homebrew.
+`run/eula.txt` accepted. Anston plays on this same machine, so **the dev server is often already
+running**.
 
-**Offline generators** (components layer). Both write committed output, so neither the mod checkout
-nor a Minecraft install is a build dependency:
+**Consequence of that host:** aarch64 guests get HVF and run natively; x86_64 gets TCG only, about
+100× slower. That is survivable precisely because the x86-only guests are old ones — emulated DOS
+and Windows 95 are still faster than the hardware they shipped on.
+
+**Offline generators.** Both commit their output, so neither the mod checkout nor a Minecraft
+install is a build dependency:
 
 ```bash
 python3 tools/generate_parts.py ../MCVmComputers   # -> src/main/resources/parts.json
-python3 tools/generate_heads.py                    # -> tools/heads/*.png + preview.png
+python3 tools/generate_heads.py                    # -> tools/heads/*.png
 ```
 
-`generate_parts.py` also needs the client jar to sample vanilla block colours; it looks in the
-default Minecraft install and honours `MC_CLIENT_JAR`.
+`generate_parts.py` needs the client jar to sample block colours; honours `MC_CLIENT_JAR`.
+`vehicles.json` is **hand-authored** — do not point the generator at it.
 
-**Standalone harness** (no Minecraft at all — very useful for emulator work):
+**Headless harness**, no Minecraft required — very useful for emulator work:
+
 ```bash
 java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --out /tmp/shots
 ```
 
-### In-game commands
+### Commands
+
 ```
 /vmcomputers create <SMALL|MEDIUM|LARGE|XLARGE> [x86_64|aarch64]
 /vmcomputers remove [id]
-/vmcomputers iso                      # list ISOs in plugins/vm_computers/isos
-/vmcomputers iso <id> <file|none>
-/vmcomputers type <text>              # types into the screen you're looking at
-/vmcomputers type @RETURN             # @TAB @ESC @BACKSPACE @UP..@F12
-/vmcomputers testdisplay [clear]      # ItemDisplay diagnostic (answer: doesn't work)
-/vmcomputers debug                    # toggle: draws the pointer on screen, for testing
-/vmcomputers order                    # parts shop, paid in Auros (3 paper each)
-/vmcomputers phone                    # hands you a brick phone (also craftable)
-/vmcomputers parts list               # component models and their piece counts
-/vmcomputers parts <model> [scale]    # preview one where you stand, facing you
-/vmcomputers parts clear              # remove previews within 32 blocks
+/vmcomputers iso [<id> <file|none>]
+/vmcomputers type <text>        # @RETURN @TAB @ESC @UP..@F12
+/vmcomputers keys [game|menu|bind <input> <key>|reset]
+/vmcomputers audio              # private link to the guest's sound
+/vmcomputers order | phone      # parts shop, Auros (3 paper each)
+/vmcomputers parts <list|model|clear>
+/vmcomputers testdisplay | debug
 ```
 
-`debug` exists because the pointer is invisible by design (§4) and "invisible and working" looks
-exactly like "invisible and broken". Turn it on to see where the plugin thinks the guest's pointer
-is; the arrow will trail your crosshair, which is the map protocol rather than the aim. It is
-global, not per player, since the arrow is painted into a framebuffer everyone looking at that
-screen shares. Leave it off otherwise — it costs map traffic on every head movement.
-Right-click the tower (desk) or control block (projector) to power on/off.
+`debug` draws the pointer on screen. It exists because the pointer is invisible by design, and
+"invisible and working" looks exactly like "invisible and broken". Leave it off — it costs map
+traffic on every head movement.
 
-**Test assets already downloaded** in `run/plugins/vm_computers/isos/`:
+### ISOs already downloaded (`run/plugins/vm_computers/isos/`)
 
-| ISO | Size | Use |
-|---|---|---|
-| `ubuntu-26.04-desktop-arm64.iso` | 3968 MB | **Live desktop, ARM.** Auto-boots to a live session, no keypress. The one to test mouse and GUI with. |
-| `alpine-virt-3.24.1-aarch64.iso` | 88 MB | **Fast iteration, ARM.** Console only, boots in seconds, scrolls continuously. |
-| `debian-13.6.0-arm64-netinst.iso` | 701 MB | Installer, ARM. **Stops on a GRUB menu waiting for a keypress** — it looks frozen but isn't. Bad for quick tests. |
-| `TinyCore-17.1.iso` | 26 MB | x86 — TCG only on Apple Silicon, so ~100× slow. |
+| ISO | Use |
+|---|---|
+| `alpine-virt-3.24.1-aarch64.iso` | **Fast iteration, ARM.** Boots in seconds, console only. |
+| `ubuntu-26.04-desktop-arm64.iso` | Live desktop, ARM. The one for testing mouse and GUI. |
+| `debian-13.6.0-arm64-netinst.iso` | Installer, ARM. **Stops at a GRUB menu** — looks frozen, isn't. |
+| `FD14LIVE.iso` | FreeDOS, x86. For the legacy-guest work. |
+| `TinyCore-17.1.iso` | x86, tiny. TCG-slow on this host. |
 
 ---
 
-## 9. Monitor sizes
+## 3. Working agreements
 
-| Size | Grid | Pixels | Form | Seat | Notes |
-|---|---|---|---|---|---|
-| SMALL | 2×2 | 256×256 | desk | 2.0 | 640×480 scaled down hard |
-| MEDIUM | 3×3 | 384×384 | desk | 2.5 | |
-| LARGE | 4×3 | 512×384 | desk | 3.0 | exact 0.8 scale — best desk |
-| XLARGE | 6×4 | 768×512 | **projector** | 5.0 | only size that shows 640×480 **1:1** |
-
-Seat distances are tuned to a ~60° head sweep. Walking closer genuinely improves aim (the screen
-covers more of your view, so fewer pixels per degree) — an emergent property of the geometry, not
-code.
+- **Push after every commit.** Not batched.
+- **Commit straight to `main`** for ordinary work. Branch only for something large enough to review
+  as a unit (the delivery truck, the components layer). A PR for three bug fixes is ceremony, and
+  Anston has said so twice.
+- **No AI attribution anywhere that reaches the repo.** No `Co-Authored-By` trailers, no "generated
+  with" footers, in commits, PR bodies, comments or files. Anston Sorensen
+  `<ansorensen1118@gmail.com>` is sole author; history was rewritten on 2026-08-16 to make that
+  true. Note PR bodies live on GitHub, not in git — a history rewrite does not touch them.
+- Git identity is set **repo-locally**.
+- **Anston reviews design choices and pushes back.** Several decisions here were reversed that way.
+  State the trade-off and a recommendation rather than quietly picking.
+- **Prefer testing on the real server.** Unit tests are for pure logic only — don't contort
+  Bukkit-coupled code for testability.
+- Goal is **highest achievable frame rate**.
+- Prices and component tiers are the mod's own numbers. Change the currency or the earn rate, not
+  the catalogue.
 
 ---
 
-## 10. Known state: what's untested or unfinished
+## 4. Decisions closed — don't reopen
 
-### What is verified, and how
+- **QEMU over RFB/VNC, not SPICE or libmks/D-Bus.** SPICE is discontinued (from a SPICE developer);
+  libmks's author says the D-Bus display driver is broken, unmaintained, and not even compiled by
+  most distros — and its DMA-BUF fast path's whole value is never reading pixels back, which this
+  project must do to quantize them. His own advice for that case was the VNC backend.
+- **Spigot API only, no NMS.** Paper is Mojang-mapped and Spigot isn't, so one jar can't call NMS
+  for both, and the Spigot artifact is unpublished by licence. It turned out to be unnecessary
+  anyway.
+- **No resource pack, for anything.** One used to be force-pushed from a dead Dropbox link, which
+  only ever kicked people. Removed. Any feature that seems to want a pack needs a different answer —
+  guest audio's answer is a browser page.
+- **The pointer is tracked but never drawn.** Tracking gives the guest hover, which a click-only
+  model can't. Drawing it means painting the framebuffer on every head movement, and it lags the
+  crosshair that is already exactly where it should be.
+- **Components are display entities in the world, player heads in menus.** An inventory slot renders
+  an `ItemStack` and nothing else, so a display entity cannot appear in a chest GUI at all.
+- **Auros, not iron.** Iron competes with everything else a player wants it for. Vanilla maps were
+  tried and are a trap: a full machine came to ~344 iron against the mod's 86, plus 688 paper.
+- **Loopback TCP, not Unix sockets**, for QMP and VNC — avoids betting on AF_UNIX in QEMU's Windows
+  builds. Unmeasurable at these rates.
+- **The truck's timings and geometry are tuning, not architecture.** Constants at the top of
+  `DeliveryTruck`, boxes in `vehicles.json`. Nothing waits on a flight leg, so no schedule change
+  can strand an order.
 
-Everything below was checked on a real server or by a headless harness, not assumed:
+---
 
-- Part model loading — 27 models, 103 display pieces, every block id resolves on 26.2.
-- `PartRenderer.transformFor` against known bounds, including that an off-centre box rotates about
-  the part origin rather than in place.
-- The head-texture parser over all 22 real values, not just synthetic ones — the pretty-printed JSON
-  these arrive as has a `metadata` block after the url, which is the shape a regex gets wrong.
-- Filled maps stack; tinted named id-less ones are `isSimilar` (see §5).
-- Schema creation, and both component backfills — each pre-existing computer got the monitor
-  matching its own size, with optional bays left alone.
-- Both crafting recipes register without a duplicate-key error.
+## 5. Gotchas that will bite
 
-The delivery truck has been play-tested in game and works. That settles two rendering assumptions
-it rests on, both worth knowing because they are the first things to suspect if lettering or the
-landing gear break after a version bump: an unrotated `FIXED` text display reads from `+Z`
-(`Branding.Face`), and writing `setInterpolationDelay` **last** is what starts an interpolation.
+### Minecraft / Bukkit
 
-### What has never been exercised in game
+- **The server only pushes a framed map every 10 ticks** — that was the entire frame rate, 2 fps,
+  regardless of everything else. The fix is `Player.sendMap`, plain Bukkit, driven every tick.
+  **NMS was never the obstacle**; the updates simply weren't being driven.
+- **Map colour index 0 is transparent, not black.** A fresh map shows the wall behind it.
+- **`MapView` renderers do not survive a restart.** Hence persisted map ids and reattachment.
+- **`ItemDisplay` does not render map contents** — only item frames reach that path. So one map per
+  block; scaled monitors are impossible.
+- **Clicking an item frame never fires `PlayerInteractEvent`.** Left click is
+  `EntityDamageByEntityEvent`, right click is `PlayerInteractEntityEvent`. A mouse built on
+  `PlayerInteractEvent` alone works at range and silently dies when you sit at the desk.
+- **Fixed frames double-fire.** The client treats a fixed frame as not having consumed the
+  interaction, so one right click raises both events. Deduped with a one-tick window.
+- **`PlayerMoveEvent` cannot drive a pointer.** CraftBukkit gates it on a cumulative **ten degrees**
+  of look change. Aim is sampled on a 1-tick task instead.
+- **Don't cancel `PlayerMoveEvent` wholesale** to seat a player — it cancels rotation too and the
+  client rubber-bands. Refuse position only.
+- **`Block.setType(material, false)`** — physics pops attached blocks off as items.
+- **A display entity has no hitbox.** Anything clickable needs a real block (`BARRIER`) or an
+  `Interaction` entity behind it.
+- **A display's `translation` is applied after its rotation and is not itself rotated.** Turning a
+  part means rotating each box's offset by hand too. Forget it and the part scatters instead of
+  turning — and it still looks plausible in a screenshot. Covered by tests now.
+- **`setInterpolationDelay` written *last* is what starts an interpolation**, and an unrotated
+  `FIXED` text display reads from `+Z`. Both verified in game via the truck.
+- **Particles only take a direction when the count is zero.** With a count, the offsets are a spread
+  and the last argument is a random-direction speed.
+- **`Villager.setAware(false)`, not `setAI(false)`.** Unaware keeps physics, step height and the
+  walk animation; AI-off slides like a statue.
+- **A chicken lays eggs even with AI off** — the timer is in `aiStep`, not the goals, and Bukkit
+  exposes no switch. The eChair refuses the drop instead.
+- **`Bukkit.addRecipe` refuses a duplicate key**, and `/reload` registers twice. `removeRecipe`
+  first.
+- **Beats inside another phase's tick range must live outside the `else if` chain**, or they are
+  silently swallowed. The truck's landing gear never deployed for exactly this reason.
 
-- **Every menu.** `OrderMenu`, `CaseMenu`, `AssemblyMenu`, `IsoMenu`. The riskiest paths are
-  `fit`/`remove` in the two bay menus and the cart in the shop, because that is where an inventory
-  bug costs a player a real item rather than just looking wrong. (The shop's *checkout* is now
-  well exercised, since every truck delivery goes through it.)
-- **Assembly**, end to end — a placed case becoming a computer with a desk and screen.
-- **Whether parts face the right way.** The authored-north convention in `PartRenderer.yawFor` is an
-  assumption about Blockbench, not a measured fact. `/vmcomputers parts <model>` is the fast loop.
-  Note the truck renders correctly through the same convention, which is decent circumstantial
-  evidence for it.
+### QEMU / guests
+
+- **ARM UEFI's per-machine variable store goes stale, and a stale one boots the EFI shell instead
+  of the ISO.** It writes `Boot####` entries pinned to exact device paths and prefers them over
+  hunting for removable media; change the hardware and every entry points at nothing. The symptom is
+  a machine that booted fine last week sitting at `Shell>` with the same ISO in the drive, and it
+  looks exactly like the ISO not being attached. **Fixed by `bootindex`** on the cdrom and disk,
+  which QEMU passes via fw_cfg and the firmware reads first. Bisected against a real failing vars
+  file. This forced the aarch64 disk from `if=virtio` to an explicit `-device virtio-blk-pci`.
+- **A keysym names a character, but QEMU presses a key.** Without an explicit shift the guest hears
+  the unshifted half — `*` typed `8`, capitals typed lower case. `Keysym.needsShift` owns this and
+  it is **US-layout**; another layout would reproduce the bug with different characters.
+- **x86 guests ignore EDID** and come up in 720×400 text mode during BIOS and installers. **ARM UEFI
+  honours it literally** — asking for 320×240 once left a guest with no usable mode at all. Every
+  size asks for 640×480.
+- **ARM `virt` has no PS/2**, so a USB keyboard device is required or there is no keyboard.
+- **QEMU does not composite the guest cursor into the framebuffer.** A guest on a hardware cursor
+  plane looks like it has no pointer. Minecraft's crosshair is the pointer; don't care.
+- **QEMU is found on `PATH` and nowhere else.** The "or configure an explicit path" in the error
+  message is a lie — no such setting exists. `qemu-img` must be on PATH separately (a different
+  package on Debian).
+- **`RfbDump` must not force `--machine`** — each architecture picks its own default.
+
+### This codebase
+
+- **A new *required* `ComponentSlot` breaks every existing computer** unless the backfill fills it.
+  `VMComputers.restoreComponents` fills gaps, and only required ones once a computer has rows of its
+  own — otherwise a deliberately-pulled hard drive grows back every restart.
+- **`Computer.architecture` defaults to `X86_64`.** Anything building a `Computer` outside
+  `/vmcomputers create` must set it from the host or the machine silently refuses every arm64 ISO.
+- **`ScreenGeometry.setGuestResolution` takes the *displayed* size** — after scaling to fit the
+  panel grid — not the guest's own resolution. `MonitorScreen.setDisplayedSize` feeds it.
+- **`Currency.is()` checks the tag, never the material.** Screen panels are filled maps too.
+- **Clearing display entities by proximity takes the neighbours' with them.** Record ids and remove
+  exactly those.
+- **An item that is also its own crafting ingredient gets eaten by its own recipe.** The brick phone
+  uses `RecipeChoice.ExactChoice` so the recipe book can't auto-fill a phone into a phone.
+- **Check what already owns an event before adding a handler.** Twice now something was built that
+  already existed: a scroll handler when `PointerListener` already owned the wheel, and a shift-key
+  fix that was already sitting finished on an unmerged branch.
+
+---
+
+## 6. State
+
+### Verified
+
+Play-tested in game: the whole delivery-truck sequence, ordering and checkout, the eChair keyboard,
+ISO boot on ARM after the `bootindex` fix, the power indicator, and `/vmcomputers type` including
+shifted characters.
+
+Covered by tests (`./gradlew test`, 27 of them, all pure): the display transform including
+rotation-about-pivot and the folded-gear case, the screen ray including the parallax regression,
+image fitting, and the whole key table.
+
+### Never exercised in game
+
+- **`AssemblyMenu` and the bay menus** — `fit`/`remove` are where an inventory bug costs a player a
+  real item. The shop's checkout is well exercised; assembly is the untouched half.
+- **Assembly end to end** — a placed case becoming a computer.
+- **Whether parts face the right way.** The authored-north convention is an assumption about
+  Blockbench; the truck rendering correctly is decent circumstantial evidence. `/vmcomputers parts
+  <model>` is the fast loop.
 - **Whether desk accessories sit on the surface** rather than floating or sunk.
-- **Guest RAM and cores now coming from fitted parts.** A 64 MB stick really does mean 64 MB, so it
-  really will fail to boot a desktop. Intended, but not watched happen.
-
-Older, still unverified: the `PointerListener` rewrite (invisible head tracking and the click model
-on it), the `PreventionListener` rewrite, and SMALL/MEDIUM booting Debian after the 640×480 fix.
+- **Guest RAM and cores from fitted parts.** A 64 MB stick really means 64 MB.
+- Older: the `PointerListener` and `PreventionListener` rewrites, SMALL/MEDIUM booting Debian.
 
 ### Known gaps
 
-Delivery truck:
-- **The flight path is only measured at the strip's ends and over the pad.** A tree partway along
-  the inbound leg gets clipped through. Cosmetic, and cheap to fix by sampling the whole lane.
-- **No payment on delivery still.** The truck makes this more conspicuous, not less: Steve turns up
-  with the goods having already been paid.
+- **Guest hardware is chosen by a guess.** Machine type, video chip, disk interface, sound card, NIC
+  and pointer style all follow from architecture alone — the code says so in a `TODO`. This is the
+  gap between "runs Ubuntu" and "runs anything", and it is the next body of work. See the Guest
+  Hardware Manual.
+- **Disks are fixed at 16 GiB** and there is no way to use an image you already have.
+- **The GPU component does nothing** but be required; **the 32-bit motherboard is indistinguishable
+  from the 64-bit one**. Both should become real QEMU knobs or be cut.
+- **No sound-card or network-card component**, though both are real choices.
+- **No OS catalogue.** ISOs are dropped in a folder by hand. Plan: quickget's per-OS tuning concept
+  as a committed JSON manifest — take the idea, not the shell scripts, which scrape vendor pages and
+  break constantly.
+- **Keyboard is chat-based** plus the chair's five keys. The on-screen keyboard is the biggest
+  remaining UX gap; it must work in a BIOS, so it can't be guest-side.
+- **No payment on delivery.** Payment is taken at order time.
+- **The truck's flight path is only measured at the strip's ends** — a tree partway along gets
+  clipped through. Cosmetic.
+- **Parts whose detail is painted on come out flat** (keyboard, motherboard traces). The fix is
+  geometry the mod never needed, which display entities make affordable.
 
-Components layer:
-- **The 32-bit motherboard does nothing.** Both supported architectures are 64-bit, so it can never
-  be the right choice. Give it a real limitation (a RAM cap is the honest one) or cut it.
-- **The GPU does nothing but be required.** No tiers, no effect on the guest. There is no honest
-  knob for one either: QEMU's `-vga` choice exists but `STD` is deliberate (it supports the EDID
-  hints ARM guests need), and the frame ceiling is Minecraft's map protocol, not the guest's video
-  device. Leaving it as a gate is defensible; inventing tiers that pretend to matter is not.
-- **No payment-on-delivery.** The mod drops a payment chest first; here payment is taken when you
-  order and the package only carries goods.
-- **Parts whose detail is painted on come out flat.** The keyboard is one cuboid whose mod texture
-  draws the key rows; the motherboard's traces are painted. The fix is geometry the mod never needed
-  — actual raised keys, actual chips — which display entities make affordable.
-- **Peripherals on computers built before the monitor bay existed** are drawn on the desk but have
-  no component fitted, so their case menu shows those bays empty. Cosmetic, and only affects
-  machines predating this branch.
-- **No permissions.** Any player can order, assemble, and `remove` someone else's computer. The shop
-  makes this worse than it was: griefing now has a payoff. This is the most serious gap on the
-  branch.
+### Recently closed
 
-Older:
-- **The pointer is invisible by design** (§4), so the guest's own cursor is the only feedback. A
-  guest on a hardware cursor plane shows nothing at all, and there the crosshair is all you get.
-- **Keyboard is chat-based** (`/vmcomputers type`). The planned on-screen keyboard doesn't exist.
-- **No size-selection GUI** for `/vmcomputers create` — the arg exists, the menu doesn't. Note the
-  monitor *component* now sets size on the assembly path, so this only affects the command.
-- **No OS catalog / downloader.** ISOs are dropped in a folder by hand. Plan: port `quickget`'s
-  catalog concept to a JSON manifest.
-- **Security:** guests get user-mode NAT, which reaches whatever the host can reach including its
-  LAN. `VmSpec.Builder.networking(false)` turns it off. Worth an admin config knob.
+Permissions (`vmcomputers.use` / `.build` / `.admin`, with per-computer ownership), a cap on
+concurrent VMs, guest networking as an admin setting, guest audio over HTTP, and the first tests.
 
 ---
 
-## 11. Gotchas that will bite
+## 7. Next
 
-- Use `Block.setType(material, false)` — physics pops attached blocks (button, pressure plate) off
-  as dropped items.
-- Item frames need care: breaking one in creative fires **no block event**, and right-clicking
-  **rotates** the item. `PlayerInteractEvent` cancellation is not enough.
-- **Clicking an item frame never fires `PlayerInteractEvent`.** A frame is an entity: left click is
-  an attack (`EntityDamageByEntityEvent`), right click is `PlayerInteractEntityEvent`. Since the
-  screen *is* item frames, a mouse driven only by `PlayerInteractEvent` works when you aim past arm's
-  reach — the miss arrives as `LEFT_CLICK_AIR` — and silently does nothing when you sit at the desk.
-  This cost a debugging session. `PointerListener` now takes the left button from
-  `PlayerAnimationEvent` (the arm swing, sent for every left click whatever is in front of you) and
-  the right button from both interact events.
-- **The screen's frames are `setFixed(true)`, and the vanilla client treats a fixed frame as not
-  having consumed the interaction.** So it follows the entity packet with a use-item packet, and one
-  right click raises `PlayerInteractEntityEvent` *and* `PlayerInteractEvent`. Both paths are needed,
-  so `PointerListener` drops the duplicate with a one-tick window instead.
-- `PlayerInteractEvent.getClickedBlock()` is **null** for air clicks — fires on every swing.
-- Don't cancel `PlayerMoveEvent` wholesale to keep a player seated; it cancels rotation too and the
-  client rubber-bands. Refuse position only, pass yaw/pitch through.
-- ARM `virt` has **no PS/2**, so a USB keyboard device is required or there's no keyboard at all.
-- ARM UEFI needs a **private writable copy** of `edk2-arm-vars.fd` per machine.
-- **That private copy goes stale, and a stale one boots the EFI shell instead of the ISO.** ARM
-  UEFI writes `Boot####` entries into it, each pinned to an exact device path, and prefers them
-  over hunting for removable media. Change the hardware — which fitting or pulling a component now
-  does — and every remembered entry points at something that is no longer there, so BdsDxe falls
-  through the lot and starts `Boot0002 "EFI Internal Shell"`. The symptom is a machine that booted
-  an ISO happily last week sitting at a `Shell>` prompt this week with the same ISO in the drive,
-  and it looks exactly like the ISO not being attached at all. **Fixed by `bootindex` on the cdrom
-  and disk devices** (`VmSpec.toArgv`), which QEMU passes through fw_cfg and the firmware reads
-  before consulting its own variables. Bisected on a real failing vars file: same file, EFI shell
-  without `bootindex`, Debian's GRUB with it. Note this forced the aarch64 disk from `if=virtio` to
-  an explicit `-device virtio-blk-pci`, since an implicit device has nowhere to hang a bootindex.
-- `RfbDump` must not force `--machine`; the architecture picks its own default (`q35` vs `virt`).
-
-Components layer:
-
-- **A new *required* `ComponentSlot` breaks every existing computer** unless the backfill fills it.
-  Adding the monitor bay did exactly that: machines that already had component rows skipped the
-  "no rows = legacy" path and were left unable to power on with no way to get a part in.
-  `VMComputers.restoreComponents` now fills *gaps*, and only required ones once a computer has rows
-  of its own — otherwise a hard drive someone deliberately pulled grows back every restart.
-- **`Computer.architecture` defaults to `X86_64`.** Anything constructing a `Computer` outside
-  `/vmcomputers create` must set it from the host, or the machine silently refuses every arm64 ISO
-  in the folder. `AssemblyMenu` shipped without doing this and that is exactly what happened.
-- **An item that is also one of its own crafting ingredients can be eaten by its own recipe.** The
-  brick phone is a `BRICK`, so the brick slots use `RecipeChoice.ExactChoice` — otherwise the recipe
-  book's auto-fill hands the player their own phone to build a phone.
-- **`Bukkit.addRecipe` refuses a key that already exists**, and a reload runs registration twice in
-  one server. Always `removeRecipe` first.
-- **Clearing display entities by proximity takes the neighbours' with them.** A delivered package
-  records the ids of the displays it spawned and removes exactly those; the earlier radius sweep
-  deleted the box standing next to it and left an invisible thing to click.
-- **`Currency.is()` checks the tag, never the material.** Screen panels are filled maps too.
-
-Delivery truck:
-
-- **A display's `translation` is applied after its rotation, and this bites twice.** Once for a
-  static part (§5) and again for anything that moves: `Branding.pose` and `PartRenderer.transformFor`
-  both exist so the box Steve throws can tumble with its lettering still stuck to its sides.
-- **Beats that fall inside another phase's range must live outside the `else if` chain.** The gear
-  drops mid-approach and the fans spool while Steve is boarding; both were silently swallowed by
-  the branch above them, and the landing gear simply never deployed.
-- **`Villager.setAware(false)`, not `setAI(false)`.** Unaware keeps physics, step height and the
-  walk animation that comes from actually moving, while ignoring every goal. AI off entirely makes
-  him slide like a statue; AI on sends him off to find a bed.
-- **Particles only take a direction when the count is zero.** With a count above zero the offsets
-  are a spread and the last argument is a random-direction speed, so downwash scatters instead of
-  blowing down.
-
----
-
-## 12. Suggested next steps
-
-1. **Finish play-testing the components loop.** Order → package → place a case → fit everything →
-   assemble → power on. Ordering and delivery are now well exercised; assembly and the bay menus
-   are the untouched half, and they are where an inventory bug costs a player a real item.
-2. **Then the older unverified work**: pointer tracking and clicks, protection, SMALL/MEDIUM. Check
-   hover actually reaches the guest — hover a menu bar and see it highlight.
-3. **Permissions.** `plugin.yml` declares none. Ordering and assembly made this urgent.
-4. **Decide the 32-bit motherboard's fate** — cap its RAM or cut it.
-5. **Finish a Debian install** end to end with `/vmcomputers type`. First real proof a persistent OS
-   survives a power cycle on the virtual disk. Worth doing soon: it is the one thing that exercises
-   the UEFI variable store as intended, now that `bootindex` stops a stale one hijacking the boot.
-6. **On-screen keyboard** — the biggest remaining UX gap. Host-rendered overlay driven by the
-   click-to-position model; must work in a BIOS, so it can't be guest-side.
-7. **OS catalog + downloader.**
-8. **Guest audio** needs a plan that is not a resource pack. The pack is gone (§4) and is not coming
-   back; the `guest-audio` branch predates that decision and should be read with it in mind.
-
----
-
-## 13. Working agreements
-
-- Git identity is set **repo-locally** to `Anston Sorensen <ansorensen1118@gmail.com>` (matches all
-  prior commits). Work on a branch and merge to `main`, rather than committing to it directly.
-- Anston prefers testing on the real server over building extra classes to test things outside it.
-  Unit tests are for **pure logic only** (`ComputerLayout`, `ScreenGeometry`, `ImageScaler`, `Json`,
-  `MapColorLut`) — don't contort Bukkit-coupled code for testability.
-- Goal is **highest performance / fps achievable**.
-- Anston reviews design choices and will push back on them; several decisions here were reversed
-  that way (player heads, and the currency). State the trade-off and the recommendation rather than
-  quietly picking.
-- Prices, and the numbers behind component tiers, are the mod's own. Change the currency or the
-  earn rate, not the catalogue numbers.
+1. **`disks/` folder** — list existing images the way `isos/` already does, with the same
+   path-escape guard. Smallest change here, and it unblocks testing everything else: you can install
+   Windows 95 once by hand and copy it in.
+2. **Guest profiles** — replace the architecture guess with a named era that supplies machine,
+   firmware, video, disk, sound, NIC and pointer. The change that makes DOS and Win9x possible.
+3. **Point the graphics bay at the video device** — fixes "the GPU does nothing" and the Cirrus
+   problem together (Windows 9x has in-box drivers for Cirrus and nothing else).
+4. **OS catalogue**, starting as a manifest with no downloader.
+5. **Hard drive tiers**, then **sound and network bays**.
+6. **Finish a Debian install** end to end — first real proof a persistent OS survives a power cycle.
+7. **On-screen keyboard.**
