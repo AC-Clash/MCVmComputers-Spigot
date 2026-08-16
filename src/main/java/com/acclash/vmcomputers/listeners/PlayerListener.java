@@ -1,13 +1,12 @@
 package com.acclash.vmcomputers.listeners;
 
 import com.acclash.vmcomputers.VMComputers;
+import com.acclash.vmcomputers.parts.EChair;
 import org.bukkit.Location;
-import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.persistence.PersistentDataType;
 
 /**
  * Player-facing behaviour that is not tied to a computer.
@@ -32,8 +31,7 @@ public class PlayerListener implements Listener {
     public void onPlayerMove(PlayerMoveEvent e) {
         Player player = e.getPlayer();
         if (!player.isInsideVehicle()) return;
-        if (!player.getVehicle().getPersistentDataContainer()
-                .has(new NamespacedKey(VMComputers.getPlugin(), "isEChair"), PersistentDataType.STRING)) {
+        if (!EChair.is(player.getVehicle())) {
             return;
         }
 

@@ -647,5 +647,110 @@ public final class RfbClient implements Closeable {
                     throw new IllegalArgumentException("no keysym mapping for character " + (int) c);
             }
         }
+
+        /**
+         * Every key a player can name, in the order they are offered for completion.
+         *
+         * <p>One table, shared by the typing command and by the chair's rebindable keys. Two
+         * tables would drift, and the failure would be a player told that a key they can type is
+         * not a key they can bind.
+         */
+        public static final String[] NAMES = {
+            "RETURN", "ENTER", "SPACE", "TAB", "ESCAPE", "BACKSPACE", "DELETE",
+            "UP", "DOWN", "LEFT", "RIGHT", "HOME", "END", "PAGEUP", "PAGEDOWN",
+            "SHIFT", "CTRL", "ALT",
+            "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+        };
+
+        /**
+         * The keysym a name stands for, or null if it is not one.
+         *
+         * <p>A single printable character is its own key, so {@code w} and {@code SPACE} are both
+         * things a player can bind.
+         */
+        public static Integer byName(String rawName) {
+            if (rawName == null || rawName.isEmpty()) {
+                return null;
+            }
+            String name = rawName.toUpperCase(java.util.Locale.ROOT);
+            if (name.length() == 1) {
+                char c = rawName.charAt(0);
+                return c >= 0x20 && c <= 0x7E ? Integer.valueOf(c) : null;
+            }
+            if (name.matches("F([1-9]|1[0-2])")) {
+                return Integer.valueOf(f(Integer.parseInt(name.substring(1))));
+            }
+            switch (name) {
+                case "RETURN":
+                case "ENTER":
+                    return Integer.valueOf(RETURN);
+                case "TAB":
+                    return Integer.valueOf(TAB);
+                case "ESC":
+                case "ESCAPE":
+                    return Integer.valueOf(ESCAPE);
+                case "BACKSPACE":
+                    return Integer.valueOf(BACKSPACE);
+                case "DELETE":
+                    return Integer.valueOf(DELETE);
+                case "SPACE":
+                    return Integer.valueOf(' ');
+                case "UP":
+                    return Integer.valueOf(UP);
+                case "DOWN":
+                    return Integer.valueOf(DOWN);
+                case "LEFT":
+                    return Integer.valueOf(LEFT);
+                case "RIGHT":
+                    return Integer.valueOf(RIGHT);
+                case "HOME":
+                    return Integer.valueOf(HOME);
+                case "END":
+                    return Integer.valueOf(END);
+                case "PAGEUP":
+                    return Integer.valueOf(PAGE_UP);
+                case "PAGEDOWN":
+                    return Integer.valueOf(PAGE_DOWN);
+                case "SHIFT":
+                    return Integer.valueOf(SHIFT_LEFT);
+                case "CTRL":
+                case "CONTROL":
+                    return Integer.valueOf(CONTROL_LEFT);
+                case "ALT":
+                    return Integer.valueOf(ALT_LEFT);
+                default:
+                    return null;
+            }
+        }
+
+        /** How to write a keysym back to a player, so what they are shown is what they can type. */
+        public static String nameOf(int keysym) {
+            switch (keysym) {
+                case RETURN: return "ENTER";
+                case TAB: return "TAB";
+                case ESCAPE: return "ESCAPE";
+                case BACKSPACE: return "BACKSPACE";
+                case DELETE: return "DELETE";
+                case UP: return "UP";
+                case DOWN: return "DOWN";
+                case LEFT: return "LEFT";
+                case RIGHT: return "RIGHT";
+                case HOME: return "HOME";
+                case END: return "END";
+                case PAGE_UP: return "PAGEUP";
+                case PAGE_DOWN: return "PAGEDOWN";
+                case SHIFT_LEFT: return "SHIFT";
+                case CONTROL_LEFT: return "CTRL";
+                case ALT_LEFT: return "ALT";
+                case ' ': return "SPACE";
+                default:
+                    if (keysym >= 0xFFBE && keysym <= 0xFFC9) {
+                        return "F" + (keysym - 0xFFBE + 1);
+                    }
+                    return keysym >= 0x21 && keysym <= 0x7E
+                            ? String.valueOf((char) keysym)
+                            : "0x" + Integer.toHexString(keysym);
+            }
+        }
     }
 }

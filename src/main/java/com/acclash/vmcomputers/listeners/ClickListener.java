@@ -1,6 +1,7 @@
 package com.acclash.vmcomputers.listeners;
 
 import com.acclash.vmcomputers.VMComputers;
+import com.acclash.vmcomputers.parts.EChair;
 import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.emu.VmService;
@@ -8,7 +9,6 @@ import com.acclash.vmcomputers.gui.CaseMenu;
 import com.acclash.vmcomputers.parts.ComponentSlot;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -19,20 +19,17 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
-import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Optional;
 
 public class ClickListener implements Listener {
-
-    private final NamespacedKey eChair = new NamespacedKey(VMComputers.getPlugin(), "isEChair");
 
     /** Seats the player when they click the invisible chair entity. */
     @EventHandler
     public void onRightClick(PlayerInteractEntityEvent e) {
         if (e.getRightClicked() instanceof LivingEntity) {
             LivingEntity entity = (LivingEntity) e.getRightClicked();
-            if (!entity.getPersistentDataContainer().has(eChair, PersistentDataType.STRING)) return;
+            if (!EChair.is(entity)) return;
             if (!entity.getPassengers().isEmpty()) return;
             entity.addPassenger(e.getPlayer());
         }
@@ -132,8 +129,7 @@ public class ClickListener implements Listener {
     private void seatPlayer(Player player, Location blockLocation) {
         Optional<Entity> chair = blockLocation.getWorld()
                 .getNearbyEntities(blockLocation.clone().add(0.5, 0.5, 0.5), 1, 1, 1).stream()
-                .filter(entity -> entity.getPersistentDataContainer()
-                        .has(eChair, PersistentDataType.STRING))
+                .filter(EChair::is)
                 .findFirst();
         chair.ifPresent(entity -> entity.addPassenger(player));
     }

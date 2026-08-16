@@ -1,6 +1,7 @@
 package com.acclash.vmcomputers.computer;
 
 import com.acclash.vmcomputers.VMComputers;
+import com.acclash.vmcomputers.parts.EChair;
 import com.acclash.vmcomputers.parts.ComponentSlot;
 import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.parts.Furniture;
@@ -40,7 +41,6 @@ public final class ComputerBuilder {
     public static List<Integer> build(World world, Computer computer) {
         ComputerLayout layout = computer.layout();
         NamespacedKey monitorKey = new NamespacedKey(VMComputers.getPlugin(), "isMonitor");
-        NamespacedKey chairKey = new NamespacedKey(VMComputers.getPlugin(), "isEChair");
         NamespacedKey idKey = new NamespacedKey(VMComputers.getPlugin(), "computerId");
 
         // Backing first: item frames need something solid behind them.
@@ -96,16 +96,11 @@ public final class ComputerBuilder {
             stairs.setFacing(computer.facing().getOppositeFace());
             chairBlock.setBlockData(stairs, false);
 
+            // The seat itself is an eChair: an entity, because only an entity carries a passenger,
+            // and a passenger is what a sitting player is. What it is made of lives in EChair and
+            // is not this class's business.
             Location seat = chairBlock.getLocation().add(0.5, 0, 0.5);
-            world.spawn(seat, org.bukkit.entity.Chicken.class, chicken -> {
-                chicken.getPersistentDataContainer().set(chairKey, PersistentDataType.STRING, "true");
-                chicken.getPersistentDataContainer().set(idKey, PersistentDataType.INTEGER, computer.id());
-                chicken.setAI(false);
-                chicken.setInvisible(true);
-                chicken.setInvulnerable(true);
-                chicken.setSilent(true);
-                chicken.setRotation(yawOf(computer.facing()), 0f);
-            });
+            EChair.spawn(world, seat, computer.id(), yawOf(computer.facing()));
         }
 
         // The tower and the control block are what a player right-clicks to power the machine on,

@@ -12,7 +12,6 @@ import org.bukkit.entity.Player;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Sends keystrokes to whichever computer the player is looking at.
@@ -26,13 +25,6 @@ import java.util.Locale;
  * them distinguishable from literal text without needing a second command.
  */
 public class Type extends ComputerSubCommand {
-
-    /** Named keys, addressed as {@code @NAME}. */
-    private static final String[] SPECIAL_NAMES = {
-            "RETURN", "ENTER", "TAB", "ESC", "ESCAPE", "BACKSPACE", "DELETE", "SPACE",
-            "UP", "DOWN", "LEFT", "RIGHT", "HOME", "END", "PAGEUP", "PAGEDOWN",
-            "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"
-    };
 
     @Override
     public String getName() {
@@ -99,7 +91,7 @@ public class Type extends ComputerSubCommand {
 
             String token = tokens[t];
             if (token.startsWith("@") && token.length() > 1) {
-                Integer keysym = specialKeysym(token.substring(1));
+                Integer keysym = RfbClient.Keysym.byName(token.substring(1));
                 if (keysym == null) {
                     player.sendMessage(ChatColor.RED + "Unknown key '" + token + "'.");
                     continue;
@@ -127,52 +119,12 @@ public class Type extends ComputerSubCommand {
         machine.sendKey(keysym, false);
     }
 
-    private static Integer specialKeysym(String rawName) {
-        String name = rawName.toUpperCase(Locale.ROOT);
-        if (name.matches("F([1-9]|1[0-2])")) {
-            return Integer.valueOf(RfbClient.Keysym.f(Integer.parseInt(name.substring(1))));
-        }
-        switch (name) {
-            case "RETURN":
-            case "ENTER":
-                return Integer.valueOf(RfbClient.Keysym.RETURN);
-            case "TAB":
-                return Integer.valueOf(RfbClient.Keysym.TAB);
-            case "ESC":
-            case "ESCAPE":
-                return Integer.valueOf(RfbClient.Keysym.ESCAPE);
-            case "BACKSPACE":
-                return Integer.valueOf(RfbClient.Keysym.BACKSPACE);
-            case "DELETE":
-                return Integer.valueOf(RfbClient.Keysym.DELETE);
-            case "SPACE":
-                return Integer.valueOf(' ');
-            case "UP":
-                return Integer.valueOf(RfbClient.Keysym.UP);
-            case "DOWN":
-                return Integer.valueOf(RfbClient.Keysym.DOWN);
-            case "LEFT":
-                return Integer.valueOf(RfbClient.Keysym.LEFT);
-            case "RIGHT":
-                return Integer.valueOf(RfbClient.Keysym.RIGHT);
-            case "HOME":
-                return Integer.valueOf(RfbClient.Keysym.HOME);
-            case "END":
-                return Integer.valueOf(RfbClient.Keysym.END);
-            case "PAGEUP":
-                return Integer.valueOf(RfbClient.Keysym.PAGE_UP);
-            case "PAGEDOWN":
-                return Integer.valueOf(RfbClient.Keysym.PAGE_DOWN);
-            default:
-                return null;
-        }
-    }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, String[] args) {
         if (args.length >= 2) {
             List<String> options = new ArrayList<String>();
-            for (String name : SPECIAL_NAMES) {
+            for (String name : RfbClient.Keysym.NAMES) {
                 options.add("@" + name);
             }
             return options;

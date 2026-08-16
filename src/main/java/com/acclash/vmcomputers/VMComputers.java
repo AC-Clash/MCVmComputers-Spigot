@@ -15,6 +15,7 @@ import com.acclash.vmcomputers.parts.PartModels;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenPump;
 import com.acclash.vmcomputers.listeners.ClickListener;
+import com.acclash.vmcomputers.listeners.EChairListener;
 import com.acclash.vmcomputers.listeners.OrderingListener;
 import com.acclash.vmcomputers.listeners.PlacementListener;
 import com.acclash.vmcomputers.listeners.PlayerListener;
@@ -254,6 +255,8 @@ public final class VMComputers extends JavaPlugin {
 
         getCommand("vmcomputers").setExecutor(new ComputerCM());
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
+        // Reads the movement keys of anyone sitting in an eChair and gives them to the guest.
+        getServer().getPluginManager().registerEvents(new EChairListener(), this);
         getServer().getPluginManager().registerEvents(new MenuListener(), this);
         getServer().getPluginManager().registerEvents(new OrderingListener(), this);
         getServer().getPluginManager().registerEvents(new PlacementListener(), this);

@@ -2,6 +2,7 @@ package com.acclash.vmcomputers.listeners;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.parts.EChair;
 import org.bukkit.ChatColor;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
@@ -43,7 +44,6 @@ import java.util.List;
 public class PreventionListener implements Listener {
 
     private final NamespacedKey idKey = new NamespacedKey(VMComputers.getPlugin(), "computerId");
-    private final NamespacedKey chairKey = new NamespacedKey(VMComputers.getPlugin(), "isEChair");
 
     /** The computer an entity belongs to, from the id stamped on it at build time. */
     private Computer ownerOf(Entity entity) {
@@ -88,12 +88,12 @@ public class PreventionListener implements Listener {
     }
 
     /**
-     * The chair is a chicken, and a chicken lays eggs.
+     * An eChair drops nothing, ever.
      *
-     * <p>{@code setAI(false)} does not stop it: the egg timer lives in the chicken's own tick
-     * rather than in its goals, so an invisible chair sitting under a desk quietly produces eggs
-     * forever. There is no API to turn that off -- Bukkit's {@code Chicken} exposes only its
-     * variant -- so the drop is refused instead.
+     * <p>It is built on a chicken, and {@code setAI(false)} does not stop one laying: the egg
+     * timer lives in the mob's own tick rather than in its goals, so an invisible seat under a
+     * desk quietly produces eggs forever. There is no API to turn that off, so the drop is
+     * refused here instead -- the one place the eChair's plumage shows through.
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityDropItem(EntityDropItemEvent e) {
@@ -111,7 +111,7 @@ public class PreventionListener implements Listener {
      * should not become killable because a map lookup came back empty.
      */
     private boolean isChair(Entity entity) {
-        return entity.getPersistentDataContainer().has(chairKey, PersistentDataType.STRING);
+        return EChair.is(entity);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
