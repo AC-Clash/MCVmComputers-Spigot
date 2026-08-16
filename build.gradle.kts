@@ -28,6 +28,16 @@ dependencies {
     // does not re-export it, so it is needed on the compile classpath only. Version matches what
     // the 26.2 server ships.
     compileOnly("org.joml:joml:1.10.8")
+
+    // Tests cover the pure geometry and lookup code only -- the maths that decides where a part
+    // sits, where a look ray lands and which key a character is. None of it needs a server, and
+    // all of it is the kind of thing that breaks silently: a wrong transform still renders, it
+    // just renders in the wrong place.
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testCompileOnly("org.spigotmc:spigot-api:26.2-R0.1-SNAPSHOT")
+    testRuntimeOnly("org.spigotmc:spigot-api:26.2-R0.1-SNAPSHOT")
+    testImplementation("org.joml:joml:1.10.8")
 }
 
 java {
@@ -45,6 +55,11 @@ tasks {
 
     jar {
         archiveBaseName.set("VMComputers")
+    }
+
+    test {
+        useJUnitPlatform()
+        testLogging { events("failed") }
     }
 
     runServer {
