@@ -6,6 +6,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -20,11 +21,10 @@ import java.util.Arrays;
  * nothing to draw it with, so the tablet's job here is only to open a chest menu -- which means the
  * prop is free to be whatever is funniest.
  *
- * <p>The icon is an approximation and known to be one. Nothing in vanilla looks like a brick phone,
- * for the same reason nothing looks like a graphics card: the only item whose texture a server can
- * choose is a player head. A recovery compass is at least a dark handheld device rather than a tool
- * or a food, and it cannot be accidentally placed as a block, which rules out most of the
- * better-shaped candidates.
+ * <p>It is a brick. Nothing in vanilla is actually a brick phone, so the choice is between items
+ * that gesture at a handheld device and the one item that is literally the thing the joke is named
+ * after -- and a brick reads as a brick phone the moment it has the name on it, which no gadget
+ * lookalike managed.
  */
 public final class BrickPhone {
 
@@ -34,7 +34,7 @@ public final class BrickPhone {
     }
 
     public static ItemStack create() {
-        ItemStack stack = new ItemStack(Material.RECOVERY_COMPASS);
+        ItemStack stack = new ItemStack(Material.BRICK);
         ItemMeta meta = stack.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.RESET + "" + ChatColor.GOLD + "Brick Phone");
@@ -78,7 +78,10 @@ public final class BrickPhone {
                 "BCG",
                 "BRG");
         recipe.setIngredient('L', Material.LIGHTNING_ROD);
-        recipe.setIngredient('B', Material.BRICK);
+        // Plain bricks only. The phone is itself a brick now, so a bare material ingredient
+        // would happily accept one -- and the recipe book's auto-fill would reach into the
+        // player's inventory and feed them their own phone to build a phone.
+        recipe.setIngredient('B', new RecipeChoice.ExactChoice(new ItemStack(Material.BRICK)));
         recipe.setIngredient('C', Material.COMPASS);
         recipe.setIngredient('G', Material.GLASS_PANE);
         recipe.setIngredient('R', Material.REPEATER);
@@ -86,7 +89,7 @@ public final class BrickPhone {
     }
 
     public static boolean is(ItemStack stack) {
-        if (stack == null || stack.getType() != Material.RECOVERY_COMPASS) {
+        if (stack == null || stack.getType() != Material.BRICK) {
             return false;
         }
         ItemMeta meta = stack.getItemMeta();
