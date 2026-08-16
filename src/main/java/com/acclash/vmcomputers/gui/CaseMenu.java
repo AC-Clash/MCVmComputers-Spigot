@@ -41,8 +41,14 @@ public class CaseMenu extends Menu {
     /** Bay slots along the middle row, in enum order. */
     private static final int SLOT_ROW = 1;
 
+    /** How often to check whether the machine's power state still matches what is on screen. */
+    private static final int WATCH_TICKS = 5;
+
     private final Computer computer;
     private final Map<Integer, ComponentSlot> bays = new HashMap<Integer, ComponentSlot>();
+
+    /** Power state the lever was last drawn from, so a redraw only happens when it changes. */
+    private boolean shownRunning;
 
     public CaseMenu(Player viewer, Computer computer) {
         super(viewer);
@@ -121,6 +127,7 @@ public class CaseMenu extends Menu {
 
     private void drawPower() {
         boolean running = VmService.isRunning(computer.id());
+        shownRunning = running;
         set(POWER_SLOT, button(running ? Material.REDSTONE_TORCH : Material.LEVER,
                 running ? ChatColor.GREEN + "Running" : ChatColor.GRAY + "Powered off",
                 running ? "Click to shut down." : "Click to power on.",
@@ -254,8 +261,27 @@ public class CaseMenu extends Menu {
             viewer.sendMessage(ChatColor.GRAY + "Powering on...");
             VmService.start(computer, screen, m -> viewer.sendMessage(ChatColor.YELLOW + m));
         }
-        // The machine changes state on a background thread, so the button is redrawn from what is
-        // true now rather than what was just asked for.
+        // Redrawn immediately so the button reflects what is true now rather than what was just
+        // asked for -- but this alone shows the *old* state, because booting and shutting down
+        // both happen on a background thread and have not finished yet. The watcher below is what
+        // actually flips the lever, a fraction of a second later when the machine really is up.
         refresh();
+    }
+
+    /**
+     * Power can change without this menu being touched: a boot started here finishes on another
+     * thread, someone else can right-click the tower, and a guest can bring itself down. So the
+     * lever is driven by what the machine is actually doing rather than by what was clicked.
+     */
+    @Override
+    protected int refreshTicks() {
+        return WATCH_TICKS;
+    }
+
+    @Override
+    protected void tick() {
+        if (VmService.isRunning(computer.id()) != shownRunning) {
+            refresh();
+        }
     }
 }

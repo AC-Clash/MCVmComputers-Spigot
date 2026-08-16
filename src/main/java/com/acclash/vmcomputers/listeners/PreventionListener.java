@@ -18,6 +18,7 @@ import org.bukkit.event.block.BlockPistonExtendEvent;
 import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDropItemEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.hanging.HangingBreakEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -42,6 +43,7 @@ import java.util.List;
 public class PreventionListener implements Listener {
 
     private final NamespacedKey idKey = new NamespacedKey(VMComputers.getPlugin(), "computerId");
+    private final NamespacedKey chairKey = new NamespacedKey(VMComputers.getPlugin(), "isEChair");
 
     /** The computer an entity belongs to, from the id stamped on it at build time. */
     private Computer ownerOf(Entity entity) {
@@ -80,9 +82,36 @@ public class PreventionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityDamaged(EntityDamageEvent e) {
-        if (ownerOf(e.getEntity()) != null) {
+        if (isChair(e.getEntity()) || ownerOf(e.getEntity()) != null) {
             e.setCancelled(true);
         }
+    }
+
+    /**
+     * The chair is a chicken, and a chicken lays eggs.
+     *
+     * <p>{@code setAI(false)} does not stop it: the egg timer lives in the chicken's own tick
+     * rather than in its goals, so an invisible chair sitting under a desk quietly produces eggs
+     * forever. There is no API to turn that off -- Bukkit's {@code Chicken} exposes only its
+     * variant -- so the drop is refused instead.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onEntityDropItem(EntityDropItemEvent e) {
+        if (isChair(e.getEntity()) || ownerOf(e.getEntity()) != null) {
+            e.setCancelled(true);
+        }
+    }
+
+    /**
+     * True for a seat.
+     *
+     * <p>Checked by its own tag rather than by looking the computer up, because the lookup can
+     * miss -- a chair built before ids were stamped on furniture, or one whose computer is not in
+     * the registry -- and a miss silently turns the protection off. Something a player sits on
+     * should not become killable because a map lookup came back empty.
+     */
+    private boolean isChair(Entity entity) {
+        return entity.getPersistentDataContainer().has(chairKey, PersistentDataType.STRING);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)

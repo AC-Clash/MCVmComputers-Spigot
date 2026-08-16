@@ -1,5 +1,6 @@
 package com.acclash.vmcomputers.gui;
 
+import com.acclash.vmcomputers.VMComputers;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -9,6 +10,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,6 +34,7 @@ public abstract class Menu implements InventoryHolder {
 
     protected final Player viewer;
     private Inventory inventory;
+    private BukkitTask ticker;
 
     protected Menu(Player viewer) {
         this.viewer = viewer;
@@ -66,6 +69,10 @@ public abstract class Menu implements InventoryHolder {
     public void open() {
         draw();
         viewer.openInventory(getInventory());
+        if (refreshTicks() > 0) {
+            ticker = Bukkit.getScheduler().runTaskTimer(
+                    VMComputers.getPlugin(), this::tick, refreshTicks(), refreshTicks());
+        }
     }
 
     /** Redraws in place, keeping the window open. */
@@ -73,6 +80,30 @@ public abstract class Menu implements InventoryHolder {
         if (inventory != null) {
             inventory.clear();
             draw();
+        }
+    }
+
+    /**
+     * How often to call {@link #tick} while this menu is open, or 0 to never.
+     *
+     * <p>For menus showing something they do not themselves control. A chest GUI is a snapshot
+     * taken when it was drawn, so anything that changes behind it -- a machine finishing its boot
+     * on a background thread, someone else hitting the power button on the tower, a guest falling
+     * over -- leaves the window quietly lying until the player closes and reopens it.
+     */
+    protected int refreshTicks() {
+        return 0;
+    }
+
+    /** Called every {@link #refreshTicks} ticks while open. Redraw here only if something changed. */
+    protected void tick() {
+    }
+
+    /** Called when the window closes. Stops the ticker; override to add cleanup, and call super. */
+    public void closed() {
+        if (ticker != null) {
+            ticker.cancel();
+            ticker = null;
         }
     }
 

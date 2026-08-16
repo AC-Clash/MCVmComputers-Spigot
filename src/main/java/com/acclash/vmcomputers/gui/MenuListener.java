@@ -4,6 +4,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -43,6 +44,21 @@ public class MenuListener implements Listener {
     public void onDrag(InventoryDragEvent event) {
         if (menuOf(event.getView().getTopInventory()) != null) {
             event.setCancelled(true);
+        }
+    }
+
+    /**
+     * Lets a menu stop watching whatever it was watching.
+     *
+     * <p>Menus that track something they do not own keep a repeating task alive while open; this
+     * is what ends it. Without it every open of such a menu would leak a task that redraws an
+     * inventory nobody is looking at.
+     */
+    @EventHandler
+    public void onClose(InventoryCloseEvent event) {
+        Menu menu = menuOf(event.getView().getTopInventory());
+        if (menu != null) {
+            menu.closed();
         }
     }
 
