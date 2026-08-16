@@ -1,0 +1,122 @@
+{
+  "_note": "Hand-authored, unlike parts.json. Same schema: Blockbench-style cuboids as BlockDisplay transforms, sizes and centres in blocks relative to the model's bottom centre, authored facing north (-Z).",
+  "_why_not_parts_json": "parts.json is generated from the VM Computers mod's own GPLv3 Blockbench models and its header credits them. Nothing here comes from the mod, so it does not belong in a file that says it does. Edit this one by hand; do not run tools/generate_parts.py at it.",
+  "_layout": "A box truck: cab at the front (negative Z), cargo box behind it. 4.5 blocks long, 2.0 wide, 2.56 tall at the roof. Roughly two and a half players long, which reads as a vehicle next to one rather than a shed.",
+  "models": {
+    "delivery_truck": [
+      {
+        "_": "wheels -- front left, front right, rear left, rear right",
+        "block": "black_concrete",
+        "size": [0.32, 0.72, 0.72],
+        "centre": [-0.86, 0.36, -1.45]
+      },
+      {
+        "block": "black_concrete",
+        "size": [0.32, 0.72, 0.72],
+        "centre": [0.86, 0.36, -1.45]
+      },
+      {
+        "block": "black_concrete",
+        "size": [0.32, 0.72, 0.72],
+        "centre": [-0.86, 0.36, 1.35]
+      },
+      {
+        "block": "black_concrete",
+        "size": [0.32, 0.72, 0.72],
+        "centre": [0.86, 0.36, 1.35]
+      },
+      {
+        "_": "chassis: the dark rail the body sits on, so the truck does not look like a box on wheels",
+        "block": "gray_concrete",
+        "size": [1.84, 0.28, 4.5],
+        "centre": [0.0, 0.66, 0.0]
+      },
+      {
+        "_": "cab",
+        "block": "white_concrete",
+        "size": [1.9, 1.2, 1.6],
+        "centre": [0.0, 1.4, -1.45]
+      },
+      {
+        "_": "cab roof cap, a shade off the body so the edge reads at distance",
+        "block": "light_gray_concrete",
+        "size": [1.94, 0.1, 1.64],
+        "centre": [0.0, 2.05, -1.45]
+      },
+      {
+        "_": "cargo box, taller than the cab",
+        "block": "white_concrete",
+        "size": [2.0, 1.75, 2.9],
+        "centre": [0.0, 1.68, 0.8]
+      },
+      {
+        "_": "livery stripe, left and right flanks. Sits 0.02 proud of the body to avoid z-fighting.",
+        "block": "gold_block",
+        "size": [0.06, 0.2, 2.8],
+        "centre": [-1.02, 1.35, 0.8]
+      },
+      {
+        "block": "gold_block",
+        "size": [0.06, 0.2, 2.8],
+        "centre": [1.02, 1.35, 0.8]
+      },
+      {
+        "_": "windscreen",
+        "block": "black_stained_glass",
+        "size": [1.7, 0.62, 0.08],
+        "centre": [0.0, 1.68, -2.27]
+      },
+      {
+        "_": "side windows",
+        "block": "black_stained_glass",
+        "size": [0.08, 0.55, 0.9],
+        "centre": [-0.97, 1.62, -1.6]
+      },
+      {
+        "block": "black_stained_glass",
+        "size": [0.08, 0.55, 0.9],
+        "centre": [0.97, 1.62, -1.6]
+      },
+      {
+        "_": "grille",
+        "block": "polished_blackstone",
+        "size": [1.6, 0.34, 0.1],
+        "centre": [0.0, 1.02, -2.29]
+      },
+      {
+        "_": "bumper",
+        "block": "iron_block",
+        "size": [1.96, 0.24, 0.18],
+        "centre": [0.0, 0.72, -2.32]
+      },
+      {
+        "_": "headlights",
+        "block": "sea_lantern",
+        "size": [0.26, 0.22, 0.1],
+        "centre": [-0.62, 1.32, -2.3]
+      },
+      {
+        "block": "sea_lantern",
+        "size": [0.26, 0.22, 0.1],
+        "centre": [0.62, 1.32, -2.3]
+      },
+      {
+        "_": "wing mirrors",
+        "block": "gray_concrete",
+        "size": [0.12, 0.34, 0.1],
+        "centre": [-1.06, 1.7, -2.1]
+      },
+      {
+        "block": "gray_concrete",
+        "size": [0.12, 0.34, 0.1],
+        "centre": [1.06, 1.7, -2.1]
+      },
+      {
+        "_": "rear doors -- this is the end Steve takes the box out of",
+        "block": "light_gray_concrete",
+        "size": [1.9, 1.5, 0.06],
+        "centre": [0.0, 1.6, 2.27]
+      }
+    ]
+  }
+}
