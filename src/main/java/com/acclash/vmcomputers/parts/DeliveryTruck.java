@@ -122,13 +122,25 @@ public final class DeliveryTruck {
     private static final int BOX_OUT = 150;
     private static final int AT_PLAYER = 180;
     private static final int HANDOVER = 184;
-    private static final int BACK_AT_CAB = 214;
-    private static final int FANS_ON = 214;
-    private static final int STEVE_IN = 218;
-    private static final int LIFT_START = 222;
-    private static final int GEAR_UP = 240;
-    private static final int LIFT_END = 292;
-    private static final int CRUISE_END = 332;
+    /** Ticks the box spends in the air once Steve lets go of it. */
+    private static final int THROW_TIME = 12;
+    private static final int THROW_LAND = HANDOVER + THROW_TIME;
+    private static final int BACK_AT_CAB = 226;
+    private static final int FANS_ON = 226;
+    private static final int STEVE_IN = 230;
+    private static final int LIFT_START = 234;
+    private static final int GEAR_UP = 252;
+    private static final int LIFT_END = 304;
+    private static final int CRUISE_END = 344;
+
+    /** How high the thrown box arcs above the straight line from his hands to the ground. */
+    private static final double THROW_ARC = 0.9;
+
+    /** How far the box turns each tick in flight: about a turn and a half over the throw. */
+    private static final float TUMBLE_STEP = (float) Math.toRadians(45);
+
+    /** Lettering size on a package. Its long face is 0.81 blocks, so this is most of it. */
+    private static final float BOX_SIGN_SCALE = 0.5f;
 
     /** How long the gear takes to swing, in ticks. The client tweens the whole thing. */
     private static final int GEAR_TIME = 14;
@@ -158,6 +170,22 @@ public final class DeliveryTruck {
     private final List<Entity> spawned = new ArrayList<Entity>();
     private final List<Entity> truckParts = new ArrayList<Entity>();
     private final List<Entity> carriedBox = new ArrayList<Entity>();
+
+    // The box in his hands, kept in the pieces it is made of rather than as one list, because
+    // once it is thrown every piece has to be re-posed each tick to tumble together.
+    private final List<BlockDisplay> boxBlocks = new ArrayList<BlockDisplay>();
+    private final List<PartModel.Piece> boxPieces = new ArrayList<PartModel.Piece>();
+    private final List<TextDisplay> boxSigns = new ArrayList<TextDisplay>();
+    private final List<Vector3f> boxSignOffsets = new ArrayList<Vector3f>();
+    private final List<Branding.Face> boxSignFaces = new ArrayList<Branding.Face>();
+
+    /** The box's own facing, and the point it tumbles about. */
+    private Quaternionf carryTurn;
+    private Vector3f boxCentre = new Vector3f();
+
+    private Location throwFrom;
+    private Location throwTo;
+    private float tumbleAngle;
 
     /** The wheels, paired with the model boxes that describe their two poses. */
     private final List<BlockDisplay> gear = new ArrayList<BlockDisplay>();
@@ -226,11 +254,13 @@ public final class DeliveryTruck {
                 heading.getModZ() * 1.45 + side.getModZ() * 1.6 * sign);
         this.rearSpot = road.rearOfParkedTruck();
 
+        // Three blocks back, not arm's length. He throws the box the last stretch, and a throw
+        // that covers a foot and a half is a drop.
         Location feet = player.getLocation();
         Vector fromPlayer = rearSpot.toVector().subtract(feet.toVector()).setY(0);
         this.handoverSpot = fromPlayer.lengthSquared() < 1.0e-6
                 ? feet.clone()
-                : feet.clone().add(fromPlayer.normalize().multiply(1.6));
+                : feet.clone().add(fromPlayer.normalize().multiply(3.0));
     }
 
     /**
@@ -347,18 +377,32 @@ public final class DeliveryTruck {
             }
         }
 
-        // Lettering on both flanks, proud of the livery stripe and centred on the cargo box.
-        for (boolean east : new boolean[]{true, false}) {
-            TextDisplay sign = Branding.sign(start, Branding.COMPANY,
-                    new Vector3f(east ? 1.07f : -1.07f, 1.85f, 0.8f), turn, east, 1.0f);
-            sign.setViewRange(1.4f);
-            sign.setTeleportDuration(MOVE_STEP);
-            sign.setPersistent(false);
-            truckParts.add(remember(sign));
-        }
+        // Livery on both flanks, proud of the gold stripe and centred on the cargo box; then the
+        // maker's badge front and rear, and the model name under the rear one. The badges are
+        // small on purpose -- they read as stamped metal rather than as more advertising.
+        addSign(start, Branding.COMPANY, new Vector3f(1.07f, 1.85f, 0.8f),
+                Branding.Face.RIGHT, 1.0f);
+        addSign(start, Branding.COMPANY, new Vector3f(-1.07f, 1.85f, 0.8f),
+                Branding.Face.LEFT, 1.0f);
+        addSign(start, Branding.MAKE_ON_DARK, new Vector3f(0f, 1.02f, -2.37f),
+                Branding.Face.FRONT, 0.4f);
+        addSign(start, Branding.MAKE_ON_LIGHT, new Vector3f(0f, 1.85f, 2.34f),
+                Branding.Face.REAR, 0.4f);
+        addSign(start, Branding.MODEL_NAME, new Vector3f(0f, 1.60f, 2.34f),
+                Branding.Face.REAR, 0.45f);
 
         this.task = Bukkit.getScheduler().runTaskTimer(
                 VMComputers.getPlugin(), this::tick, 0L, 1L);
+    }
+
+    /** One piece of lettering on the truck, moved and torn down with the rest of it. */
+    private void addSign(Location origin, String text, Vector3f offset, Branding.Face face,
+                         float scale) {
+        TextDisplay sign = Branding.sign(origin, text, offset, turn, face, scale);
+        sign.setViewRange(1.4f);
+        sign.setTeleportDuration(MOVE_STEP);
+        sign.setPersistent(false);
+        truckParts.add(remember(sign));
     }
 
     private void tick() {
@@ -390,8 +434,12 @@ public final class DeliveryTruck {
             face(player.getLocation());
             carryBox();
         } else if (tick == HANDOVER) {
-            handOver(player);
-        } else if (tick > HANDOVER && tick <= BACK_AT_CAB) {
+            releaseBox(player);
+        } else if (tick > HANDOVER && tick < THROW_LAND) {
+            flyThrownBox();
+        } else if (tick == THROW_LAND) {
+            boxLands(player);
+        } else if (tick > THROW_LAND && tick <= BACK_AT_CAB) {
             walk(cabDoor, BACK_AT_CAB - tick);
         } else if (tick == STEVE_IN) {
             world.playSound(cabDoor, Sound.BLOCK_IRON_DOOR_CLOSE, 0.7f, 1.1f);
@@ -654,23 +702,43 @@ public final class DeliveryTruck {
         }
     }
 
-    /** Spawns the box Steve carries: scenery only, with the real package created at handover. */
+    /** Spawns the box Steve carries: scenery only, with the real package created where it lands. */
     private void takeOutBox(Player player) {
         BlockFace carryFacing = towards(rearSpot, player.getLocation());
-        Quaternionf carryTurn = new Quaternionf().rotateY(PartRenderer.yawFor(carryFacing));
+        this.carryTurn = new Quaternionf().rotateY(PartRenderer.yawFor(carryFacing));
 
-        for (BlockDisplay display : PartRenderer.spawnNamedDisplays(
-                carriedAt(), carryFacing, "package", 1.0f, TRUCK_OWNER)) {
+        PartModel box = PartModels.get("package");
+        List<PartModel.Piece> pieces = box == null
+                ? new ArrayList<PartModel.Piece>() : box.pieces();
+
+        List<BlockDisplay> displays = PartRenderer.spawnNamedDisplays(
+                carriedAt(), carryFacing, "package", 1.0f, TRUCK_OWNER);
+        for (int i = 0; i < displays.size(); i++) {
+            BlockDisplay display = displays.get(i);
             display.setTeleportDuration(1);
             display.setPersistent(false);
             carriedBox.add(remember(display));
+            if (i < pieces.size()) {
+                boxBlocks.add(display);
+                boxPieces.add(pieces.get(i));
+            }
         }
-        for (boolean east : new boolean[]{true, false}) {
+        // The package is one box, and its centre is what the whole thing tumbles about -- taken
+        // from the model rather than assumed, so a two-piece package would still spin true.
+        if (!boxPieces.isEmpty()) {
+            boxCentre = boxPieces.get(0).centre();
+        }
+
+        for (Branding.Face face : new Branding.Face[]{Branding.Face.RIGHT, Branding.Face.LEFT}) {
+            Vector3f offset = new Vector3f(face == Branding.Face.RIGHT ? 0.26f : -0.26f, 0.24f, 0f);
             TextDisplay sign = Branding.sign(carriedAt(), Branding.COMPANY_SHORT,
-                    new Vector3f(east ? 0.26f : -0.26f, 0.24f, 0f), carryTurn, east, 0.5f);
+                    offset, carryTurn, face, BOX_SIGN_SCALE);
             sign.setTeleportDuration(1);
             sign.setPersistent(false);
             carriedBox.add(remember(sign));
+            boxSigns.add(sign);
+            boxSignOffsets.add(offset);
+            boxSignFaces.add(face);
         }
     }
 
@@ -699,13 +767,79 @@ public final class DeliveryTruck {
         return at.clone().add(forward.getX(), 0.85, forward.getZ());
     }
 
-    private void handOver(Player player) {
+    /**
+     * Steve lets go of the box.
+     *
+     * <p>He does not hand it over. He is in a hurry, he has said so, and a courier who lobs the
+     * package at your feet is funnier and truer than one who waits for a signature.
+     */
+    private void releaseBox(Player player) {
+        throwFrom = carriedAt();
+        // Aimed at the exact spot the real package will appear, so the swap at the end of the
+        // flight has nothing to give it away.
+        throwTo = Delivery.landingSpot(player);
+        face(throwTo);
+        world.playSound(throwFrom, Sound.ENTITY_SNOWBALL_THROW, 0.9f, 0.8f);
+        world.playSound(throwFrom, Sound.ENTITY_VILLAGER_TRADE, 0.8f, 1.0f);
+        player.sendMessage(ChatColor.GOLD + "Steve: " + ChatColor.WHITE + "THERE YOU GO. "
+                + "SIGN NOTHING, I'M IN A HURRY.");
+    }
+
+    /**
+     * The box in flight: a flat arc from his hands to the ground, turning end over end.
+     *
+     * <p>Every piece is re-posed about the box's own centre rather than teleported independently,
+     * which is what keeps the lettering stuck to the sides instead of hanging in the air where the
+     * box used to be.
+     */
+    private void flyThrownBox() {
+        double t = (tick - HANDOVER) / (double) THROW_TIME;
+        double x = throwFrom.getX() + (throwTo.getX() - throwFrom.getX()) * t;
+        double z = throwFrom.getZ() + (throwTo.getZ() - throwFrom.getZ()) * t;
+        double y = throwFrom.getY() + (throwTo.getY() - throwFrom.getY()) * t
+                + THROW_ARC * 4.0 * t * (1.0 - t);
+
+        tumbleAngle += TUMBLE_STEP;
+        Quaternionf spin = new Quaternionf().rotateX(tumbleAngle);
+
+        for (int i = 0; i < boxBlocks.size(); i++) {
+            BlockDisplay display = boxBlocks.get(i);
+            if (!display.isValid()) {
+                continue;
+            }
+            PartModel.Piece piece = boxPieces.get(i);
+            PartModel.Piece tumbled = new PartModel.Piece(piece.block(), piece.size(),
+                    piece.centre(), new Vector3f(1f, 0f, 0f), tumbleAngle, piece.centre(),
+                    null, false);
+            display.setTransformation(PartRenderer.transformFor(tumbled, carryTurn, 1.0f));
+        }
+        for (int i = 0; i < boxSigns.size(); i++) {
+            TextDisplay sign = boxSigns.get(i);
+            if (!sign.isValid()) {
+                continue;
+            }
+            Vector3f moved = new Vector3f(boxSignOffsets.get(i))
+                    .sub(boxCentre).rotate(spin).add(boxCentre);
+            Quaternionf facing = new Quaternionf(spin).mul(boxSignFaces.get(i).rotation());
+            sign.setTransformation(Branding.pose(moved, carryTurn, facing, BOX_SIGN_SCALE));
+        }
+
+        Location at = new Location(world, x, y, z);
+        for (Entity piece : carriedBox) {
+            if (piece.isValid()) {
+                piece.teleport(at);
+            }
+        }
+    }
+
+    /** It lands. The scenery box goes, the real package appears in the same spot. */
+    private void boxLands(Player player) {
         clearCarriedBox();
         handedOver = true;
         Delivery.send(player, contents);
-        world.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_TRADE, 0.8f, 1.0f);
-        player.sendMessage(ChatColor.GOLD + "Steve: " + ChatColor.WHITE + "THERE YOU GO. "
-                + "SIGN NOTHING, I'M IN A HURRY.");
+        world.playSound(throwTo, Sound.BLOCK_WOOL_FALL, 1.0f, 0.7f);
+        world.spawnParticle(Particle.CLOUD, throwTo.clone().add(0, 0.15, 0), 8, 0.3, 0.02, 0.3,
+                0.01);
         player.sendMessage(ChatColor.GRAY + "Right-click the box to open it.");
     }
 
@@ -753,6 +887,11 @@ public final class DeliveryTruck {
             spawned.remove(piece);
         }
         carriedBox.clear();
+        boxBlocks.clear();
+        boxPieces.clear();
+        boxSigns.clear();
+        boxSignOffsets.clear();
+        boxSignFaces.clear();
     }
 
     private void removeSteve() {
