@@ -30,8 +30,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * An order arriving the long way round: a truck flies in on ducted fans, drops its gear and
- * lands, Steve gets out and hands over a box, then it lifts off and climbs away.
+ * An order arriving the long way round: a truck flies in on ducted fans, holds a hover over the
+ * spot, settles straight down, and Steve gets out and hands over a box before it lifts off
+ * vertically and climbs away.
  *
  * <h2>What this costs</h2>
  *
@@ -84,23 +85,44 @@ public final class DeliveryTruck {
      */
     public static final double REAR_OFFSET = 3.0;
 
-    /** How high the approach starts, headroom permitting. */
+    /** How high it comes in and hovers, headroom permitting. */
     private static final int MAX_ALTITUDE = 9;
 
-    // The schedule, in ticks from dispatch. Roughly ten seconds end to end.
-    private static final int GEAR_DOWN = 22;
-    private static final int APPROACH_END = 44;
-    private static final int STEVE_OUT = 52;
-    private static final int AT_REAR = 72;
-    private static final int BOX_OUT = 76;
-    private static final int AT_PLAYER = 106;
-    private static final int HANDOVER = 110;
-    private static final int BACK_AT_CAB = 140;
-    private static final int FANS_ON = 140;
-    private static final int STEVE_IN = 144;
-    private static final int DEPART_START = 148;
-    private static final int GEAR_UP = 156;
-    private static final int DEPART_END = 200;
+    /**
+     * Extra height it will gain on the way out, on top of the hover height.
+     *
+     * <p>Without this the climb-out is level: both ends of the strip measure the same nine blocks
+     * of open sky, so the departure has nowhere left to climb to and "forward and up" comes out as
+     * just forward. The far end is re-measured with this added, which is safe because it is only
+     * used where the truck is leaving and about to despawn.
+     */
+    private static final int CLIMB_OUT = 6;
+
+    /** How far the hover drifts up and down while it holds station over the pad. */
+    private static final double HOVER_BOB = 0.12;
+
+    // The schedule, in ticks from dispatch. Roughly twelve seconds end to end.
+    //
+    // It flies like a helicopter rather than a plane: in level, stop over the pad, hold, then
+    // straight down. Leaving is the same in reverse -- straight up off the ground first, and only
+    // then away. Nothing about that is more expensive than the diagonal it replaced; it is the
+    // same two numbers per tick, eased differently.
+    private static final int INBOUND_END = 30;
+    private static final int GEAR_DOWN = 26;
+    private static final int HOVER_END = 42;
+    private static final int DESCENT_END = 68;
+    private static final int STEVE_OUT = 76;
+    private static final int AT_REAR = 96;
+    private static final int BOX_OUT = 100;
+    private static final int AT_PLAYER = 130;
+    private static final int HANDOVER = 134;
+    private static final int BACK_AT_CAB = 164;
+    private static final int FANS_ON = 164;
+    private static final int STEVE_IN = 168;
+    private static final int LIFT_START = 172;
+    private static final int GEAR_UP = 182;
+    private static final int LIFT_END = 200;
+    private static final int CRUISE_END = 240;
 
     /** How long the gear takes to swing, in ticks. The client tweens the whole thing. */
     private static final int GEAR_TIME = 14;
@@ -150,9 +172,14 @@ public final class DeliveryTruck {
     private double altitude;
     private float bladeAngle;
 
-    /** Approach and departure heights, each limited by what is actually open above the lane. */
-    private final int approachTop;
-    private final int departTop;
+    /**
+     * The height it flies in at, hovers at and lifts back to, limited by what is actually open
+     * above both the near end of the strip and the pad itself.
+     */
+    private final int hoverTop;
+
+    /** How high it climbs on the way out, once it is moving forward again. */
+    private final int climbTop;
 
     private final Location cabDoor;
     private final Location rearSpot;
@@ -168,8 +195,14 @@ public final class DeliveryTruck {
         this.heading = road.heading();
         this.turn = new Quaternionf().rotateY(PartRenderer.yawFor(heading));
 
-        this.approachTop = road.clearanceAbove(0, MAX_ALTITUDE);
-        this.departTop = road.clearanceAbove(road.lastIndex(), MAX_ALTITUDE);
+        // It now stops over the pad and comes straight down, so the pad's own headroom matters as
+        // much as the approach end's -- the lower of the two is the only height that is clear for
+        // the whole of the inbound leg and the hover.
+        this.hoverTop = Math.min(
+                road.clearanceAbove(0, MAX_ALTITUDE),
+                road.clearanceAbove(road.parkIndex(), MAX_ALTITUDE));
+        this.climbTop = Math.max(hoverTop,
+                road.clearanceAbove(road.lastIndex(), MAX_ALTITUDE + CLIMB_OUT));
 
         Location park = road.at(road.parkIndex());
         BlockFace side = rightOf(heading);
@@ -270,7 +303,7 @@ public final class DeliveryTruck {
                 + "COMING IN NOW. MIND THE DOWNWASH.");
 
         PartModel model = PartModels.get(MODEL);
-        this.altitude = approachTop;
+        this.altitude = hoverTop;
         Location start = road.at(0).add(0, altitude, 0);
 
         List<BlockDisplay> displays = PartRenderer.spawnNamedDisplays(
@@ -332,14 +365,9 @@ public final class DeliveryTruck {
 
         tick++;
 
-        if (tick <= APPROACH_END) {
-            // Forward and down at once, like a plane on final: the horizontal run eases out into
-            // the parking spot while the descent flares, so it settles rather than dropping.
-            double t = tick / (double) APPROACH_END;
-            altitude = approachTop * (1.0 - t) * (1.0 - t);
-            moveTruck(road.parkIndex() * (1.0 - (1.0 - t) * (1.0 - t)));
-            fans(1.0);
-        } else if (tick == APPROACH_END + 1) {
+        if (tick <= DESCENT_END) {
+            approach();
+        } else if (tick == DESCENT_END + 1) {
             touchDown();
         } else if (tick == STEVE_OUT) {
             world.playSound(cabDoor, Sound.BLOCK_IRON_DOOR_OPEN, 0.7f, 1.1f);
@@ -372,26 +400,70 @@ public final class DeliveryTruck {
         }
 
         // Spool up while Steve is still boarding, so the lift-off is not a standing start.
-        if (tick >= FANS_ON && tick < DEPART_START) {
-            fans((tick - FANS_ON) / (double) (DEPART_START - FANS_ON));
+        if (tick >= FANS_ON && tick < LIFT_START) {
+            fans((tick - FANS_ON) / (double) (LIFT_START - FANS_ON));
         }
         if (tick == GEAR_UP) {
             deployGear(true);
         }
-        if (tick >= DEPART_START && tick <= DEPART_END) {
-            // Ease in on both axes: it unsticks, then climbs away.
-            double t = (tick - DEPART_START) / (double) (DEPART_END - DEPART_START);
-            int park = road.parkIndex();
-            altitude = departTop * t * t;
-            moveTruck(park + (road.lastIndex() - park) * t * t);
-            fans(1.0);
+        if (tick >= LIFT_START && tick <= CRUISE_END) {
+            depart();
         }
 
         // One tick past the end, so the last teleport of the climb-out is actually seen before
         // everything is removed.
-        if (tick > DEPART_END) {
+        if (tick > CRUISE_END) {
             finish();
         }
+    }
+
+    /**
+     * Flies in level, stops over the pad, holds, then comes straight down.
+     *
+     * <p>The inbound leg eases out so it arrives at a standstill rather than sailing past, and the
+     * descent is a smoothstep, which is slow off the hover <em>and</em> slow into the ground --
+     * the shape a helicopter actually makes, and the reason it reads as settling under power
+     * rather than falling.
+     */
+    private void approach() {
+        double index;
+        if (tick <= INBOUND_END) {
+            double t = tick / (double) INBOUND_END;
+            index = road.parkIndex() * (1.0 - (1.0 - t) * (1.0 - t));
+            altitude = hoverTop;
+        } else if (tick <= HOVER_END) {
+            index = road.parkIndex();
+            // Not quite still. A dead-static hover looks like the animation has hung.
+            altitude = hoverTop + Math.sin(tick * 0.45) * HOVER_BOB;
+        } else {
+            double t = (tick - HOVER_END) / (double) (DESCENT_END - HOVER_END);
+            index = road.parkIndex();
+            altitude = hoverTop * (1.0 - smoothstep(t));
+        }
+        moveTruck(index);
+        fans(1.0);
+    }
+
+    /** Straight up off the pad first, then forward and climbing. The arrival, in reverse. */
+    private void depart() {
+        double index;
+        if (tick <= LIFT_END) {
+            double t = (tick - LIFT_START) / (double) (LIFT_END - LIFT_START);
+            index = road.parkIndex();
+            altitude = hoverTop * smoothstep(t);
+        } else {
+            double t = (tick - LIFT_END) / (double) (CRUISE_END - LIFT_END);
+            int park = road.parkIndex();
+            index = park + (road.lastIndex() - park) * t * t;
+            altitude = hoverTop + (climbTop - hoverTop) * t;
+        }
+        moveTruck(index);
+        fans(1.0);
+    }
+
+    /** Eases at both ends. Slow off the hover, slow into the ground. */
+    private static double smoothstep(double t) {
+        return t * t * (3.0 - 2.0 * t);
     }
 
     /**
@@ -490,6 +562,14 @@ public final class DeliveryTruck {
                         z + random.nextDouble(-0.18, 0.18),
                         0, 0.0, -1.0, 0.0, 0.16 + 0.22 * intensity);
             }
+        }
+
+        // Ground effect: close to the pad the downwash has something to hit, and dust coming back
+        // up off the ground is most of what makes a hover look like it is holding itself there.
+        if (altitude > 0.05 && altitude < 2.6) {
+            Location pad = road.at(truckIndex);
+            world.spawnParticle(Particle.CLOUD,
+                    pad.getX(), pad.getY() + 0.15, pad.getZ(), 3, 1.1, 0.05, 1.1, 0.02);
         }
 
         if (tick % 6 == 0) {
