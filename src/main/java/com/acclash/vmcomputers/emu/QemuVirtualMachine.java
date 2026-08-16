@@ -53,12 +53,13 @@ public final class QemuVirtualMachine implements VirtualMachine {
 
     /** Builds a spec sized for a monitor and creates the VM. The disk is created if missing. */
     public static QemuVirtualMachine forComputer(int computerId, QemuBinary qemu, MonitorSize monitor,
-                                                 Path disk, Path iso, int memoryMb,
+                                                 Path disk, Path iso, int memoryMb, int cpus,
                                                  Consumer<String> logger) throws IOException {
         VmSpec.Builder builder = VmSpec.builder("vmcomputer-" + computerId)
                 .architecture(qemu.architecture())
                 .resolution(monitor.guestWidth(), monitor.guestHeight())
-                .memoryMb(memoryMb);
+                .memoryMb(memoryMb)
+                .cpus(cpus);
 
         if (qemu.architecture() == VmSpec.Architecture.AARCH64) {
             // ARM guests boot UEFI rather than a BIOS, and need their own writable variable store.

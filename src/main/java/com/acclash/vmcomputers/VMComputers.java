@@ -3,10 +3,19 @@ package com.acclash.vmcomputers;
 import com.acclash.vmcomputers.commands.ComputerCM;
 import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.computer.ComputerRegistry;
+import com.acclash.vmcomputers.computer.PendingCase;
 import com.acclash.vmcomputers.display.MapColorLut;
+import com.acclash.vmcomputers.gui.MenuListener;
+import com.acclash.vmcomputers.parts.BrickPhone;
+import com.acclash.vmcomputers.parts.ComponentSlot;
+import com.acclash.vmcomputers.parts.ComponentType;
+import com.acclash.vmcomputers.parts.Currency;
+import com.acclash.vmcomputers.parts.PartModels;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenPump;
 import com.acclash.vmcomputers.listeners.ClickListener;
+import com.acclash.vmcomputers.listeners.OrderingListener;
+import com.acclash.vmcomputers.listeners.PlacementListener;
 import com.acclash.vmcomputers.listeners.PlayerListener;
 import com.acclash.vmcomputers.listeners.PointerListener;
 import com.acclash.vmcomputers.listeners.PreventionListener;
@@ -97,6 +106,90 @@ public final class VMComputers extends JavaPlugin {
         return registry;
     }
 
+    /**
+     * Placed but unassembled cases, keyed by block position.
+     *
+     * <p>Its own map rather than a corner of {@link ComputerRegistry}, which indexes every block a
+     * computer occupies so a click anywhere on one finds it. A case is exactly one block, so it
+     * needs none of that.
+     */
+    private final java.util.Map<String, PendingCase> pendingCases =
+            new java.util.concurrent.ConcurrentHashMap<String, PendingCase>();
+
+    private static String caseKey(String world, int x, int y, int z) {
+        return world + ":" + x + ":" + y + ":" + z;
+    }
+
+    public PendingCase pendingCaseAt(String world, int x, int y, int z) {
+        return pendingCases.get(caseKey(world, x, y, z));
+    }
+
+    public void rememberPendingCase(PendingCase pending) {
+        pendingCases.put(caseKey(pending.worldName(), pending.x(), pending.y(), pending.z()),
+                pending);
+    }
+
+    public void forgetPendingCase(PendingCase pending) {
+        pendingCases.remove(caseKey(pending.worldName(), pending.x(), pending.y(), pending.z()));
+    }
+
+    public java.util.Collection<PendingCase> pendingCases() {
+        return pendingCases.values();
+    }
+
+    /**
+     * Puts a computer's stored components back in their bays.
+     *
+     * <p>Rows naming a slot or a component that no longer exists are dropped rather than fatal: a
+     * renamed component should cost that one part, not the whole machine.
+     */
+    private void restoreComponents(Computer computer, java.util.Map<String, String> stored) {
+        boolean legacy = stored == null || stored.isEmpty();
+
+        if (!legacy) {
+            for (java.util.Map.Entry<String, String> entry : stored.entrySet()) {
+                ComponentType type = ComponentType.byId(entry.getValue());
+                if (type == null) {
+                    getLogger().warning("Computer #" + computer.id() + " has unknown component '"
+                            + entry.getValue() + "'; dropped.");
+                    continue;
+                }
+                try {
+                    computer.install(ComponentSlot.valueOf(entry.getKey()), type);
+                } catch (IllegalArgumentException e) {
+                    getLogger().warning("Computer #" + computer.id() + " has unknown slot '"
+                            + entry.getKey() + "'; dropped.");
+                }
+            }
+        }
+
+        // Fill the gaps, and write them back so this only happens once.
+        //
+        // Two different situations, both of which end with a machine that cannot start unless
+        // something is put in: a computer with no rows at all predates components entirely (it
+        // used to boot on a hardcoded 4 GB), and a computer with rows may still be missing a bay
+        // that did not exist when it was last saved -- the monitor bay arrived exactly that way.
+        // Either would leave a built machine refusing to power on with no way to get parts into it.
+        //
+        // Only *required* bays are filled once a computer has any rows of its own. Doing otherwise
+        // would resurrect the hard drive of someone who deliberately took theirs out, every time
+        // the server restarted.
+        for (java.util.Map.Entry<ComponentSlot, ComponentType> entry
+                : ComponentType.defaultLoadout(computer.monitorSize()).entrySet()) {
+            ComponentSlot slot = entry.getKey();
+            if (computer.installedIn(slot) != null || (!legacy && !slot.required())) {
+                continue;
+            }
+            computer.install(slot, entry.getValue());
+            try {
+                computerDao.saveComponent(computer.id(), slot.name(), entry.getValue().id());
+            } catch (SQLException e) {
+                getLogger().warning("Could not backfill " + slot + " for computer #"
+                        + computer.id() + ": " + e.getMessage());
+            }
+        }
+    }
+
     @Override
     public void onEnable() {
         plugin = this;
@@ -105,6 +198,11 @@ public final class VMComputers extends JavaPlugin {
         this.mapPalette = MapColorLut.build(MapColorLut.DEFAULT_BITS);
         getLogger().info("Map palette LUT built in " + ((System.nanoTime() - lutStart) / 1_000_000)
                 + "ms (" + mapPalette.paletteSize() + " usable colours).");
+
+        // Parses every part's block data once, so building a computer is only entity creation.
+        PartModels.load(getLogger());
+        BrickPhone.registerRecipe();
+        Currency.registerRecipe();
 
         this.db = new SQLite(this);
         this.db.load();
@@ -117,9 +215,13 @@ public final class VMComputers extends JavaPlugin {
             // Map renderers do not survive a restart -- the default world-map renderer comes back
             // on every map -- so they have to be reinstalled from the stored panel ids.
             java.util.Map<Integer, List<Integer>> panels = computerDao.loadAllPanels();
+            java.util.Map<Integer, java.util.Map<String, String>> components =
+                    computerDao.loadAllComponents();
             int reattached = 0;
             byte black = mapPalette.match(0, 0, 0);
             for (Computer computer : loaded) {
+                restoreComponents(computer, components.get(Integer.valueOf(computer.id())));
+
                 List<Integer> ids = panels.get(Integer.valueOf(computer.id()));
                 if (ids == null) {
                     continue;
@@ -131,14 +233,21 @@ public final class VMComputers extends JavaPlugin {
                     reattached++;
                 }
             }
+            for (PendingCase pending : computerDao.loadAllCases()) {
+                rememberPendingCase(pending);
+            }
             getLogger().info("Loaded " + loaded.size() + " computer(s), "
-                    + reattached + " screen(s) reattached.");
+                    + reattached + " screen(s) reattached, "
+                    + pendingCases.size() + " case(s) awaiting parts.");
         } catch (SQLException e) {
             getLogger().log(Level.SEVERE, "Failed to initialise computer storage", e);
         }
 
         getCommand("vmcomputers").setExecutor(new ComputerCM());
         getServer().getPluginManager().registerEvents(new ClickListener(), this);
+        getServer().getPluginManager().registerEvents(new MenuListener(), this);
+        getServer().getPluginManager().registerEvents(new OrderingListener(), this);
+        getServer().getPluginManager().registerEvents(new PlacementListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(), this);
         getServer().getPluginManager().registerEvents(new PreventionListener(), this);
         this.pointerListener = new PointerListener();
