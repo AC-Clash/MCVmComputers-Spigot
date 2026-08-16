@@ -1,0 +1,29 @@
+# VM Computers
+
+audio:
+  # Guest audio cannot be played through Minecraft. Its sound packet carries a sound *name* and a
+  # pitch -- there is no way to send samples, and a vanilla client can only play files it already
+  # has. So the plugin serves the audio over HTTP instead, and a player opens it in a browser.
+  # Nothing is streamed until someone asks for a link, and the guest's sound card is left idle
+  # until the first listener connects.
+  enabled: true
+
+  # Port the audio server listens on. Players' browsers connect here, so it has to be open in the
+  # firewall and forwarded the same way the Minecraft port is.
+  port: 25566
+
+  # What to put in the link handed to players. The server has no reliable way to discover how the
+  # outside world reaches it, so set this to the domain or public IP people already use to connect.
+  # Left blank, the plugin falls back to server-ip from server.properties, and then to localhost --
+  # which only works if the player is on the same machine.
+  public-address: ""
+
+  # Samples per second. 44100 is CD rate and what most guests produce; QEMU refuses anything above
+  # 48000. Lower costs less bandwidth and sounds worse.
+  sample-rate: 44100
+
+  # How much audio is held for listeners, in milliseconds. A browser that stalls is allowed to fall
+  # this far behind before the oldest audio is dropped and it is snapped back to live. It is never
+  # allowed to slow the connection down instead: that thread also paces the frame rate, so a stuck
+  # listener must never cost anyone frames.
+  buffer-millis: 2000

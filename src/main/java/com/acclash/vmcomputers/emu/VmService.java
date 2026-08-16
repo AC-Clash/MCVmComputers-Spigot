@@ -1,6 +1,7 @@
 package com.acclash.vmcomputers.emu;
 
 import com.acclash.vmcomputers.VMComputers;
+import com.acclash.vmcomputers.audio.AudioBus;
 import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.parts.ComponentSlot;
 import com.acclash.vmcomputers.parts.ComponentType;
@@ -151,7 +152,8 @@ public final class VmService {
                 // Only used when /vmcomputers debug is on, but the palette is right here and the
                 // toggle is not, so set them now rather than plumbing the palette to the command.
                 screen.setCursorColours(palette.match(255, 255, 255), black);
-                machine.setFrameListener(new FramePump(screen, palette, black));
+                machine.setFrameListener(new FramePump(screen, palette, black,
+                        plugin.getAudioService().busFor(computer.id())));
 
                 machine.start();
                 ComputerFunctions.register(machine);
@@ -179,6 +181,9 @@ public final class VmService {
             try {
                 // Blocks until the guest has really gone -- a graceful stop waits on ACPI.
                 ComputerFunctions.stop(computer.id());
+                // Ends any browser still listening, rather than leaving it on a stream that will
+                // never produce another sample.
+                plugin.getAudioService().release(computer.id());
                 computer.setState(Computer.State.OFF);
                 if (screen != null) {
                     screen.fill(plugin.getMapPalette().match(0, 0, 0));
@@ -228,13 +233,21 @@ public final class VmService {
         private final MonitorScreen screen;
         private final MapColorLut palette;
         private final byte border;
+        private final AudioBus audio;
         private byte[] quantized = new byte[0];
         private int[] scaled = new int[0];
 
-        FramePump(MonitorScreen screen, MapColorLut palette, byte border) {
+        FramePump(MonitorScreen screen, MapColorLut palette, byte border, AudioBus audio) {
             this.screen = screen;
             this.palette = palette;
             this.border = border;
+            this.audio = audio;
+        }
+
+        @Override
+        public void onAudio(byte[] pcm, int length) {
+            // Returns immediately whatever listeners are doing; see AudioBus.
+            audio.write(pcm, length);
         }
 
         @Override

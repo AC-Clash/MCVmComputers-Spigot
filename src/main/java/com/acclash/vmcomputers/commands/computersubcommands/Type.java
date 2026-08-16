@@ -104,7 +104,7 @@ public class Type extends ComputerSubCommand {
             for (int i = 0; i < token.length(); i++) {
                 char c = token.charAt(i);
                 try {
-                    typeChar(machine, c);
+                    tapChar(machine, c);
                     sent++;
                 } catch (IllegalArgumentException e) {
                     player.sendMessage(ChatColor.RED + "Cannot type '" + c + "'.");
@@ -114,21 +114,13 @@ public class Type extends ComputerSubCommand {
         return sent;
     }
 
-    private static void tap(VirtualMachine machine, int keysym) {
-        machine.sendKey(keysym, true);
-        machine.sendKey(keysym, false);
-    }
-
     /**
      * Types one character, holding shift for the ones that need it.
      *
-     * <p>Without this, every shifted character came out as whatever is on the same key unshifted:
-     * {@code *} typed {@code 8}, {@code !} typed {@code 1}, and a capital letter typed lower case.
-     * A keysym names a character, but QEMU has to press a key, and it presses the one that carries
-     * that character on the guest's layout -- so the shift has to come from here, the way a real
-     * VNC client sends it.
+     * <p>Without this every shifted character arrives as whatever shares its key unshifted:
+     * {@code *} types {@code 8}, {@code !} types {@code 1}, and a capital letter types lower case.
      */
-    private static void typeChar(VirtualMachine machine, char c) {
+    private static void tapChar(VirtualMachine machine, char c) {
         int keysym = RfbClient.Keysym.ofChar(c);
         if (!RfbClient.Keysym.needsShift(c)) {
             tap(machine, keysym);
@@ -139,6 +131,10 @@ public class Type extends ComputerSubCommand {
         machine.sendKey(RfbClient.Keysym.SHIFT_LEFT, false);
     }
 
+    private static void tap(VirtualMachine machine, int keysym) {
+        machine.sendKey(keysym, true);
+        machine.sendKey(keysym, false);
+    }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, String[] args) {

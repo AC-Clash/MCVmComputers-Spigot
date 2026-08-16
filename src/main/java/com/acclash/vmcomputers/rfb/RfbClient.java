@@ -69,6 +69,19 @@ public final class RfbClient implements Closeable {
         default void onBell() {
         }
 
+        /**
+         * A block of guest audio, little-endian PCM in the format asked for by
+         * {@link #enableAudio(int, int)}.
+         *
+         * <p>{@code pcm} is reused between calls, so copy anything that must outlive it.
+         */
+        default void onAudio(byte[] pcm, int length) {
+        }
+
+        /** The guest started or stopped producing audio. */
+        default void onAudioState(boolean playing) {
+        }
+
         default void onCutText(String text) {
         }
 
@@ -88,6 +101,22 @@ public final class RfbClient implements Closeable {
     private static final int SMSG_SET_COLOUR_MAP = 1;
     private static final int SMSG_BELL = 2;
     private static final int SMSG_CUT_TEXT = 3;
+    /**
+     * QEMU's extension channel. Both directions use message type 255 with a submessage byte; the
+     * only submessage used here is audio. Values from QEMU's own ui/vnc.h.
+     */
+    private static final int MSG_QEMU = 255;
+    private static final int QEMU_SUB_AUDIO = 1;
+    private static final int QEMU_AUDIO_END = 0;
+    private static final int QEMU_AUDIO_BEGIN = 1;
+    private static final int QEMU_AUDIO_DATA = 2;
+    private static final int QEMU_AUDIO_ENABLE = 0;
+    private static final int QEMU_AUDIO_DISABLE = 1;
+    private static final int QEMU_AUDIO_SET_FORMAT = 2;
+    /** Sample format 3 is signed 16-bit; QEMU sends it little-endian. */
+    private static final int QEMU_AUDIO_FORMAT_S16 = 3;
+    /** Pseudo-encoding that opts into the audio extension. Without it QEMU rejects the request. */
+    private static final int ENC_AUDIO = -259;
 
     // Encodings.
     private static final int ENC_RAW = 0;
@@ -109,6 +138,8 @@ public final class RfbClient implements Closeable {
     private volatile Listener listener;
     private volatile boolean running;
     private volatile long minFrameIntervalNanos;
+    /** Grown on demand and reused, since audio blocks arrive continuously once enabled. */
+    private byte[] audioBuffer = new byte[0];
     private Thread pumpThread;
 
     private long frameCount;
@@ -261,7 +292,10 @@ public final class RfbClient implements Closeable {
     }
 
     private void sendSetEncodings() throws IOException {
-        int[] encodings = {ENC_COPY_RECT, ENC_RAW, ENC_DESKTOP_SIZE};
+        // ENC_AUDIO is a pseudo-encoding: it asks for no pixel format, it declares that this
+        // client understands QEMU's audio extension. QEMU checks for it before honouring any audio
+        // message, so leaving it out makes enableAudio silently do nothing.
+        int[] encodings = {ENC_COPY_RECT, ENC_RAW, ENC_DESKTOP_SIZE, ENC_AUDIO};
         synchronized (out) {
             out.writeByte(MSG_SET_ENCODINGS);
             out.writeByte(0);
@@ -291,6 +325,95 @@ public final class RfbClient implements Closeable {
 
     public void setListener(Listener listener) {
         this.listener = listener;
+    }
+
+    /**
+     * Asks QEMU to start sending guest audio over this connection.
+     *
+     * <p>Minecraft cannot be sent audio at all -- its sound packet carries a name and a pitch, not
+     * samples -- so this exists to feed something outside the game, and it costs nothing until a
+     * listener actually wants it.
+     *
+     * <p>Two messages: the format, then the enable. QEMU only honours either if the audio
+     * pseudo-encoding was advertised at handshake, which {@link #handshake} does.
+     *
+     * @param sampleRate samples per second; QEMU refuses anything above 48000
+     * @param channels   1 or 2; QEMU refuses anything else
+     */
+    public void enableAudio(int sampleRate, int channels) throws IOException {
+        if (channels != 1 && channels != 2) {
+            throw new IllegalArgumentException("channels must be 1 or 2, got " + channels);
+        }
+        if (sampleRate <= 0 || sampleRate > 48000) {
+            throw new IllegalArgumentException("sample rate must be 1..48000, got " + sampleRate);
+        }
+        synchronized (out) {
+            out.writeByte(MSG_QEMU);
+            out.writeByte(QEMU_SUB_AUDIO);
+            out.writeShort(QEMU_AUDIO_SET_FORMAT);
+            out.writeByte(QEMU_AUDIO_FORMAT_S16);
+            out.writeByte(channels);
+            out.writeInt(sampleRate);
+
+            out.writeByte(MSG_QEMU);
+            out.writeByte(QEMU_SUB_AUDIO);
+            out.writeShort(QEMU_AUDIO_ENABLE);
+            out.flush();
+        }
+    }
+
+    /** Stops the audio stream. Safe to call when it was never started. */
+    public void disableAudio() throws IOException {
+        synchronized (out) {
+            out.writeByte(MSG_QEMU);
+            out.writeByte(QEMU_SUB_AUDIO);
+            out.writeShort(QEMU_AUDIO_DISABLE);
+            out.flush();
+        }
+    }
+
+    /**
+     * Reads one QEMU-extension message.
+     *
+     * <p>Audio shares the socket with the framebuffer, so a long audio block delays the next frame
+     * and vice versa. That is the trade for not opening a second connection, and at 44.1 kHz stereo
+     * a block is a few kilobytes -- far less than a frame.
+     */
+    private void handleQemuMessage() throws IOException {
+        int submessage = in.readUnsignedByte();
+        if (submessage != QEMU_SUB_AUDIO) {
+            // Nothing else is subscribed to, and the length is not knowable, so the stream would
+            // desynchronise if this ever fired. It cannot: the server only sends what was asked for.
+            throw new IOException("unexpected QEMU submessage " + submessage);
+        }
+        int operation = in.readUnsignedShort();
+        switch (operation) {
+            case QEMU_AUDIO_BEGIN:
+            case QEMU_AUDIO_END: {
+                Listener l = listener;
+                if (l != null) {
+                    l.onAudioState(operation == QEMU_AUDIO_BEGIN);
+                }
+                break;
+            }
+            case QEMU_AUDIO_DATA: {
+                int length = in.readInt();
+                if (length < 0) {
+                    throw new IOException("negative audio block length " + length);
+                }
+                if (audioBuffer.length < length) {
+                    audioBuffer = new byte[Math.max(length, audioBuffer.length * 2)];
+                }
+                in.readFully(audioBuffer, 0, length);
+                Listener l = listener;
+                if (l != null) {
+                    l.onAudio(audioBuffer, length);
+                }
+                break;
+            }
+            default:
+                throw new IOException("unknown QEMU audio operation " + operation);
+        }
     }
 
     /** Optional floor on the interval between update requests; 0 disables throttling. */
@@ -354,6 +477,9 @@ public final class RfbClient implements Closeable {
                     }
                     break;
                 }
+                case MSG_QEMU:
+                    handleQemuMessage();
+                    break;
                 case SMSG_CUT_TEXT: {
                     skipFully(3);
                     String text = readString(in);
@@ -429,6 +555,12 @@ public final class RfbClient implements Closeable {
                     applyResize(w, h);
                     resized = true;
                     damage.clear();
+                    break;
+                case ENC_AUDIO:
+                    // QEMU acknowledges the audio extension by sending a rectangle in this
+                    // pseudo-encoding: full screen bounds, no data behind it. It means "audio
+                    // requests will be honoured from here on", and the only correct response is
+                    // to read nothing and carry on.
                     break;
                 default:
                     throw new IOException("server used unnegotiated encoding " + encoding);
@@ -601,6 +733,24 @@ public final class RfbClient implements Closeable {
 
     /** X11 keysyms for the keys a virtual keyboard actually needs. */
     public static final class Keysym {
+        /** Characters that are only reachable on a US layout by holding shift. */
+        private static final String SHIFTED_SYMBOLS = "~!@#$%^&*()_+{}|:\"<>?";
+
+        /**
+         * Whether a character needs shift held down to type it.
+         *
+         * <p>Sending the keysym alone is not enough. QEMU translates a keysym to a scancode for the
+         * physical key, and without a shift the guest reads whatever is printed on the unshifted
+         * half of it -- so a colon arrives as a semicolon, and "C:" becomes "C;". Every symbol on
+         * the top half of a key has the same problem, and so does every capital letter.
+         *
+         * <p>US layout, which is what QEMU assumes by default. A guest set to another layout would
+         * show this bug again with a different set of characters, and this table is where to look.
+         */
+        public static boolean needsShift(char c) {
+            return (c >= 'A' && c <= 'Z') || SHIFTED_SYMBOLS.indexOf(c) >= 0;
+        }
+
         public static final int BACKSPACE = 0xFF08;
         public static final int TAB = 0xFF09;
         public static final int RETURN = 0xFF0D;
@@ -646,22 +796,6 @@ public final class RfbClient implements Closeable {
                 default:
                     throw new IllegalArgumentException("no keysym mapping for character " + (int) c);
             }
-        }
-
-        /**
-         * True for a character that is only reachable with shift held.
-         *
-         * <p>A keysym names a <em>character</em>, but a keyboard has keys. QEMU turns the keysym
-         * back into the key that carries it on the guest's layout and presses that -- so asking
-         * for {@code *} presses the {@code 8} key, and without a shift state the guest is told
-         * {@code 8}. A real VNC client holds shift around these; this is the list of when to.
-         *
-         * <p>US layout, which is what QEMU assumes by default. A guest configured for another
-         * layout would need a different table, and the symptom would be exactly this bug again
-         * with different characters.
-         */
-        public static boolean needsShift(char c) {
-            return (c >= 'A' && c <= 'Z') || "~!@#$%^&*()_+{}|:\"<>?".indexOf(c) >= 0;
         }
 
         /**

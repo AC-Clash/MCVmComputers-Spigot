@@ -1,5 +1,6 @@
 package com.acclash.vmcomputers.commands;
 
+import com.acclash.vmcomputers.commands.computersubcommands.Audio;
 import com.acclash.vmcomputers.commands.computersubcommands.Create;
 import com.acclash.vmcomputers.commands.computersubcommands.Debug;
 import com.acclash.vmcomputers.commands.computersubcommands.Iso;
@@ -38,6 +39,7 @@ public class ComputerCM implements TabExecutor {
         subCommands.add(new Phone());
         subCommands.add(new Parts());
         subCommands.add(new Debug());
+        subCommands.add(new Audio());
     }
 
 
