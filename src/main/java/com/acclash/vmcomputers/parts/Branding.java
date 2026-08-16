@@ -45,6 +45,19 @@ public final class Branding {
      */
     public static final String COMPANY_SHORT = ChatColor.GOLD + "AURA\nCHARISMA";
 
+    /**
+     * The truck's make, badged front and rear.
+     *
+     * <p>Two colours for one badge because it is chrome on two different grounds: the front sits
+     * on a blackstone grille and wants light lettering, the rear on light grey doors and wants
+     * dark. The same grey on both would disappear against one of them.
+     */
+    public static final String MAKE_ON_DARK = ChatColor.GRAY + "R & S";
+    public static final String MAKE_ON_LIGHT = ChatColor.DARK_GRAY + "R & S";
+
+    /** The model name, on the rear doors under the badge. */
+    public static final String MODEL_NAME = ChatColor.DARK_GRAY + "bullet";
+
     /** Marks a sign so cleanup can find it without knowing who spawned it. */
     private static final String SIGN_KEY = "vmcSign";
 
@@ -52,15 +65,52 @@ public final class Branding {
     }
 
     /**
-     * Rotation that lays a sign flat against a flank of a north-authored model.
+     * Which face of a north-authored model a sign is stuck to.
      *
-     * <p>Rotating {@code +Z} by {@code t} about {@code +Y} gives {@code (sin t, 0, cos t)}, so the
-     * west flank (outward normal {@code -X}) wants {@code -90} and the east flank {@code +90}.
-     *
-     * @param east true for the {@code +X} side, false for the {@code -X} side
+     * <p>Rotating {@code +Z} by {@code t} about {@code +Y} gives {@code (sin t, 0, cos t)}, so
+     * each face's angle is the one that turns an unrotated sign's normal onto it. Left and right
+     * are the model's own: a model looks along {@code -Z}, so its right hand points at {@code +X}.
      */
-    public static Quaternionf flank(boolean east) {
-        return new Quaternionf().rotateY((float) Math.toRadians(east ? 90 : -90));
+    public enum Face {
+        /** The {@code -Z} end, the way the model is authored to look. */
+        FRONT(180),
+        /** The {@code +Z} end. */
+        REAR(0),
+        /** The {@code +X} flank. */
+        RIGHT(90),
+        /** The {@code -X} flank. */
+        LEFT(-90);
+
+        private final int degrees;
+
+        Face(int degrees) {
+            this.degrees = degrees;
+        }
+
+        public Quaternionf rotation() {
+            return new Quaternionf().rotateY((float) Math.toRadians(degrees));
+        }
+    }
+
+    /**
+     * The transformation that puts lettering at an offset, facing a direction.
+     *
+     * <p>Exposed because a sign does not always stay where it was put: the box Steve throws
+     * tumbles, and its lettering has to tumble with it rather than hang in the air where the box
+     * used to be.
+     *
+     * @param offset centre of the lettering relative to the model's bottom centre, before turning
+     * @param turn   the model's own rotation
+     * @param facing which way the text reads, already composed with any extra spin
+     * @param scale  size multiplier
+     */
+    public static Transformation pose(Vector3f offset, Quaternionf turn, Quaternionf facing,
+                                      float scale) {
+        return new Transformation(
+                new Vector3f(offset).rotate(turn),
+                new Quaternionf(turn).mul(facing),
+                new Vector3f(scale, scale, scale),
+                new Quaternionf());
     }
 
     /**
@@ -74,15 +124,12 @@ public final class Branding {
      * @param text   what to write; may contain newlines
      * @param offset centre of the lettering, relative to the model's bottom centre, before turning
      * @param turn   the model's own rotation, from {@link PartRenderer#yawFor}
-     * @param east   which flank the sign is on
+     * @param face   which face of the model the sign is stuck to
      * @param scale  size multiplier; 1.0 is roughly a quarter-block line height
      */
     public static TextDisplay sign(Location origin, String text, Vector3f offset, Quaternionf turn,
-                                   boolean east, float scale) {
-        Quaternionf left = new Quaternionf(turn).mul(flank(east));
-        Vector3f translation = new Vector3f(offset).rotate(turn);
-        Transformation transformation = new Transformation(
-                translation, left, new Vector3f(scale, scale, scale), new Quaternionf());
+                                   Face face, float scale) {
+        Transformation transformation = pose(offset, turn, face.rotation(), scale);
 
         return origin.getWorld().spawn(origin, TextDisplay.class, display -> {
             display.setText(text);

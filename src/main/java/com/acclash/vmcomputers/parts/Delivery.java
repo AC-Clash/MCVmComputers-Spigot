@@ -136,9 +136,10 @@ public final class Delivery {
         // The company's name on both long sides. Short form: the whole name scaled to fit a
         // 0.81-block face is unreadable.
         Quaternionf turn = new Quaternionf().rotateY(PartRenderer.yawFor(facing));
-        for (boolean east : new boolean[]{true, false}) {
+        for (Branding.Face face : new Branding.Face[]{Branding.Face.RIGHT, Branding.Face.LEFT}) {
             pieces.add(Branding.sign(spot, Branding.COMPANY_SHORT,
-                    new Vector3f(east ? 0.26f : -0.26f, 0.24f, 0f), turn, east, 0.5f));
+                    new Vector3f(face == Branding.Face.RIGHT ? 0.26f : -0.26f, 0.24f, 0f),
+                    turn, face, 0.5f));
         }
 
         StringBuilder ids = new StringBuilder();
@@ -274,8 +275,12 @@ public final class Delivery {
      *
      * <p>Falls back to their own feet if the spot in front is obstructed, which is better than a
      * package inside a wall.
+     *
+     * <p>Public because the delivery truck throws the box rather than setting it down, and the
+     * thrown one has to land exactly where the real one appears. Aiming at anything else puts a
+     * visible jump at the moment they swap.
      */
-    private static Location landingSpot(Player player) {
+    public static Location landingSpot(Player player) {
         Location base = player.getLocation();
         Vector forward = base.getDirection().setY(0);
         Location candidate = forward.lengthSquared() < 1.0e-6
