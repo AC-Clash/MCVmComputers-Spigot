@@ -63,6 +63,11 @@ public class TestDisplay extends ComputerSubCommand {
     }
 
     @Override
+    public String getPermission() {
+        return com.acclash.vmcomputers.utils.Permissions.ADMIN;
+    }
+
+    @Override
     public void perform(Player player, String[] args) {
         World world = player.getWorld();
 

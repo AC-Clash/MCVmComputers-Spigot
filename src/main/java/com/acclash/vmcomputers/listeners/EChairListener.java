@@ -3,6 +3,7 @@ package com.acclash.vmcomputers.listeners;
 import com.acclash.vmcomputers.emu.VirtualMachine;
 import com.acclash.vmcomputers.parts.EChair;
 import com.acclash.vmcomputers.utils.ComputerFunctions;
+import com.acclash.vmcomputers.utils.Permissions;
 import org.bukkit.ChatColor;
 import org.bukkit.Sound;
 import org.bukkit.entity.Entity;
@@ -72,6 +73,10 @@ public class EChairListener implements Listener {
         if (chair == null) {
             // Covers standing up in ways that raise no dismount event of their own.
             releaseAll(player);
+            return;
+        }
+
+        if (!Permissions.canUse(player)) {
             return;
         }
 

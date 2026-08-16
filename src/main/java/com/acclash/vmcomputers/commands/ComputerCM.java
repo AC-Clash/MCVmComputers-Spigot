@@ -2,6 +2,7 @@ package com.acclash.vmcomputers.commands;
 
 import com.acclash.vmcomputers.commands.computersubcommands.Audio;
 import com.acclash.vmcomputers.commands.computersubcommands.Create;
+import com.acclash.vmcomputers.utils.Permissions;
 import com.acclash.vmcomputers.commands.computersubcommands.Debug;
 import com.acclash.vmcomputers.commands.computersubcommands.Iso;
 import com.acclash.vmcomputers.commands.computersubcommands.Keys;
@@ -53,9 +54,19 @@ public class ComputerCM implements TabExecutor {
                 player.sendMessage(ChatColor.GOLD + "/npc <command>");
             } else {
                 for (int i = 0; i < getSubCommands().size(); i++) {
-                    if (args[0].equalsIgnoreCase(getSubCommands().get(i).getName())) {
-                        getSubCommands().get(i).perform(player, args);
+                    ComputerSubCommand sub = getSubCommands().get(i);
+                    if (!args[0].equalsIgnoreCase(sub.getName())) {
+                        continue;
                     }
+                    // Checked here rather than in each subcommand, so a new one cannot ship
+                    // unguarded by being forgotten.
+                    if (!player.hasPermission(sub.getPermission())
+                            && !player.hasPermission(Permissions.ADMIN)) {
+                        player.sendMessage(ChatColor.RED
+                                + "You do not have permission to do that.");
+                        return true;
+                    }
+                    sub.perform(player, args);
                 }
             }
         }

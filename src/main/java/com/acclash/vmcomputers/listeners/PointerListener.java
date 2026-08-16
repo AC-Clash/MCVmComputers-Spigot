@@ -7,6 +7,7 @@ import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenGeometry;
 import com.acclash.vmcomputers.emu.VirtualMachine;
 import com.acclash.vmcomputers.utils.ComputerFunctions;
+import com.acclash.vmcomputers.utils.Permissions;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.ItemFrame;
@@ -263,6 +264,11 @@ public class PointerListener implements Listener {
         boolean debug = VMComputers.getPlugin().isPointerDebug();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
+            // Aiming is input: it gives the guest hover, which is why it is tracked at all. So a
+            // player who may not use computers should not be steering one by looking at it.
+            if (!Permissions.canUse(player)) {
+                continue;
+            }
             // Fills a Location we own instead of allocating one per player per tick.
             Location at = player.getLocation(scratch);
             Pose pose = poses.get(player.getUniqueId());

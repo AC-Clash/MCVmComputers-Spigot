@@ -41,6 +41,11 @@ public class Debug extends ComputerSubCommand {
     }
 
     @Override
+    public String getPermission() {
+        return com.acclash.vmcomputers.utils.Permissions.ADMIN;
+    }
+
+    @Override
     public void perform(Player player, String[] args) {
         VMComputers plugin = VMComputers.getPlugin();
         boolean enabled = !plugin.isPointerDebug();

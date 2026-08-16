@@ -6,6 +6,7 @@ import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.emu.VmPaths;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import com.acclash.vmcomputers.utils.Permissions;
 import org.bukkit.entity.Player;
 
 import java.nio.file.Path;
@@ -66,6 +67,9 @@ public class Iso extends ComputerSubCommand {
         Computer computer = VMComputers.getPlugin().getRegistry().byId(id);
         if (computer == null) {
             player.sendMessage(ChatColor.YELLOW + "No computer with id " + id + ".");
+            return;
+        }
+        if (!Permissions.requireModify(player, computer, "change the disc in")) {
             return;
         }
 

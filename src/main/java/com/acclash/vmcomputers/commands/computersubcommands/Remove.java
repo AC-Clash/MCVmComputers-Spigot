@@ -13,6 +13,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
+import com.acclash.vmcomputers.utils.Permissions;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -46,9 +47,18 @@ public class Remove extends ComputerSubCommand {
     }
 
     @Override
+    public String getPermission() {
+        return com.acclash.vmcomputers.utils.Permissions.BUILD;
+    }
+
+    @Override
     public void perform(Player player, String[] args) {
         Computer computer = args.length >= 2 ? byId(player, args[1]) : byPosition(player);
         if (computer == null) {
+            return;
+        }
+        // Deleting a machine destroys its disk, so this is the owner's call or an admin's.
+        if (!Permissions.requireModify(player, computer, "remove")) {
             return;
         }
 

@@ -13,6 +13,7 @@ import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import com.acclash.vmcomputers.utils.Permissions;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -51,7 +52,9 @@ public class PlacementListener implements Listener {
                     clicked.getWorld().getName(), clicked.getX(), clicked.getY(), clicked.getZ());
             if (existing != null) {
                 event.setCancelled(true);
-                new AssemblyMenu(player, existing).open();
+                if (Permissions.requireBuild(player)) {
+                    new AssemblyMenu(player, existing).open();
+                }
                 return;
             }
 
@@ -63,6 +66,9 @@ public class PlacementListener implements Listener {
     }
 
     private void place(Player player, Block target) {
+        if (!Permissions.requireBuild(player)) {
+            return;
+        }
         if (!target.isPassable()) {
             player.sendMessage(ChatColor.RED + "There is no room there.");
             return;

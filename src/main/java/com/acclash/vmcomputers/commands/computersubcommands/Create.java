@@ -76,6 +76,11 @@ public class Create extends ComputerSubCommand {
     }
 
     @Override
+    public String getPermission() {
+        return com.acclash.vmcomputers.utils.Permissions.ADMIN;
+    }
+
+    @Override
     public void perform(Player player, String[] args) {
         if (args.length < 2) {
             // TODO: open the size-selection menu here instead once the GUI exists.

@@ -54,6 +54,11 @@ public class Parts extends ComputerSubCommand {
     }
 
     @Override
+    public String getPermission() {
+        return com.acclash.vmcomputers.utils.Permissions.ADMIN;
+    }
+
+    @Override
     public void perform(Player player, String[] args) {
         if (!PartModels.isLoaded()) {
             player.sendMessage(ChatColor.RED

@@ -6,6 +6,7 @@ import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.parts.Delivery;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Interaction;
+import com.acclash.vmcomputers.utils.Permissions;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -36,6 +37,9 @@ public class OrderingListener implements Listener {
         // Cancelled so a phone aimed at a block does not also place or activate something.
         event.setCancelled(true);
         Player player = event.getPlayer();
+        if (!Permissions.requireBuild(player)) {
+            return;
+        }
         player.sendMessage(ChatColor.GRAY + "You dial the only number in the phone.");
         player.sendMessage(ChatColor.GOLD + "Steve: " + ChatColor.WHITE
                 + "YEAH? WHAT DO YOU NEED?");

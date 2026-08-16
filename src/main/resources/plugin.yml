@@ -11,3 +11,22 @@ commands:
     description: Create, remove and manage VM computers.
     usage: /vmcomputers <create|remove> ...
     aliases: [ vmc, computer ]
+
+# Three tiers, split by what a player can lose rather than by what they can touch.
+#
+# Anyone may use a machine: sit at it, power it, click, type. Only its owner may take it apart or
+# change what is in it, because that is what destroys someone else's work. Admin overrides both and
+# covers the commands that build or delete machines outright.
+permissions:
+  vmcomputers.use:
+    description: Sit at computers, power them on and off, click and type.
+    default: true
+  vmcomputers.build:
+    description: Place cases, assemble computers, and order parts from the shop.
+    default: true
+  vmcomputers.admin:
+    description: Create and remove any computer, and modify machines owned by others.
+    default: op
+    children:
+      vmcomputers.use: true
+      vmcomputers.build: true

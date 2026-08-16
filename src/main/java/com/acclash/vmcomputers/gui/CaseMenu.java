@@ -10,6 +10,7 @@ import com.acclash.vmcomputers.parts.ComponentType;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import com.acclash.vmcomputers.utils.Permissions;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
@@ -166,6 +167,13 @@ public class CaseMenu extends Menu {
 
     @Override
     public void onClick(int slot, ClickType click) {
+        // Re-checked on every click rather than only when the window opened. A menu stays open
+        // across a permission change, and an open window should not be a way around one.
+        if (!Permissions.canModify(viewer, computer)) {
+            viewer.closeInventory();
+            viewer.sendMessage(org.bukkit.ChatColor.RED + "That computer is not yours to change.");
+            return;
+        }
         if (slot == POWER_SLOT) {
             togglePower();
             return;

@@ -33,6 +33,11 @@ public class Order extends ComputerSubCommand {
     }
 
     @Override
+    public String getPermission() {
+        return com.acclash.vmcomputers.utils.Permissions.BUILD;
+    }
+
+    @Override
     public void perform(Player player, String[] args) {
         new OrderMenu(player).open();
         player.sendMessage(ChatColor.GRAY + "Parts are paid for in Auros, which are crafted from paper.");

@@ -33,6 +33,11 @@ public class Phone extends ComputerSubCommand {
     }
 
     @Override
+    public String getPermission() {
+        return com.acclash.vmcomputers.utils.Permissions.BUILD;
+    }
+
+    @Override
     public void perform(Player player, String[] args) {
         if (player.getInventory().firstEmpty() == -1) {
             player.sendMessage(ChatColor.RED + "Your inventory is full.");

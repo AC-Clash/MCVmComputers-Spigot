@@ -12,6 +12,7 @@ import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import com.acclash.vmcomputers.utils.Permissions;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -30,6 +31,7 @@ public class ClickListener implements Listener {
         if (e.getRightClicked() instanceof LivingEntity) {
             LivingEntity entity = (LivingEntity) e.getRightClicked();
             if (!EChair.is(entity)) return;
+            if (!Permissions.requireUse(e.getPlayer())) return;
             if (!entity.getPassengers().isEmpty()) return;
             entity.addPassenger(e.getPlayer());
         }
@@ -55,14 +57,19 @@ public class ClickListener implements Listener {
 
         if (action == Action.RIGHT_CLICK_BLOCK) {
             if (isChairBlock(computer, clicked)) {
-                seatPlayer(player, clicked.getLocation());
+                if (Permissions.requireUse(player)) {
+                    seatPlayer(player, clicked.getLocation());
+                }
                 e.setCancelled(true);
             } else if (isPowerBlock(computer, clicked)) {
                 // Bare click powers the machine, sneak-click opens it up. The common action stays
                 // one click; configuring is behind a modifier.
                 if (player.isSneaking()) {
-                    new CaseMenu(player, computer).open();
-                } else {
+                    // Opening the case is where parts come out, so it is the owner's.
+                    if (Permissions.requireModify(player, computer, "open up")) {
+                        new CaseMenu(player, computer).open();
+                    }
+                } else if (Permissions.requireUse(player)) {
                     togglePower(player, computer);
                 }
                 e.setCancelled(true);
