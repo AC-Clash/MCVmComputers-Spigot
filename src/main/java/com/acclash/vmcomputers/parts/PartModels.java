@@ -30,10 +30,15 @@ import java.util.stream.Collectors;
  * parses a string every call, and a desk spawns a dozen boxes; doing it once means placing a part
  * is just entity creation. It also means a typo in the generated file is a startup warning naming
  * the model, instead of an exception on the first player who builds a computer.
+ *
+ * <p>{@code vehicles.json} is read alongside it and shares the schema, so the delivery truck is
+ * spawned, previewed and cleaned up by exactly the same code as a graphics card. It is a separate
+ * file only because it is hand-authored: {@code parts.json} carries a header crediting the mod's
+ * assets, and nothing in the truck came from there.
  */
 public final class PartModels {
 
-    private static final String RESOURCE = "/parts.json";
+    private static final String[] RESOURCES = {"/parts.json", "/vehicles.json"};
 
     private static volatile Map<String, PartModel> models = Collections.emptyMap();
 
@@ -47,42 +52,15 @@ public final class PartModels {
      * @return how many models were loaded
      */
     public static int load(Logger log) {
-        String text;
-        try (InputStream in = PartModels.class.getResourceAsStream(RESOURCE)) {
-            if (in == null) {
-                log.severe("parts.json is missing from the plugin jar; components will not render.");
-                return 0;
-            }
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                text = reader.lines().collect(Collectors.joining("\n"));
-            }
-        } catch (IOException e) {
-            log.severe("Could not read parts.json: " + e.getMessage());
-            return 0;
-        }
-
         Map<String, PartModel> loaded = new LinkedHashMap<String, PartModel>();
-        try {
-            Map<String, Object> root = Json.asObject(Json.parse(text));
-            Map<String, Object> raw = Json.getObject(root, "models");
-            if (raw == null) {
-                log.severe("parts.json has no 'models' object.");
-                return 0;
-            }
-            for (Map.Entry<String, Object> entry : raw.entrySet()) {
-                PartModel model = readModel(entry.getKey(), Json.asArray(entry.getValue()), log);
-                if (model != null) {
-                    loaded.put(entry.getKey(), model);
-                }
-            }
-        } catch (RuntimeException e) {
-            log.severe("parts.json is malformed: " + e.getMessage());
-            return 0;
+        for (String resource : RESOURCES) {
+            // One bad file does not empty the others: a hand-edited vehicles.json with a trailing
+            // comma should cost the truck, not every component in the game.
+            readInto(resource, loaded, log);
         }
 
         if (loaded.isEmpty()) {
-            log.severe("parts.json contained no usable models.");
+            log.severe("No usable part models were loaded; components will not render.");
             return 0;
         }
 
@@ -93,6 +71,41 @@ public final class PartModels {
         }
         log.info("Loaded " + loaded.size() + " part models (" + pieces + " display pieces).");
         return loaded.size();
+    }
+
+    /** Reads one model file into {@code into}. Logs and returns quietly if it cannot be used. */
+    private static void readInto(String resource, Map<String, PartModel> into, Logger log) {
+        String text;
+        try (InputStream in = PartModels.class.getResourceAsStream(resource)) {
+            if (in == null) {
+                log.severe(resource + " is missing from the plugin jar.");
+                return;
+            }
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                text = reader.lines().collect(Collectors.joining("\n"));
+            }
+        } catch (IOException e) {
+            log.severe("Could not read " + resource + ": " + e.getMessage());
+            return;
+        }
+
+        try {
+            Map<String, Object> root = Json.asObject(Json.parse(text));
+            Map<String, Object> raw = Json.getObject(root, "models");
+            if (raw == null) {
+                log.severe(resource + " has no 'models' object.");
+                return;
+            }
+            for (Map.Entry<String, Object> entry : raw.entrySet()) {
+                PartModel model = readModel(entry.getKey(), Json.asArray(entry.getValue()), log);
+                if (model != null) {
+                    into.put(entry.getKey(), model);
+                }
+            }
+        } catch (RuntimeException e) {
+            log.severe(resource + " is malformed: " + e.getMessage());
+        }
     }
 
     private static PartModel readModel(String name, List<Object> raw, Logger log) {
