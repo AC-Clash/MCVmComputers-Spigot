@@ -9,6 +9,7 @@ import com.acclash.vmcomputers.gui.MenuListener;
 import com.acclash.vmcomputers.parts.BrickPhone;
 import com.acclash.vmcomputers.parts.ComponentSlot;
 import com.acclash.vmcomputers.parts.ComponentType;
+import com.acclash.vmcomputers.parts.Currency;
 import com.acclash.vmcomputers.parts.PartModels;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.display.ScreenPump;
@@ -201,6 +202,7 @@ public final class VMComputers extends JavaPlugin {
         // Parses every part's block data once, so building a computer is only entity creation.
         PartModels.load(getLogger());
         BrickPhone.registerRecipe();
+        Currency.registerRecipe();
 
         this.db = new SQLite(this);
         this.db.load();

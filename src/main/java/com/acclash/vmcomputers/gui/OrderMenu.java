@@ -101,9 +101,10 @@ public class OrderMenu extends Menu {
                     active ? "Showing this section" : "Click to view"));
         }
 
-        set(TAB_ROW * ROW + 8, button(Currency.ITEM,
+        set(TAB_ROW * ROW + 8, button(Currency.create(1),
                 ChatColor.GOLD + "Your balance: " + Currency.format(held()),
-                "Paid when you place the order."));
+                "Paid when you place the order.",
+                "Craft more from paper."));
 
         drawCart();
     }
