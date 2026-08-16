@@ -54,9 +54,19 @@ public final class BrickPhone {
      * <p>{@code removeRecipe} first because {@code addRecipe} refuses a key that already exists,
      * and a plugin reload runs this a second time in the same server.
      *
-     * <p>Cheap on purpose. The phone is the only way into the ordering loop -- nothing can be
-     * bought, and therefore no computer can be built from parts, until a player has one -- so its
-     * cost should be a formality rather than a gate. Everything expensive is in the catalogue.
+     * <p>The shape is the phone: a copper aerial on top, two clay bricks making up the body it is
+     * named after, a compass and a repeater for the guts, and glass down the side for the little
+     * screen.
+     *
+     * <pre>
+     *     .  rod  .
+     *   brick  compass  pane
+     *   brick  repeater pane
+     * </pre>
+     *
+     * <p>A repeater rather than plain redstone, because a repeater is what gets a phone its signal
+     * in the first place, and the extra cost over dust is a few stone and sticks next to a compass
+     * that already wants four iron.
      */
     public static void registerRecipe() {
         NamespacedKey key = new NamespacedKey(VMComputers.getPlugin(), "brick_phone");
@@ -64,12 +74,14 @@ public final class BrickPhone {
 
         ShapedRecipe recipe = new ShapedRecipe(key, create());
         recipe.shape(
-                " N ",
-                "IRI",
-                "IRI");
-        recipe.setIngredient('N', Material.IRON_NUGGET);
-        recipe.setIngredient('I', Material.IRON_INGOT);
-        recipe.setIngredient('R', Material.REDSTONE);
+                " L ",
+                "BCG",
+                "BRG");
+        recipe.setIngredient('L', Material.LIGHTNING_ROD);
+        recipe.setIngredient('B', Material.BRICK);
+        recipe.setIngredient('C', Material.COMPASS);
+        recipe.setIngredient('G', Material.GLASS_PANE);
+        recipe.setIngredient('R', Material.REPEATER);
         Bukkit.addRecipe(recipe);
     }
 
