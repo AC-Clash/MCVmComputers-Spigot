@@ -1,7 +1,13 @@
 # Component head skins
 
-One 64×64 Minecraft skin per component. Only the head region of each is used — these become the
-player-head icons shown in the parts shop and the case bays.
+> **These are not the heads the plugin currently uses.** The shipped catalogue points at
+> community-made heads instead — see `HEAD_TEXTURES` in `ComponentType` for what is actually in
+> game. This set was drawn first, and is kept as a self-authored alternative: every community head
+> depends on someone else's upload staying on Mojang's texture server, and if one disappears these
+> can be uploaded to replace it.
+
+One 64×64 Minecraft skin per component. Only the head region of each is used — these are drawn to
+serve as the player-head icons in the parts shop and the case bays.
 
 Regenerate with:
 
