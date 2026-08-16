@@ -74,7 +74,7 @@ public final class Currency {
         if (meta != null) {
             meta.setDisplayName(ChatColor.RESET + "" + ChatColor.GOLD + "Auro");
             meta.setLore(Arrays.asList(
-                    ChatColor.GRAY + "Legal tender for computer parts.",
+                    ChatColor.GRAY + "Legal tender of Aura Charisma.",
                     ChatColor.DARK_GRAY + "Crafted from " + PAPER_PER_AURO + " paper."));
             meta.setColor(TINT);
             meta.getPersistentDataContainer().set(key(), PersistentDataType.STRING, "true");
