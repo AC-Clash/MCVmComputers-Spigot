@@ -137,6 +137,7 @@ public class Create extends ComputerSubCommand {
 
         Computer saved;
         try {
+            computer.setOwner(player.getUniqueId());
             saved = VMComputers.getPlugin().getComputerDao().insert(computer);
         } catch (SQLException e) {
             player.sendMessage(ChatColor.RED + "Could not save the computer; see the console.");

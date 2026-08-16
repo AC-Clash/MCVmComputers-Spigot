@@ -112,6 +112,11 @@ public final class ComputerDao {
             if (!hasColumn(connection, "computers", "arch")) {
                 statement.executeUpdate("ALTER TABLE computers ADD COLUMN arch TEXT");
             }
+            // Machines built before this column exists stay unowned, which leaves them modifiable
+            // by anyone. Claiming them for whoever happens to click first would be worse.
+            if (!hasColumn(connection, "computers", "owner")) {
+                statement.executeUpdate("ALTER TABLE computers ADD COLUMN owner TEXT");
+            }
         }
     }
 
@@ -141,7 +146,8 @@ public final class ComputerDao {
 
     public List<Computer> loadAll() throws SQLException {
         List<Computer> out = new ArrayList<Computer>();
-        String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state, iso, arch FROM computers";
+        String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state, iso, arch, owner"
+                + " FROM computers";
         try (PreparedStatement statement = database.getSQLConnection().prepareStatement(sql);
              ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
@@ -168,6 +174,14 @@ public final class ComputerDao {
                     rs.getString("type"),
                     Computer.State.valueOf(rs.getString("state")));
             computer.setIsoName(rs.getString("iso"));
+            String owner = rs.getString("owner");
+            if (owner != null) {
+                try {
+                    computer.setOwner(java.util.UUID.fromString(owner));
+                } catch (IllegalArgumentException ignored) {
+                    // Not a uuid; treat as unowned rather than dropping the machine.
+                }
+            }
             String arch = rs.getString("arch");
             if (arch != null) {
                 try {
@@ -187,8 +201,8 @@ public final class ComputerDao {
 
     /** Inserts a computer and returns it with the id the database assigned. */
     public Computer insert(Computer computer) throws SQLException {
-        String sql = "INSERT INTO computers (world, x, y, z, facing, monitor_size, type, state)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO computers (world, x, y, z, facing, monitor_size, type, state, owner)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         Connection connection = database.getSQLConnection();
         try (PreparedStatement statement =
                      connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -200,13 +214,18 @@ public final class ComputerDao {
             statement.setString(6, computer.monitorSize().name());
             statement.setString(7, computer.type());
             statement.setString(8, computer.state().name());
+            statement.setString(9, computer.owner() == null ? null : computer.owner().toString());
             statement.executeUpdate();
 
             try (ResultSet keys = statement.getGeneratedKeys()) {
                 int id = keys.next() ? keys.getInt(1) : -1;
-                return new Computer(id, computer.worldName(), computer.anchorX(),
+                Computer saved = new Computer(id, computer.worldName(), computer.anchorX(),
                         computer.anchorY(), computer.anchorZ(), computer.facing(),
                         computer.monitorSize(), computer.type(), computer.state());
+                saved.setOwner(computer.owner());
+                saved.setIsoName(computer.isoName());
+                saved.setArchitecture(computer.architecture());
+                return saved;
             }
         }
     }

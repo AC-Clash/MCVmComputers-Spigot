@@ -62,11 +62,15 @@ public final class QemuVirtualMachine implements VirtualMachine {
     /** Builds a spec sized for a monitor and creates the VM. The disk is created if missing. */
     public static QemuVirtualMachine forComputer(int computerId, QemuBinary qemu, MonitorSize monitor,
                                                  Path disk, Path iso, int memoryMb, int cpus,
-                                                 Consumer<String> logger) throws IOException {
+                                                 boolean networking, Consumer<String> logger)
+            throws IOException {
         VmSpec.Builder builder = VmSpec.builder("vmcomputer-" + computerId)
                 .architecture(qemu.architecture())
                 .resolution(monitor.guestWidth(), monitor.guestHeight())
-                .cpus(cpus);
+                .cpus(cpus)
+                // Passed in rather than read here: this package stays free of Bukkit, and whether
+                // guests get a network card is an admin's decision rather than an emulator one.
+                .networking(networking);
 
         // TODO: all of this belongs in the parts selector, chosen per computer when it is built.
         // Until that exists the architecture stands in for it, and it is a decent proxy: on an

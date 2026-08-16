@@ -100,6 +100,12 @@ public final class VmService {
             return;
         }
 
+        String refusal = overLimit(computer);
+        if (refusal != null) {
+            feedback.accept(refusal);
+            return;
+        }
+
         VMComputers plugin = VMComputers.getPlugin();
         // Marked before the task is queued, on the thread the caller is already on, so a menu
         // redrawn on the very next tick already knows this machine is on its way up.
@@ -143,9 +149,13 @@ public final class VmService {
                 plugin.getLogger().info("Computer #" + computer.id() + " booting with "
                         + memoryMb + " MB and " + cores + " core(s).");
 
+                // User-mode NAT reaches whatever this host reaches, LAN included, so whether a
+                // guest gets a card at all is the admin's call rather than a fixed default.
+                boolean networking = plugin.getConfig().getBoolean("guest.networking", true);
                 QemuVirtualMachine machine = QemuVirtualMachine.forComputer(
                         computer.id(), binary, computer.monitorSize(),
-                        disk, iso, memoryMb, cores, line -> plugin.getLogger().info(line));
+                        disk, iso, memoryMb, cores, networking,
+                        line -> plugin.getLogger().info(line));
 
                 MapColorLut palette = plugin.getMapPalette();
                 byte black = palette.match(0, 0, 0);
@@ -193,6 +203,47 @@ public final class VmService {
                 TRANSITIONS.remove(Integer.valueOf(computer.id()));
             }
         });
+    }
+
+    /**
+     * Why this machine may not start right now, or null if it may.
+     *
+     * <p>A running computer is a whole QEMU process holding whatever its memory component says, so
+     * without a ceiling a busy server is one popular build away from swapping itself to death.
+     * There is no queue on purpose: a machine that boots ten minutes after the player asked, once
+     * they have wandered off, is worse than a refusal that says why.
+     *
+     * <p>Counted from the machines actually registered rather than from stored state, so a guest
+     * still shutting down still counts -- it has not given its memory back yet.
+     */
+    private static String overLimit(Computer computer) {
+        VMComputers plugin = VMComputers.getPlugin();
+
+        int maxRunning = plugin.getConfig().getInt("limits.max-running", 4);
+        int running = ComputerFunctions.getMachines().size();
+        if (maxRunning > 0 && running >= maxRunning) {
+            return "The server is already running " + running + " machine"
+                    + (running == 1 ? "" : "s") + ", which is the limit. Wait for one to shut down.";
+        }
+
+        int maxEach = plugin.getConfig().getInt("limits.max-per-player", 2);
+        java.util.UUID owner = computer.owner();
+        if (maxEach <= 0 || owner == null) {
+            return null;
+        }
+
+        int mine = 0;
+        for (Integer id : ComputerFunctions.getMachines().keySet()) {
+            Computer other = plugin.getRegistry().byId(id.intValue());
+            if (other != null && owner.equals(other.owner())) {
+                mine++;
+            }
+        }
+        if (mine >= maxEach) {
+            return "You already have " + mine + " machine" + (mine == 1 ? "" : "s")
+                    + " running, which is your limit. Shut one down first.";
+        }
+        return null;
     }
 
     /**

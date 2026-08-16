@@ -219,6 +219,7 @@ public class AssemblyMenu extends Menu {
 
         Computer saved;
         try {
+            candidate.setOwner(viewer.getUniqueId());
             saved = VMComputers.getPlugin().getComputerDao().insert(candidate);
         } catch (SQLException e) {
             viewer.sendMessage(ChatColor.RED + "Could not save the computer; see the console.");

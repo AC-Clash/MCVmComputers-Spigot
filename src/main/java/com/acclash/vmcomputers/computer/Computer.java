@@ -2,6 +2,8 @@ package com.acclash.vmcomputers.computer;
 
 import com.acclash.vmcomputers.display.MonitorSize;
 import com.acclash.vmcomputers.emu.VmSpec;
+
+import java.util.UUID;
 import com.acclash.vmcomputers.parts.ComponentSlot;
 import com.acclash.vmcomputers.parts.ComponentType;
 import org.bukkit.Location;
@@ -43,6 +45,15 @@ public final class Computer {
     private volatile State state;
     private volatile String isoName;
     private volatile VmSpec.Architecture architecture = VmSpec.Architecture.X86_64;
+    /**
+     * Who built it, or null for a machine from before computers had owners.
+     *
+     * <p>Set after construction rather than passed in, for the same reason the ISO and the
+     * architecture are: a computer is created from a layout long before anyone knows what will be
+     * stored against it, and threading a nullable through every constructor call to say "nobody
+     * yet" is worse than a setter.
+     */
+    private volatile UUID owner;
 
     private final ComputerLayout layout;
 
@@ -174,6 +185,26 @@ public final class Computer {
 
     public void setIsoName(String isoName) {
         this.isoName = isoName;
+    }
+
+    /** Who may take this apart. Null on machines built before ownership was recorded. */
+    public UUID owner() {
+        return owner;
+    }
+
+    public void setOwner(UUID owner) {
+        this.owner = owner;
+    }
+
+    /**
+     * True if this player may reconfigure or dismantle the machine.
+     *
+     * <p>An unowned computer is fair game -- those predate ownership and refusing everyone would
+     * strand them permanently. Using someone's computer is a separate question and deliberately
+     * not this method's: you can sit at a machine you cannot take apart.
+     */
+    public boolean mayModify(UUID player) {
+        return owner == null || owner.equals(player);
     }
 
     public ComputerLayout layout() {

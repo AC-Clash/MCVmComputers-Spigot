@@ -27,3 +27,32 @@ audio:
   # allowed to slow the connection down instead: that thread also paces the frame rate, so a stuck
   # listener must never cost anyone frames.
   buffer-millis: 2000
+
+limits:
+  # Most virtual machines allowed to run at once, across the whole server.
+  #
+  # Each running computer is a real QEMU process holding however much memory its RAM component
+  # says, so ten players each booting a desktop is ten desktops' worth of RAM on this host. There
+  # is no queue: once this many are running, the next power-on is refused with a message naming
+  # the limit. Raise it if the host can take it.
+  max-running: 4
+
+  # Most one player may have running at a time. 0 disables the per-player limit and leaves only
+  # the server-wide one above.
+  #
+  # This is the limit that stops one person occupying the whole allowance, which matters more than
+  # the total on a busy server.
+  max-per-player: 2
+
+guest:
+  # Whether guests get a network card at all.
+  #
+  # On is what makes network installs work -- a Debian netinst image is useless without it, and so
+  # is anything a player wants to download inside the guest. It also means a player's virtual
+  # machine can reach whatever this server can reach, which includes other machines on the host's
+  # LAN and anything listening on localhost. That is user-mode NAT working as designed; there is no
+  # setting that grants the internet while withholding the LAN.
+  #
+  # Turn it off on a public server unless you have a reason not to, and expect network installers
+  # to stop working when you do.
+  networking: true
