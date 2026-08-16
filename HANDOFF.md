@@ -2,9 +2,9 @@
 
 Read this first. Written so a fresh session can be productive without re-deriving anything.
 
-State as of **2026-08-15**. Two phases are described: the **QEMU overhaul**, which is merged, and
-the **components layer**, which is on a branch and is where all recent work has been. Sections
-covering the second are marked; everything else predates it and still holds.
+State as of **2026-08-16**. Three phases are described, and all three are **merged into `main`**:
+the **QEMU overhaul**, the **components layer**, and the **delivery truck**. Sections covering the
+later two are marked; everything else predates them and still holds.
 
 ---
 
@@ -15,12 +15,14 @@ A **Spigot plugin** that runs real virtual machines inside vanilla Minecraft. A 
 it. Vanilla clients only — no client mod, which is the whole point of the project and constrains
 every design decision below.
 
-**Repo:** `AC-Clash/MCVmComputers-Spigot` (PUBLIC). The overhaul is **merged into `main`**.
+**Repo:** `AC-Clash/MCVmComputers-Spigot` (PUBLIC). Everything below is **merged into `main`**;
+work on a branch and open a PR rather than committing to `main` directly.
 
-**Current branch: `component-models`**, 14 commits ahead of `main` and not pushed anywhere. It adds
-the whole components layer -- how parts look, how they are bought, and how a computer gets built out
-of them. `guest-audio` is a separate unmerged branch (4 commits, also off `main`); it owns
-`src/main/resources/config.yml`, so **do not add a config.yml on this branch** or the two will
+Merged so far: the QEMU overhaul, the components layer (PR #5 -- how parts look, how they are
+bought, how a computer is built out of them), and the delivery truck (PR #6).
+
+`guest-audio` is an unmerged branch (4 commits off `main`); it owns
+`src/main/resources/config.yml`, so **do not add a config.yml** on any branch or the two will
 conflict over it.
 
 `nms-map-packets` is parked, not dead: it branches off the overhaul and sends the map packet
@@ -63,7 +65,7 @@ QEMU process ──QMP (JSON/TCP)──▶  emu/    lifecycle: start, stop, medi
 | `rfb/` | RFB 3.8 client. **No Bukkit.** | `RfbClient` |
 | `display/` | Guest pixels → Minecraft maps | `MonitorScreen`, `PanelRenderer`, `ScreenPump` (sends frames), `MapColorLut`, `ImageScaler`, `ScreenGeometry`, `MonitorSize` |
 | `computer/` | The in-world model | `ComputerLayout` (pure offsets), `Computer`, `ComputerRegistry` (O(1) block index), `ComputerBuilder` (puts one in the world), `PendingCase` (placed, not yet assembled) |
-| `parts/` | Everything a component *is* | `PartModel`/`PartModels` (geometry from `parts.json`), `PartRenderer` (transforms + spawning), `Furniture` (generated desk), `ComponentType`/`ComponentSlot` (the catalogue), `HeadTextures` (icons), `Currency` (Auros), `BrickPhone`, `Delivery` (packages) |
+| `parts/` | Everything a component *is* | `PartModel`/`PartModels` (geometry from `parts.json` + `vehicles.json`), `PartRenderer` (transforms + spawning), `Furniture` (generated desk), `ComponentType`/`ComponentSlot` (the catalogue), `HeadTextures` (icons), `Currency` (Auros), `BrickPhone`, `Delivery` (packages), `DeliveryTruck` (the arrival), `Roadway` (somewhere to land), `Branding` (in-world lettering) |
 | `gui/` | Chest menus | `Menu` (base, holder-identified), `MenuListener`, `OrderMenu` (shop), `CaseMenu` (shift-click the tower), `AssemblyMenu` (click a placed case), `IsoMenu` |
 | `sql/` | Persistence | `ComputerDao` |
 | `listeners/` | Game events | `PointerListener`, `PreventionListener`, `ClickListener`, `PlayerListener`, `OrderingListener` (phone + packages), `PlacementListener` (placing/opening a case) |
@@ -186,6 +188,16 @@ So an Auro is its own item (`Currency`) with its own recipe, three paper, shapel
 is the whole point: it lets the mod's price numbers keep meaning what they meant. The first instinct
 — that a custom currency has no source — was wrong, because a plugin can register a recipe that
 *produces* one.
+
+**No resource pack, for anything.** (2026-08-16.) One used to be pushed to every joining player
+from a Dropbox link dead for years, with `force = true`, which kicks anyone whose download fails.
+It existed for guest audio. Removed outright, and **do not add one back**: display entities, player
+heads and item-framed maps are all chosen precisely so a vanilla client needs nothing. Any feature
+that seems to want a pack needs a different answer.
+
+**The delivery truck's timings, easings and geometry are all tuning, not architecture.** Constants
+at the top of `DeliveryTruck`, boxes in `vehicles.json`. Change them freely — nothing waits on the
+flight legs, so no schedule change can strand an order.
 
 ---
 
@@ -462,28 +474,36 @@ Everything below was checked on a real server or by a headless harness, not assu
   matching its own size, with optional bays left alone.
 - Both crafting recipes register without a duplicate-key error.
 
-### What has never been exercised in game
+The delivery truck has been play-tested in game and works. That settles two rendering assumptions
+it rests on, both worth knowing because they are the first things to suspect if lettering or the
+landing gear break after a version bump: an unrotated `FIXED` text display reads from `+Z`
+(`Branding.Face`), and writing `setInterpolationDelay` **last** is what starts an interpolation.
 
-**This is the largest risk on the branch.** None of the interactive surface has been driven by a
-player, by me at least — Anston has been play-testing, and the dev world currently holds one built
-computer and three placed cases, so placement and persistence demonstrably work.
+### What has never been exercised in game
 
 - **Every menu.** `OrderMenu`, `CaseMenu`, `AssemblyMenu`, `IsoMenu`. The riskiest paths are
   `fit`/`remove` in the two bay menus and the cart in the shop, because that is where an inventory
-  bug costs a player a real item rather than just looking wrong.
-- **Delivery.** Packages landing, merging into an existing box, and opening.
+  bug costs a player a real item rather than just looking wrong. (The shop's *checkout* is now
+  well exercised, since every truck delivery goes through it.)
 - **Assembly**, end to end — a placed case becoming a computer with a desk and screen.
 - **Whether parts face the right way.** The authored-north convention in `PartRenderer.yawFor` is an
   assumption about Blockbench, not a measured fact. `/vmcomputers parts <model>` is the fast loop.
+  Note the truck renders correctly through the same convention, which is decent circumstantial
+  evidence for it.
 - **Whether desk accessories sit on the surface** rather than floating or sunk.
 - **Guest RAM and cores now coming from fitted parts.** A 64 MB stick really does mean 64 MB, so it
   really will fail to boot a desktop. Intended, but not watched happen.
 
-Older, still unverified from before this branch: the `PointerListener` rewrite (invisible head
-tracking and the click model on it), the `PreventionListener` rewrite, and SMALL/MEDIUM booting
-Debian after the 640×480 fix.
+Older, still unverified: the `PointerListener` rewrite (invisible head tracking and the click model
+on it), the `PreventionListener` rewrite, and SMALL/MEDIUM booting Debian after the 640×480 fix.
 
 ### Known gaps
+
+Delivery truck:
+- **The flight path is only measured at the strip's ends and over the pad.** A tree partway along
+  the inbound leg gets clipped through. Cosmetic, and cheap to fix by sampling the whole lane.
+- **No payment on delivery still.** The truck makes this more conspicuous, not less: Steve turns up
+  with the goods having already been paid.
 
 Components layer:
 - **The 32-bit motherboard does nothing.** Both supported architectures are 64-bit, so it can never
@@ -539,6 +559,17 @@ Older:
   client rubber-bands. Refuse position only, pass yaw/pitch through.
 - ARM `virt` has **no PS/2**, so a USB keyboard device is required or there's no keyboard at all.
 - ARM UEFI needs a **private writable copy** of `edk2-arm-vars.fd` per machine.
+- **That private copy goes stale, and a stale one boots the EFI shell instead of the ISO.** ARM
+  UEFI writes `Boot####` entries into it, each pinned to an exact device path, and prefers them
+  over hunting for removable media. Change the hardware — which fitting or pulling a component now
+  does — and every remembered entry points at something that is no longer there, so BdsDxe falls
+  through the lot and starts `Boot0002 "EFI Internal Shell"`. The symptom is a machine that booted
+  an ISO happily last week sitting at a `Shell>` prompt this week with the same ISO in the drive,
+  and it looks exactly like the ISO not being attached at all. **Fixed by `bootindex` on the cdrom
+  and disk devices** (`VmSpec.toArgv`), which QEMU passes through fw_cfg and the firmware reads
+  before consulting its own variables. Bisected on a real failing vars file: same file, EFI shell
+  without `bootindex`, Debian's GRUB with it. Note this forced the aarch64 disk from `if=virtio` to
+  an explicit `-device virtio-blk-pci`, since an implicit device has nowhere to hang a bootindex.
 - `RfbDump` must not force `--machine`; the architecture picks its own default (`q35` vs `virt`).
 
 Components layer:
@@ -561,25 +592,40 @@ Components layer:
   deleted the box standing next to it and left an invisible thing to click.
 - **`Currency.is()` checks the tag, never the material.** Screen panels are filled maps too.
 
+Delivery truck:
+
+- **A display's `translation` is applied after its rotation, and this bites twice.** Once for a
+  static part (§5) and again for anything that moves: `Branding.pose` and `PartRenderer.transformFor`
+  both exist so the box Steve throws can tumble with its lettering still stuck to its sides.
+- **Beats that fall inside another phase's range must live outside the `else if` chain.** The gear
+  drops mid-approach and the fans spool while Steve is boarding; both were silently swallowed by
+  the branch above them, and the landing gear simply never deployed.
+- **`Villager.setAware(false)`, not `setAI(false)`.** Unaware keeps physics, step height and the
+  walk animation that comes from actually moving, while ignoring every goal. AI off entirely makes
+  him slide like a statue; AI on sends him off to find a bed.
+- **Particles only take a direction when the count is zero.** With a count above zero the offsets
+  are a spread and the last argument is a random-direction speed, so downwash scatters instead of
+  blowing down.
+
 ---
 
 ## 12. Suggested next steps
 
-1. **Play-test the components loop end to end.** Craft a phone, order a cart of parts, open the
-   package, place a case, fit everything, assemble, power on. This is the single highest-value thing
-   left; the whole loop is written and none of it has been clicked through.
+1. **Finish play-testing the components loop.** Order → package → place a case → fit everything →
+   assemble → power on. Ordering and delivery are now well exercised; assembly and the bay menus
+   are the untouched half, and they are where an inventory bug costs a player a real item.
 2. **Then the older unverified work**: pointer tracking and clicks, protection, SMALL/MEDIUM. Check
    hover actually reaches the guest — hover a menu bar and see it highlight.
 3. **Permissions.** `plugin.yml` declares none. Ordering and assembly made this urgent.
 4. **Decide the 32-bit motherboard's fate** — cap its RAM or cut it.
 5. **Finish a Debian install** end to end with `/vmcomputers type`. First real proof a persistent OS
-   survives a power cycle on the virtual disk.
+   survives a power cycle on the virtual disk. Worth doing soon: it is the one thing that exercises
+   the UEFI variable store as intended, now that `bootindex` stops a stale one hijacking the boot.
 6. **On-screen keyboard** — the biggest remaining UX gap. Host-rendered overlay driven by the
    click-to-position model; must work in a BIOS, so it can't be guest-side.
 7. **OS catalog + downloader.**
-8. **Resource pack** — still only for audio. The URL in `PlayerListener` is a dead Dropbox link
-   served with `force = true`, which kicks anyone whose download fails. Needs rehosting and
-   rethinking, not deleting. Note the components layer no longer wants a pack at all.
+8. **Guest audio** needs a plan that is not a resource pack. The pack is gone (§4) and is not coming
+   back; the `guest-audio` branch predates that decision and should be read with it in mind.
 
 ---
 

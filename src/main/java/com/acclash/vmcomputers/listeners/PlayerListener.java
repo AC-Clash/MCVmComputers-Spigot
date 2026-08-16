@@ -6,19 +6,19 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.persistence.PersistentDataType;
 
+/**
+ * Player-facing behaviour that is not tied to a computer.
+ *
+ * <p>There is no resource pack. Every player who joined used to be pushed one from a Dropbox link
+ * that has been dead for years, with {@code force = true}, which kicks anyone whose download
+ * fails -- so the only thing it reliably did was refuse entry. It was there for guest audio, and
+ * nothing else ever needed it: components are display entities and player heads, and the screen is
+ * item-framed maps, precisely so that a vanilla client needs nothing.
+ */
 public class PlayerListener implements Listener {
-
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent e) {
-
-        Player player = e.getPlayer();
-        player.setResourcePack("https://www.dropbox.com/s/gvovwkn4mw11muu/Project%20Magisha.zip?dl=1", (byte[]) null, true);
-
-    }
 
     /**
      * Keeps a seated player in their chair without freezing their head.

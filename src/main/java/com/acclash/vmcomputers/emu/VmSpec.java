@@ -238,21 +238,49 @@ public final class VmSpec {
             a.add("base=localtime");
         }
 
-        String diskInterfaceValue =
-                architecture == Architecture.AARCH64 ? "virtio" : diskInterface.value();
-        for (Path disk : disks) {
-            a.add("-drive");
-            a.add("file=" + disk.toAbsolutePath() + ",format=qcow2,if=" + diskInterfaceValue);
+        if (architecture == Architecture.AARCH64) {
+            // Explicit devices rather than "if=virtio", so each one can carry a bootindex. See
+            // the note on the cdrom below: without those the firmware picks for itself, and after
+            // a while it picks the UEFI shell.
+            int unit = 0;
+            for (Path disk : disks) {
+                a.add("-drive");
+                a.add("if=none,id=hd" + unit + ",format=qcow2,file=" + disk.toAbsolutePath());
+                a.add("-device");
+                a.add("virtio-blk-pci,drive=hd" + unit + ",bootindex=" + (unit + 1));
+                unit++;
+            }
+        } else {
+            for (Path disk : disks) {
+                a.add("-drive");
+                a.add("file=" + disk.toAbsolutePath() + ",format=qcow2,if="
+                        + diskInterface.value());
+            }
         }
 
         if (cdrom != null) {
             if (architecture == Architecture.AARCH64) {
                 // virt has no IDE, and UEFI boots happily from USB storage.
+                //
+                // bootindex is what makes it boot at all on the second run. ARM UEFI keeps its own
+                // boot entries in the per-machine variable store, each pinned to an exact device
+                // path, and it prefers them over looking for removable media. Change the hardware
+                // -- which fitting or pulling a component now does -- and every remembered entry
+                // points at something that is no longer there, so the firmware falls through them
+                // all and starts the EFI shell instead. A machine that booted an ISO happily on
+                // Monday sits at a Shell> prompt on Tuesday with the same ISO in the drive.
+                //
+                // bootindex is passed through fw_cfg and read before any of that, so the order is
+                // ours rather than whatever the firmware last wrote down. Zero for the medium and
+                // one for the disk, matching the "dc" order used on BIOS machines.
+                //
+                // Verified against a variable store that was actually failing this way: with the
+                // same file it booted the shell without bootindex and the ISO with it.
                 a.add("-drive");
                 a.add("if=none,id=cd0,format=raw,readonly=on,media=cdrom,file="
                         + cdrom.toAbsolutePath());
                 a.add("-device");
-                a.add("usb-storage,bus=usb.0,drive=cd0");
+                a.add("usb-storage,bus=usb.0,drive=cd0,bootindex=0");
             } else {
                 // An explicit drive rather than -cdrom, so the medium can be swapped over QMP.
                 a.add("-drive");
