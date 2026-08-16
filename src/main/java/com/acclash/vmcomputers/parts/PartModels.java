@@ -144,23 +144,54 @@ public final class PartModels {
                 return null;
             }
 
-            Vector3f axis = null;
-            float angle = 0f;
-            Vector3f pivot = null;
-            Map<String, Object> rotation = Json.getObject(piece, "rotation");
-            if (rotation != null) {
-                String axisName = Json.getString(rotation, "axis", "y");
-                axis = new Vector3f(
-                        "x".equals(axisName) ? 1f : 0f,
-                        "y".equals(axisName) ? 1f : 0f,
-                        "z".equals(axisName) ? 1f : 0f);
-                angle = (float) Math.toRadians(number(rotation.get("angle"), 0d));
-                pivot = vector(Json.asArray(rotation.get("pivot")));
+            Spin spin = readSpin(piece);
+
+            // An optional second pose for the same box, for parts that move: the landing gear
+            // folds flat in flight. Block and size carry over -- only where it sits and how it is
+            // turned can differ, which is what stops a fold from silently becoming a new shape.
+            PartModel.Piece folded = null;
+            Map<String, Object> stowed = Json.getObject(piece, "folded");
+            if (stowed != null) {
+                Vector3f foldedCentre = vector(Json.asArray(stowed.get("centre")));
+                Spin foldedSpin = readSpin(stowed);
+                folded = new PartModel.Piece(block, size,
+                        foldedCentre == null ? centre : foldedCentre,
+                        foldedSpin.axis, foldedSpin.angle, foldedSpin.pivot, null, false);
             }
 
-            pieces.add(new PartModel.Piece(block, size, centre, axis, angle, pivot));
+            pieces.add(new PartModel.Piece(block, size, centre,
+                    spin.axis, spin.angle, spin.pivot, folded,
+                    Boolean.TRUE.equals(piece.get("spins"))));
         }
         return new PartModel(name, pieces);
+    }
+
+    /** A box's optional rotation about a pivot. All three fields are null/zero when absent. */
+    private static final class Spin {
+        private final Vector3f axis;
+        private final float angle;
+        private final Vector3f pivot;
+
+        Spin(Vector3f axis, float angle, Vector3f pivot) {
+            this.axis = axis;
+            this.angle = angle;
+            this.pivot = pivot;
+        }
+    }
+
+    private static Spin readSpin(Map<String, Object> owner) {
+        Map<String, Object> rotation = Json.getObject(owner, "rotation");
+        if (rotation == null) {
+            return new Spin(null, 0f, null);
+        }
+        String axisName = Json.getString(rotation, "axis", "y");
+        return new Spin(
+                new Vector3f(
+                        "x".equals(axisName) ? 1f : 0f,
+                        "y".equals(axisName) ? 1f : 0f,
+                        "z".equals(axisName) ? 1f : 0f),
+                (float) Math.toRadians(number(rotation.get("angle"), 0d)),
+                vector(Json.asArray(rotation.get("pivot"))));
     }
 
     private static Vector3f vector(List<Object> raw) {

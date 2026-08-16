@@ -5,6 +5,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
@@ -16,6 +17,7 @@ import org.bukkit.entity.TextDisplay;
 import org.bukkit.entity.Villager;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -25,23 +27,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * An order arriving the long way round: a truck pulls up, Steve gets out, takes a box from the
- * back, hands it over, and drives off.
+ * An order arriving the long way round: a truck flies in on ducted fans, drops its gear and
+ * lands, Steve gets out and hands over a box, then it lifts off and climbs away.
  *
  * <h2>What this costs</h2>
  *
- * Almost nothing, which is worth stating because it looks expensive. The truck is 22 display
+ * Almost nothing, which is worth stating because it looks expensive. The truck is 30 display
  * entities moved by teleporting them every {@link #MOVE_STEP} ticks with a matching
  * {@link Display#setTeleportDuration}, which makes the <em>client</em> interpolate between the
- * positions -- so smooth motion costs one short packet per entity per step, not one per tick. At
- * two-tick steps that is 220 packets a second, on the order of 6 KB/s per viewer, for the nine
- * seconds the truck exists.
+ * positions -- so smooth motion costs one short packet per entity per step, not one per tick. With
+ * the fan downwash and the spinning blades on top, the whole thing is on the order of 12 KB/s per
+ * viewer for the ten seconds it exists.
  *
  * <p>For scale: one map panel update is 16,400 bytes, and a running computer sends those at up to
- * twenty a second. The entire delivery costs less than two panel updates. Nothing here is worth
+ * twenty a second. A whole delivery costs less than a second of one screen. Nothing here is worth
  * optimising against the screen.
+ *
+ * <h2>Moving parts</h2>
+ *
+ * The landing gear and the fan blades are the same trick as the truck's motion, one level down: a
+ * display interpolates towards whatever transformation it is given, so an animation is two poses
+ * and a duration. The wheels have their stowed pose authored in {@code vehicles.json} beside their
+ * deployed one ({@link PartModel.Piece#folded}), and the blades are simply handed a new angle
+ * every few ticks. Neither costs a tick of server work while it plays.
  *
  * <h2>Why the schedule is fixed</h2>
  *
@@ -73,20 +84,33 @@ public final class DeliveryTruck {
      */
     public static final double REAR_OFFSET = 3.0;
 
-    // The schedule, in ticks from dispatch. Roughly nine seconds end to end.
-    private static final int APPROACH_END = 40;
-    private static final int STEVE_OUT = 48;
-    private static final int AT_REAR = 68;
-    private static final int BOX_OUT = 72;
-    private static final int AT_PLAYER = 102;
-    private static final int HANDOVER = 106;
-    private static final int BACK_AT_CAB = 136;
-    private static final int STEVE_IN = 140;
-    private static final int DEPART_START = 144;
-    private static final int DEPART_END = 184;
+    /** How high the approach starts, headroom permitting. */
+    private static final int MAX_ALTITUDE = 9;
+
+    // The schedule, in ticks from dispatch. Roughly ten seconds end to end.
+    private static final int GEAR_DOWN = 22;
+    private static final int APPROACH_END = 44;
+    private static final int STEVE_OUT = 52;
+    private static final int AT_REAR = 72;
+    private static final int BOX_OUT = 76;
+    private static final int AT_PLAYER = 106;
+    private static final int HANDOVER = 110;
+    private static final int BACK_AT_CAB = 140;
+    private static final int FANS_ON = 140;
+    private static final int STEVE_IN = 144;
+    private static final int DEPART_START = 148;
+    private static final int GEAR_UP = 156;
+    private static final int DEPART_END = 200;
+
+    /** How long the gear takes to swing, in ticks. The client tweens the whole thing. */
+    private static final int GEAR_TIME = 14;
 
     /** Ticks between truck teleports. The client tweens the gap, so this is smoothness per byte. */
     private static final int MOVE_STEP = 2;
+
+    /** Ticks between blade poses, and how far each one turns. */
+    private static final int BLADE_STEP = 4;
+    private static final float BLADE_SWEEP = (float) Math.toRadians(40);
 
     /** Blocks per tick. A shade over four blocks a second, which is a brisk walk. */
     private static final double WALK_SPEED = 0.22;
@@ -100,18 +124,35 @@ public final class DeliveryTruck {
     private final List<ComponentType> contents;
     private final Roadway road;
     private final BlockFace heading;
+    private final Quaternionf turn;
 
     /** Everything spawned, in spawn order, so teardown is exact rather than by proximity. */
     private final List<Entity> spawned = new ArrayList<Entity>();
     private final List<Entity> truckParts = new ArrayList<Entity>();
     private final List<Entity> carriedBox = new ArrayList<Entity>();
 
+    /** The wheels, paired with the model boxes that describe their two poses. */
+    private final List<BlockDisplay> gear = new ArrayList<BlockDisplay>();
+    private final List<PartModel.Piece> gearPieces = new ArrayList<PartModel.Piece>();
+
+    /** The fan blades, and where their downwash comes from, already turned to the truck's facing. */
+    private final List<BlockDisplay> blades = new ArrayList<BlockDisplay>();
+    private final List<PartModel.Piece> bladePieces = new ArrayList<PartModel.Piece>();
+    private final List<Vector3f> fanOffsets = new ArrayList<Vector3f>();
+
     private Villager steve;
     private BukkitTask task;
     private int tick;
     private boolean handedOver;
-    /** Where the truck was last put, so the engine is heard from the truck and not the kerb. */
+
+    /** Where the truck was last put, so sound and downwash come from the truck and not the kerb. */
     private double truckIndex;
+    private double altitude;
+    private float bladeAngle;
+
+    /** Approach and departure heights, each limited by what is actually open above the lane. */
+    private final int approachTop;
+    private final int departTop;
 
     private final Location cabDoor;
     private final Location rearSpot;
@@ -125,6 +166,10 @@ public final class DeliveryTruck {
         this.contents = new ArrayList<ComponentType>(contents);
         this.road = road;
         this.heading = road.heading();
+        this.turn = new Quaternionf().rotateY(PartRenderer.yawFor(heading));
+
+        this.approachTop = road.clearanceAbove(0, MAX_ALTITUDE);
+        this.departTop = road.clearanceAbove(road.lastIndex(), MAX_ALTITUDE);
 
         Location park = road.at(road.parkIndex());
         BlockFace side = rightOf(heading);
@@ -150,13 +195,13 @@ public final class DeliveryTruck {
     }
 
     /**
-     * Sends a truck if there is anywhere for one to drive.
+     * Sends a truck if there is anywhere for one to land.
      *
-     * @return false if there is no road, in which case the caller should deliver the plain way
+     * @return false if there is no strip, in which case the caller should deliver the plain way
      */
     public static boolean dispatch(Player player, List<ComponentType> contents) {
         // A second order while one is on the road goes on the same truck, rather than declining
-        // and telling the player there is no room to drive when a truck is visibly outside.
+        // and telling the player there is no room to land when a truck is visibly outside.
         DeliveryTruck inFlight = running.get(player.getUniqueId());
         if (inFlight != null) {
             return inFlight.alsoCarry(player, contents);
@@ -222,19 +267,45 @@ public final class DeliveryTruck {
 
     private void begin(Player player) {
         player.sendMessage(ChatColor.GOLD + "Steve: " + ChatColor.WHITE
-                + "I'M PULLING UP NOW. DON'T MOVE.");
+                + "COMING IN NOW. MIND THE DOWNWASH.");
 
-        Location start = road.at(0);
-        Quaternionf turn = new Quaternionf().rotateY(PartRenderer.yawFor(heading));
+        PartModel model = PartModels.get(MODEL);
+        this.altitude = approachTop;
+        Location start = road.at(0).add(0, altitude, 0);
 
-        for (BlockDisplay display : PartRenderer.spawnNamedDisplays(
-                start, heading, MODEL, 1.0f, TRUCK_OWNER)) {
+        List<BlockDisplay> displays = PartRenderer.spawnNamedDisplays(
+                start, heading, MODEL, 1.0f, TRUCK_OWNER);
+
+        // Displays come back in model order, so they pair up with the pieces that describe them.
+        // That is what lets the wheels and blades be found by what they do rather than by index.
+        List<PartModel.Piece> pieces = model.pieces();
+        for (int i = 0; i < displays.size(); i++) {
+            BlockDisplay display = displays.get(i);
+            PartModel.Piece piece = i < pieces.size() ? pieces.get(i) : null;
+
             // Parts are set to a short view range because they are small and there are many. A
             // truck is neither, and one that pops in at eight blocks is worse than no truck.
             display.setViewRange(1.4f);
             display.setTeleportDuration(MOVE_STEP);
             display.setPersistent(false);
             truckParts.add(remember(display));
+
+            if (piece == null) {
+                continue;
+            }
+            if (piece.folds()) {
+                gear.add(display);
+                gearPieces.add(piece);
+                // It arrives flying, so the gear starts stowed. Set instantly: interpolating from
+                // the deployed pose would show the wheels folding up as the truck appears.
+                display.setTransformation(
+                        PartRenderer.transformFor(piece.folded(), turn, 1.0f));
+            }
+            if (piece.spins()) {
+                blades.add(display);
+                bladePieces.add(piece);
+                fanOffsets.add(new Vector3f(piece.centre()).rotate(turn));
+            }
         }
 
         // Lettering on both flanks, proud of the livery stripe and centred on the cargo box.
@@ -262,12 +333,14 @@ public final class DeliveryTruck {
         tick++;
 
         if (tick <= APPROACH_END) {
-            // Ease out, so it rolls to a stop instead of stopping dead.
+            // Forward and down at once, like a plane on final: the horizontal run eases out into
+            // the parking spot while the descent flares, so it settles rather than dropping.
             double t = tick / (double) APPROACH_END;
+            altitude = approachTop * (1.0 - t) * (1.0 - t);
             moveTruck(road.parkIndex() * (1.0 - (1.0 - t) * (1.0 - t)));
-            engine();
+            fans(1.0);
         } else if (tick == APPROACH_END + 1) {
-            world.playSound(road.at(road.parkIndex()), Sound.BLOCK_PISTON_CONTRACT, 0.7f, 0.6f);
+            touchDown();
         } else if (tick == STEVE_OUT) {
             world.playSound(cabDoor, Sound.BLOCK_IRON_DOOR_OPEN, 0.7f, 1.1f);
             spawnSteve();
@@ -289,15 +362,32 @@ public final class DeliveryTruck {
         } else if (tick == STEVE_IN) {
             world.playSound(cabDoor, Sound.BLOCK_IRON_DOOR_CLOSE, 0.7f, 1.1f);
             removeSteve();
-        } else if (tick >= DEPART_START && tick <= DEPART_END) {
-            // Ease in: it pulls away rather than jumping to speed.
-            double t = (tick - DEPART_START) / (double) (DEPART_END - DEPART_START);
-            int park = road.parkIndex();
-            moveTruck(park + (road.lastIndex() - park) * t * t);
-            engine();
         }
 
-        // One tick past the end, so the last teleport of the drive-off is actually seen before
+        // Gear and fans sit outside the chain above on purpose. Both fire during phases the chain
+        // already claims -- the gear drops mid-approach, the fans spool while Steve is boarding --
+        // and an else-if would silently swallow them.
+        if (tick == GEAR_DOWN) {
+            deployGear(false);
+        }
+
+        // Spool up while Steve is still boarding, so the lift-off is not a standing start.
+        if (tick >= FANS_ON && tick < DEPART_START) {
+            fans((tick - FANS_ON) / (double) (DEPART_START - FANS_ON));
+        }
+        if (tick == GEAR_UP) {
+            deployGear(true);
+        }
+        if (tick >= DEPART_START && tick <= DEPART_END) {
+            // Ease in on both axes: it unsticks, then climbs away.
+            double t = (tick - DEPART_START) / (double) (DEPART_END - DEPART_START);
+            int park = road.parkIndex();
+            altitude = departTop * t * t;
+            moveTruck(park + (road.lastIndex() - park) * t * t);
+            fans(1.0);
+        }
+
+        // One tick past the end, so the last teleport of the climb-out is actually seen before
         // everything is removed.
         if (tick > DEPART_END) {
             finish();
@@ -305,7 +395,7 @@ public final class DeliveryTruck {
     }
 
     /**
-     * Teleports the whole truck to a point on the lane.
+     * Teleports the whole truck to a point on the lane, at its current height.
      *
      * <p>Only every {@link #MOVE_STEP} ticks: the displays carry a matching teleport duration, so
      * the client interpolates across the gap and the motion is smooth without a packet per tick.
@@ -315,7 +405,7 @@ public final class DeliveryTruck {
         if (tick % MOVE_STEP != 0) {
             return;
         }
-        Location where = road.at(index);
+        Location where = truckAt();
         for (Entity part : truckParts) {
             if (part.isValid()) {
                 part.teleport(where);
@@ -323,10 +413,104 @@ public final class DeliveryTruck {
         }
     }
 
-    private void engine() {
-        if (tick % 6 == 0) {
-            world.playSound(road.at(truckIndex), Sound.ENTITY_MINECART_RIDING, 0.35f, 0.75f);
+    private Location truckAt() {
+        return road.at(truckIndex).add(0, altitude, 0);
+    }
+
+    /**
+     * Swings the landing gear.
+     *
+     * <p>The display interpolates from wherever it is now to the pose it is given, so the swing
+     * costs one packet per wheel and no further server work.
+     *
+     * <p>The delay is written last, on the understanding that it is the field which marks the
+     * interpolation's start tick. That ordering is the one thing here taken on trust rather than
+     * read out of the server -- if the gear snaps into place instead of swinging, this is the
+     * line to suspect before anything else.
+     *
+     * @param stow true to fold flat for flight, false to drop for landing
+     */
+    private void deployGear(boolean stow) {
+        for (int i = 0; i < gear.size(); i++) {
+            BlockDisplay wheel = gear.get(i);
+            if (!wheel.isValid()) {
+                continue;
+            }
+            PartModel.Piece piece = gearPieces.get(i);
+            Transformation pose = PartRenderer.transformFor(
+                    stow ? piece.folded() : piece, turn, 1.0f);
+            wheel.setTransformation(pose);
+            wheel.setInterpolationDuration(GEAR_TIME);
+            wheel.setInterpolationDelay(0);
         }
+        Location at = truckAt();
+        world.playSound(at, stow ? Sound.BLOCK_PISTON_CONTRACT : Sound.BLOCK_PISTON_EXTEND,
+                0.8f, 0.7f);
+    }
+
+    /**
+     * Runs the fans: spins the blades and blows air out from under them.
+     *
+     * @param intensity 0 to 1; scales how hard the downwash is thrown
+     */
+    private void fans(double intensity) {
+        if (intensity <= 0.0) {
+            return;
+        }
+
+        if (tick % BLADE_STEP == 0) {
+            // Kept climbing rather than wrapped: slerp takes the short way round, so every step
+            // reads as continuing rotation. A blade is a bar, not a disc, precisely so this shows.
+            bladeAngle += BLADE_SWEEP;
+            for (int i = 0; i < blades.size(); i++) {
+                BlockDisplay blade = blades.get(i);
+                if (!blade.isValid()) {
+                    continue;
+                }
+                blade.setTransformation(spun(bladePieces.get(i), bladeAngle));
+                blade.setInterpolationDuration(BLADE_STEP);
+                blade.setInterpolationDelay(0);
+            }
+        }
+
+        if (tick % 2 != 0) {
+            return;
+        }
+        Location at = truckAt();
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (Vector3f fan : fanOffsets) {
+            double x = at.getX() + fan.x;
+            double y = at.getY() + fan.y - 0.15;
+            double z = at.getZ() + fan.z;
+            // Count zero makes the offsets a direction and the last argument a speed, which is the
+            // only way to get particles that actually blow downward rather than drift.
+            for (int i = 0; i < 2; i++) {
+                world.spawnParticle(Particle.CLOUD,
+                        x + random.nextDouble(-0.18, 0.18), y,
+                        z + random.nextDouble(-0.18, 0.18),
+                        0, 0.0, -1.0, 0.0, 0.16 + 0.22 * intensity);
+            }
+        }
+
+        if (tick % 6 == 0) {
+            world.playSound(at, Sound.ENTITY_MINECART_RIDING, (float) (0.35 * intensity), 1.4f);
+            world.playSound(at, Sound.BLOCK_CONDUIT_AMBIENT, (float) (0.25 * intensity), 1.8f);
+        }
+    }
+
+    /** A blade's pose at some angle: turned about its own centre, then by the truck's facing. */
+    private Transformation spun(PartModel.Piece blade, float angle) {
+        PartModel.Piece turned = new PartModel.Piece(blade.block(), blade.size(), blade.centre(),
+                new Vector3f(0f, 1f, 0f), angle, blade.centre(), null, false);
+        return PartRenderer.transformFor(turned, turn, 1.0f);
+    }
+
+    /** Settles onto the strip: a thump, and the dust the fans throw up off the ground. */
+    private void touchDown() {
+        altitude = 0.0;
+        Location at = road.at(road.parkIndex());
+        world.playSound(at, Sound.ENTITY_IRON_GOLEM_STEP, 0.9f, 0.7f);
+        world.spawnParticle(Particle.CLOUD, at.clone().add(0, 0.2, 0), 40, 1.3, 0.1, 1.3, 0.04);
     }
 
     private void spawnSteve() {
@@ -338,10 +522,10 @@ public final class DeliveryTruck {
             villager.setAdult();
             villager.setCustomName(ChatColor.GOLD + "Steve");
             villager.setCustomNameVisible(true);
-            // Aware, not AI: an unaware mob keeps its physics -- gravity, step height and the walk
-            // animation that comes from actually moving -- while ignoring every goal it has. With
-            // AI off entirely he would slide along like a statue; with AI on he would wander off
-            // to a bed. Neither is a courier.
+            // Unaware, not AI-less: an unaware mob keeps its physics -- gravity, step height and
+            // the walk animation that comes from actually moving -- while ignoring every goal it
+            // has. With AI off entirely he would slide along like a statue; with AI on he would
+            // wander off to a bed. Neither is a courier.
             villager.setAware(false);
             villager.setInvulnerable(true);
             villager.setCollidable(false);
@@ -385,7 +569,7 @@ public final class DeliveryTruck {
     /** Spawns the box Steve carries: scenery only, with the real package created at handover. */
     private void takeOutBox(Player player) {
         BlockFace carryFacing = towards(rearSpot, player.getLocation());
-        Quaternionf turn = new Quaternionf().rotateY(PartRenderer.yawFor(carryFacing));
+        Quaternionf carryTurn = new Quaternionf().rotateY(PartRenderer.yawFor(carryFacing));
 
         for (BlockDisplay display : PartRenderer.spawnNamedDisplays(
                 carriedAt(), carryFacing, "package", 1.0f, TRUCK_OWNER)) {
@@ -395,7 +579,7 @@ public final class DeliveryTruck {
         }
         for (boolean east : new boolean[]{true, false}) {
             TextDisplay sign = Branding.sign(carriedAt(), Branding.COMPANY_SHORT,
-                    new Vector3f(east ? 0.26f : -0.26f, 0.24f, 0f), turn, east, 0.5f);
+                    new Vector3f(east ? 0.26f : -0.26f, 0.24f, 0f), carryTurn, east, 0.5f);
             sign.setTeleportDuration(1);
             sign.setPersistent(false);
             carriedBox.add(remember(sign));
@@ -468,6 +652,8 @@ public final class DeliveryTruck {
         }
         spawned.clear();
         truckParts.clear();
+        gear.clear();
+        blades.clear();
         running.remove(owner, this);
     }
 

@@ -5,25 +5,87 @@
   "models": {
     "delivery_truck": [
       {
-        "_": "wheels -- front left, front right, rear left, rear right",
+        "_": "wheels -- front left, front right, rear left, rear right. Each carries a folded pose: turned a quarter turn about its own centre so the wheel lies flat, and lifted up under the belly. The truck flies on them stowed and swings them down to land.",
         "block": "black_concrete",
         "size": [0.32, 0.72, 0.72],
-        "centre": [-0.86, 0.36, -1.45]
+        "centre": [-0.86, 0.36, -1.45],
+        "folded": {
+          "centre": [-0.86, 0.38, -1.45],
+          "rotation": {"axis": "z", "angle": 90, "pivot": [-0.86, 0.38, -1.45]}
+        }
       },
       {
         "block": "black_concrete",
         "size": [0.32, 0.72, 0.72],
-        "centre": [0.86, 0.36, -1.45]
+        "centre": [0.86, 0.36, -1.45],
+        "folded": {
+          "centre": [0.86, 0.38, -1.45],
+          "rotation": {"axis": "z", "angle": 90, "pivot": [0.86, 0.38, -1.45]}
+        }
       },
       {
         "block": "black_concrete",
         "size": [0.32, 0.72, 0.72],
-        "centre": [-0.86, 0.36, 1.35]
+        "centre": [-0.86, 0.36, 1.35],
+        "folded": {
+          "centre": [-0.86, 0.38, 1.35],
+          "rotation": {"axis": "z", "angle": 90, "pivot": [-0.86, 0.38, 1.35]}
+        }
       },
       {
         "block": "black_concrete",
         "size": [0.32, 0.72, 0.72],
-        "centre": [0.86, 0.36, 1.35]
+        "centre": [0.86, 0.36, 1.35],
+        "folded": {
+          "centre": [0.86, 0.38, 1.35],
+          "rotation": {"axis": "z", "angle": 90, "pivot": [0.86, 0.38, 1.35]}
+        }
+      },
+      {
+        "_": "ducted fan housings, one over each wheel bay. The wheel folds flat into its own duct, which is the Back to the Future joke and also the only place on a truck with room for one.",
+        "block": "polished_deepslate",
+        "size": [0.80, 0.16, 0.80],
+        "centre": [-0.86, 0.62, -1.45]
+      },
+      {
+        "block": "polished_deepslate",
+        "size": [0.80, 0.16, 0.80],
+        "centre": [0.86, 0.62, -1.45]
+      },
+      {
+        "block": "polished_deepslate",
+        "size": [0.80, 0.16, 0.80],
+        "centre": [-0.86, 0.62, 1.35]
+      },
+      {
+        "block": "polished_deepslate",
+        "size": [0.80, 0.16, 0.80],
+        "centre": [0.86, 0.62, 1.35]
+      },
+      {
+        "_": "fan blades. A bar rather than a disc, because a square box rotated looks identical to a square box and the spin would be invisible.",
+        "block": "light_gray_concrete",
+        "size": [0.62, 0.05, 0.16],
+        "spins": true,
+        "centre": [-0.86, 0.55, -1.45]
+      },
+      {
+        "block": "light_gray_concrete",
+        "size": [0.62, 0.05, 0.16],
+        "spins": true,
+        "centre": [0.86, 0.55, -1.45]
+      },
+      {
+        "block": "light_gray_concrete",
+        "size": [0.62, 0.05, 0.16],
+        "spins": true,
+        "centre": [-0.86, 0.55, 1.35]
+      },
+      {
+        "block": "light_gray_concrete",
+        "size": [0.62, 0.05, 0.16],
+        "spins": true,
+        "centre": [0.86, 0.55, 1.35]
       },
       {
         "_": "chassis: the dark rail the body sits on, so the truck does not look like a box on wheels",

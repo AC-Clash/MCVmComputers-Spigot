@@ -100,6 +100,32 @@ public final class Roadway {
                 a.getZ() + (b.getZ() - a.getZ()) * t);
     }
 
+    /**
+     * How much open air stands above a lane column, up to {@code max}.
+     *
+     * <p>The truck flies in, so the lane is a landing strip rather than a road, and the descent
+     * needs room above the far end of it. This measures what is actually there instead of
+     * demanding a fixed amount: a lane under a canopy still gets a delivery, just a shallower
+     * approach. Rejecting it outright would fail on any road with a tree beside it.
+     */
+    public int clearanceAbove(int index, int max) {
+        Location at = at(index);
+        World world = at.getWorld();
+        int x = at.getBlockX();
+        int y = at.getBlockY();
+        int z = at.getBlockZ();
+        if (!world.isChunkLoaded(x >> 4, z >> 4)) {
+            return 0;
+        }
+        for (int dy = 0; dy < max; dy++) {
+            Block block = world.getBlockAt(x, y + dy, z);
+            if (!block.isPassable() || block.isLiquid()) {
+                return dy;
+            }
+        }
+        return max;
+    }
+
     /** Where the truck's rear doors end up once it has parked. */
     public Location rearOfParkedTruck() {
         Location park = at(parkIndex);
