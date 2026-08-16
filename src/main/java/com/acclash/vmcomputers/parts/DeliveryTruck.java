@@ -377,19 +377,22 @@ public final class DeliveryTruck {
             }
         }
 
-        // Livery on both flanks, proud of the gold stripe and centred on the cargo box; then the
-        // maker's badge front and rear, and the model name under the rear one. The badges are
-        // small on purpose -- they read as stamped metal rather than as more advertising.
+        // The operator's livery goes on the cargo box, big, on both flanks. The truck's own make
+        // and model go where a truck actually carries them, which is nowhere near it: the maker
+        // on the grille and again on the rear underride bar, the model on the cab doors under the
+        // side windows. Both are small enough to read as stamped metal rather than advertising.
         addSign(start, Branding.COMPANY, new Vector3f(1.07f, 1.85f, 0.8f),
                 Branding.Face.RIGHT, 1.0f);
         addSign(start, Branding.COMPANY, new Vector3f(-1.07f, 1.85f, 0.8f),
                 Branding.Face.LEFT, 1.0f);
-        addSign(start, Branding.MAKE_ON_DARK, new Vector3f(0f, 1.02f, -2.37f),
+        addSign(start, Branding.MAKE, new Vector3f(0f, 1.02f, -2.37f),
                 Branding.Face.FRONT, 0.4f);
-        addSign(start, Branding.MAKE_ON_LIGHT, new Vector3f(0f, 1.85f, 2.34f),
-                Branding.Face.REAR, 0.4f);
-        addSign(start, Branding.MODEL_NAME, new Vector3f(0f, 1.60f, 2.34f),
-                Branding.Face.REAR, 0.45f);
+        addSign(start, Branding.MAKE, new Vector3f(0f, 0.42f, 2.44f),
+                Branding.Face.REAR, 0.3f);
+        addSign(start, Branding.MODEL_NAME, new Vector3f(0.98f, 0.98f, -1.90f),
+                Branding.Face.RIGHT, 0.4f);
+        addSign(start, Branding.MODEL_NAME, new Vector3f(-0.98f, 0.98f, -1.90f),
+                Branding.Face.LEFT, 0.4f);
 
         this.task = Bukkit.getScheduler().runTaskTimer(
                 VMComputers.getPlugin(), this::tick, 0L, 1L);
