@@ -308,7 +308,7 @@ java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --o
 /vmcomputers type @RETURN             # @TAB @ESC @BACKSPACE @UP..@F12
 /vmcomputers testdisplay [clear]      # ItemDisplay diagnostic (answer: doesn't work)
 /vmcomputers debug                    # toggle: draws the pointer on screen, for testing
-/vmcomputers order                    # parts shop, paid in iron
+/vmcomputers order                    # parts shop, paid in Auros (blank maps)
 /vmcomputers phone                    # hands you a brick phone (also craftable)
 /vmcomputers parts list               # component models and their piece counts
 /vmcomputers parts <model> [scale]    # preview one where you stand, facing you
@@ -378,7 +378,7 @@ code.
   architecture. Anston's call, noted 2026-08-14.
 - **No size-selection GUI** — user asked for "both" (command arg *and* chest GUI); only the arg
   exists. `Create.perform` has a TODO where the menu should open.
-- **No payment-on-delivery.** The mod drops a payment chest first; here iron is taken when you
+- **No payment-on-delivery.** The mod drops a payment chest first; here payment is taken when you
   order and the package only carries goods.
 - **The 32-bit motherboard does nothing.** Both supported architectures are 64-bit, so it can never
   be the right choice. Either give it a real limitation (a RAM cap is the honest one) or cut it.
