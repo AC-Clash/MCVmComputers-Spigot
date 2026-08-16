@@ -58,14 +58,15 @@ public class PlacementListener implements Listener {
                 return;
             }
 
-            if (ComponentType.of(event.getItem()) == ComponentType.PC_CASE) {
+            ComponentType held = ComponentType.of(event.getItem());
+            if (held != null && held.isCase()) {
                 event.setCancelled(true);
-                place(player, clicked.getRelative(event.getBlockFace()));
+                place(player, clicked.getRelative(event.getBlockFace()), held);
             }
         }
     }
 
-    private void place(Player player, Block target) {
+    private void place(Player player, Block target, ComponentType caseType) {
         if (!Permissions.requireBuild(player)) {
             return;
         }
@@ -86,7 +87,8 @@ public class PlacementListener implements Listener {
         PendingCase pending;
         try {
             pending = VMComputers.getPlugin().getComputerDao().insertCase(new PendingCase(
-                    -1, world.getName(), target.getX(), target.getY(), target.getZ(), caseFacing));
+                    -1, world.getName(), target.getX(), target.getY(), target.getZ(), caseFacing,
+                    caseType));
         } catch (SQLException e) {
             player.sendMessage(ChatColor.RED + "Could not place that; see the console.");
             VMComputers.getPlugin().getLogger().severe("Case insert failed: " + e.getMessage());
@@ -97,7 +99,7 @@ public class PlacementListener implements Listener {
         // reasoning as the assembled tower: a display entity has no hitbox of its own.
         target.setType(Material.BARRIER, false);
         Location at = new Location(world, target.getX() + 0.5, target.getY(), target.getZ() + 0.5);
-        PartRenderer.spawnNamed(at, caseFacing, "pc_case_sidepanel", 1.0f,
+        PartRenderer.spawnNamed(at, caseFacing, caseType.modelName(), 1.0f,
                 PendingCase.DISPLAY_OWNER);
 
         VMComputers.getPlugin().rememberPendingCase(pending);

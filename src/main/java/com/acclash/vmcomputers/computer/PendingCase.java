@@ -45,11 +45,17 @@ public final class PendingCase {
     private final int y;
     private final int z;
     private final BlockFace facing;
+    private final ComponentType caseType;
 
     private final Map<ComponentSlot, ComponentType> installed =
             new ConcurrentHashMap<ComponentSlot, ComponentType>();
 
     public PendingCase(int id, String worldName, int x, int y, int z, BlockFace facing) {
+        this(id, worldName, x, y, z, facing, ComponentType.PC_CASE);
+    }
+
+    public PendingCase(int id, String worldName, int x, int y, int z, BlockFace facing,
+                       ComponentType caseType) {
         if (!Computer.isCardinal(facing)) {
             throw new IllegalArgumentException("facing must be cardinal, got " + facing);
         }
@@ -59,6 +65,13 @@ public final class PendingCase {
         this.y = y;
         this.z = z;
         this.facing = facing;
+        // Rows written before cases had a type read back as the plain one, which is what they were.
+        this.caseType = caseType != null ? caseType : ComponentType.PC_CASE;
+    }
+
+    /** Which case was put down. Decides the model drawn and the profile the machine starts with. */
+    public ComponentType caseType() {
+        return caseType;
     }
 
     public int id() {

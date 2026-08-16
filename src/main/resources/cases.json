@@ -1,0 +1,46 @@
+{
+  "_note": "Hand-authored, like vehicles.json. Nothing here came from the mod's assets, so the parts generator must never be pointed at this file -- it would overwrite it. Two real machines, modelled from photographs: boxes are in blocks, relative to the part's bottom centre, and the front bezel faces -Z to match pc_case's own front panel.",
+
+  "models": {
+    "dell_dimension_l500r": [
+      { "_": "beige body", "block": "white_terracotta",
+        "size": [0.375, 0.6875, 0.78125], "centre": [0.0, 0.34375, 0.015625] },
+      { "_": "front bezel, the greyer plastic Dell used across the L series",
+        "block": "light_gray_concrete",
+        "size": [0.3875, 0.6875, 0.0625], "centre": [0.0, 0.34375, -0.40625] },
+      { "_": "5.25in optical bay", "block": "black_concrete",
+        "size": [0.28, 0.075, 0.03], "centre": [0.0, 0.55, -0.43125] },
+      { "_": "3.5in floppy bay", "block": "black_concrete",
+        "size": [0.2, 0.05, 0.03], "centre": [0.0, 0.4375, -0.43125] },
+      { "_": "lower vent grille", "block": "gray_concrete",
+        "size": [0.3, 0.0625, 0.03], "centre": [0.0, 0.09375, -0.43125] },
+      { "_": "badge", "block": "gray_concrete",
+        "size": [0.125, 0.04, 0.03], "centre": [-0.06, 0.1875, -0.43125] },
+      { "_": "power button", "block": "quartz_block",
+        "size": [0.05, 0.05, 0.03], "centre": [0.11, 0.1875, -0.43125] },
+      { "_": "top seam", "block": "light_gray_concrete",
+        "size": [0.38, 0.03, 0.78125], "centre": [0.0, 0.671875, 0.015625] }
+    ],
+
+    "compaq_presario": [
+      { "_": "silver body", "block": "light_gray_concrete",
+        "size": [0.375, 0.6875, 0.78125], "centre": [0.0, 0.34375, 0.015625] },
+      { "_": "black front, the mid-2000s Presario look", "block": "black_concrete",
+        "size": [0.3875, 0.6875, 0.0625], "centre": [0.0, 0.34375, -0.40625] },
+      { "_": "brushed strip across the front", "block": "iron_block",
+        "size": [0.3875, 0.05, 0.03], "centre": [0.0, 0.5, -0.43125] },
+      { "_": "optical bay", "block": "gray_concrete",
+        "size": [0.28, 0.06, 0.03], "centre": [0.0, 0.59375, -0.43125] },
+      { "_": "media card slots", "block": "gray_concrete",
+        "size": [0.16, 0.04, 0.03], "centre": [-0.08, 0.375, -0.43125] },
+      { "_": "front USB", "block": "gray_concrete",
+        "size": [0.07, 0.03, 0.03], "centre": [0.11, 0.375, -0.43125] },
+      { "_": "blue power ring", "block": "light_blue_concrete",
+        "size": [0.07, 0.07, 0.03], "centre": [0.0, 0.171875, -0.43125] },
+      { "_": "lower vent", "block": "gray_concrete",
+        "size": [0.3, 0.05, 0.03], "centre": [0.0, 0.0625, -0.43125] },
+      { "_": "top seam", "block": "iron_block",
+        "size": [0.38, 0.03, 0.78125], "centre": [0.0, 0.671875, 0.015625] }
+    ]
+  }
+}

@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
  */
 public final class PartModels {
 
-    private static final String[] RESOURCES = {"/parts.json", "/vehicles.json"};
+    private static final String[] RESOURCES = {"/parts.json", "/vehicles.json", "/cases.json"};
 
     private static volatile Map<String, PartModel> models = Collections.emptyMap();
 

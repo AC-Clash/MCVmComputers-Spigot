@@ -205,7 +205,20 @@ public class AssemblyMenu extends Menu {
         MonitorSize size = pending.plannedSize();
         World world = viewer.getWorld();
 
-        Computer candidate = pending.toComputer(-1, size, "Generic PC");
+        // The machine is named after the box it was built in, and inherits the hardware that box
+        // implies. A named case is the whole point: buying a Dimension is how a player says
+        // "Windows 98" without having to know what Windows 98 wants.
+        // The type column carries the case's id rather than a display name. It was only ever
+        // written and read back, never shown, and holding the id means the assembled tower can be
+        // drawn as the box it was built in without another column to store that.
+        ComponentType caseType = pending.caseType();
+        Computer candidate = pending.toComputer(-1, size, caseType.id());
+        if (caseType.profile() != null) {
+            candidate.setProfile(caseType.profile());
+            if (caseType.profile().architecture() != null) {
+                candidate.setArchitecture(caseType.profile().architecture());
+            }
+        }
 
         // Checked before anything is built or written, so a refused assembly leaves the case
         // exactly as it was rather than half a computer and a lost case.

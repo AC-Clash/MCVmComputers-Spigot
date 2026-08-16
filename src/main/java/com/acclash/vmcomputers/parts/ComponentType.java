@@ -62,6 +62,15 @@ public final class ComponentType {
             new LinkedHashMap<String, ComponentType>();
 
     /**
+     * Ids of the components that are placed rather than fitted.
+     *
+     * <p>Declared up here with the registry and not down among the instance fields: static fields
+     * initialise in source order, and the catalogue below populates this while being built. Left
+     * further down it is still null when the first case registers itself.
+     */
+    private static final java.util.Set<String> CASES = new java.util.HashSet<String>();
+
+    /**
      * Head textures for the catalogue, by component id.
      *
      * <p>One block rather than an argument on each entry, so filling the set in is a single paste
@@ -125,9 +134,29 @@ public final class ComponentType {
 
     // ---- the catalogue ---------------------------------------------------
 
-    public static final ComponentType PC_CASE = register(new ComponentType(
+    public static final ComponentType PC_CASE = registerCase(new ComponentType(
             "pc_case", "PC Case", Material.BLACK_SHULKER_BOX, 6, Category.PARTS, null,
-            "pc_case_sidepanel", "Houses the machine. Right-click to open it."));
+            "pc_case_sidepanel", "Houses the machine. Right-click to open it.", null));
+
+    /**
+     * A Dell Dimension L500r, and with it a machine already set up for Windows 98.
+     *
+     * <p>The point of a named case is that it answers the hardware question by being bought. Nobody
+     * should have to learn that Windows 98 wants a Cirrus card, a PS/2 mouse and a CPU old enough
+     * not to overflow its own timing loop -- putting this box on the floor says all of it.
+     */
+    public static final ComponentType CASE_DELL_DIMENSION_L500R = registerCase(new ComponentType(
+            "case_dell_dimension_l500r", "Dell Dimension L500r", Material.WHITE_SHULKER_BOX, 8,
+            Category.PARTS, null, "dell_dimension_l500r",
+            "A beige Pentium III from 2000. Comes set up for Windows 98.",
+            com.acclash.vmcomputers.emu.GuestProfile.DELL_DIMENSION_L500R));
+
+    /** A Compaq Presario, set up for Windows XP Professional x64 Edition. */
+    public static final ComponentType CASE_COMPAQ_PRESARIO = registerCase(new ComponentType(
+            "case_compaq_presario", "Compaq Presario", Material.LIGHT_GRAY_SHULKER_BOX, 10,
+            Category.PARTS, null, "compaq_presario",
+            "An Athlon 64 desktop. Comes set up for Windows XP x64.",
+            com.acclash.vmcomputers.emu.GuestProfile.COMPAQ_PRESARIO));
 
     public static final ComponentType CASE_SIDE_PANEL = register(new ComponentType(
             "case_side_panel", "Case Side Panel", Material.GRAY_STAINED_GLASS_PANE, 2,
@@ -254,6 +283,14 @@ public final class ComponentType {
     private final String modelName;
     private final String description;
     private final com.acclash.vmcomputers.emu.VmSpec.Vga vga;
+    private final com.acclash.vmcomputers.emu.GuestProfile profile;
+
+    private ComponentType(String id, String displayName, Material icon, int price,
+                          Category category, ComponentSlot slot, String modelName,
+                          String description, com.acclash.vmcomputers.emu.GuestProfile profile) {
+        this(id, displayName, icon, price, category, slot, modelName, description, 0, null,
+                profile);
+    }
 
     private ComponentType(String id, String displayName, Material icon, int price,
                           Category category, ComponentSlot slot, String modelName,
@@ -271,6 +308,16 @@ public final class ComponentType {
                           Category category, ComponentSlot slot, String modelName,
                           String description, int rating,
                           com.acclash.vmcomputers.emu.VmSpec.Vga vga) {
+        this(id, displayName, icon, price, category, slot, modelName, description, rating, vga,
+                null);
+    }
+
+    private ComponentType(String id, String displayName, Material icon, int price,
+                          Category category, ComponentSlot slot, String modelName,
+                          String description, int rating,
+                          com.acclash.vmcomputers.emu.VmSpec.Vga vga,
+                          com.acclash.vmcomputers.emu.GuestProfile profile) {
+        this.profile = profile;
         this.id = id;
         this.displayName = displayName;
         this.icon = icon;
@@ -298,6 +345,27 @@ public final class ComponentType {
     private static ComponentType register(ComponentType type) {
         REGISTRY.put(type.id, type);
         return type;
+    }
+
+    /**
+     * Registers a case, which is a component you place rather than fit.
+     *
+     * <p>Kept as its own set rather than inferred from having no slot, because side panels have no
+     * slot either and putting one on the floor should not start a computer.
+     */
+    private static ComponentType registerCase(ComponentType type) {
+        CASES.add(type.id);
+        return register(type);
+    }
+
+    /** Whether this is a case: placeable as a block, and the start of a build. */
+    public boolean isCase() {
+        return CASES.contains(id);
+    }
+
+    /** The profile a machine built in this case starts with, or null to leave it automatic. */
+    public com.acclash.vmcomputers.emu.GuestProfile profile() {
+        return profile;
     }
 
     /** Stable identifier, used in persistent data and configuration. */

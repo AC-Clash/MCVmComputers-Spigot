@@ -115,13 +115,13 @@ public final class ComputerBuilder {
             // Bottom centre of the block: the model's own origin is its bottom centre, so it
             // stands on the floor rather than sinking into it.
             PartRenderer.spawnNamed(tower.clone().add(0.5, 0.0, 0.5), computer.facing(),
-                    "pc_case_sidepanel", 1.0f, computer.id());
+                    computer.caseModelName(), 1.0f, computer.id());
         }
         if (layout.control() != null) {
             Location control = computer.locationOf(world, layout.control());
             control.getBlock().setType(Material.BARRIER, false);
             PartRenderer.spawnNamed(control.clone().add(0.5, 0.0, 0.5), computer.facing(),
-                    "pc_case_sidepanel", 1.0f, computer.id());
+                    computer.caseModelName(), 1.0f, computer.id());
         }
 
         // The keyboard and mouse are decoration -- nothing reads them as blocks -- so they become

@@ -157,6 +157,21 @@ public final class Computer {
         return monitorSize;
     }
 
+    /**
+     * The model to draw this machine's tower with.
+     *
+     * <p>Derived from {@link #type()}, which holds the id of the case it was assembled in. Machines
+     * built before named cases existed have something else in there -- "Generic PC" -- so anything
+     * that does not resolve falls back to the plain case, which is what those machines are.
+     */
+    public String caseModelName() {
+        com.acclash.vmcomputers.parts.ComponentType built =
+                com.acclash.vmcomputers.parts.ComponentType.byId(type);
+        return built != null && built.isCase()
+                ? built.modelName()
+                : com.acclash.vmcomputers.parts.ComponentType.PC_CASE.modelName();
+    }
+
     public String type() {
         return type;
     }

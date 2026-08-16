@@ -125,6 +125,10 @@ public final class ComputerDao {
             if (!hasColumn(connection, "computers", "profile")) {
                 statement.executeUpdate("ALTER TABLE computers ADD COLUMN profile TEXT");
             }
+            // Cases placed before there was more than one kind read back as the plain one.
+            if (!hasColumn(connection, "pending_cases", "case_type")) {
+                statement.executeUpdate("ALTER TABLE pending_cases ADD COLUMN case_type TEXT");
+            }
         }
     }
 
@@ -154,8 +158,8 @@ public final class ComputerDao {
 
     public List<Computer> loadAll() throws SQLException {
         List<Computer> out = new ArrayList<Computer>();
-        String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state, iso, arch, owner"
-                + " FROM computers";
+        String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state, iso, arch,"
+                + " owner, disk, profile FROM computers";
         try (PreparedStatement statement = database.getSQLConnection().prepareStatement(sql);
              ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
@@ -213,8 +217,8 @@ public final class ComputerDao {
 
     /** Inserts a computer and returns it with the id the database assigned. */
     public Computer insert(Computer computer) throws SQLException {
-        String sql = "INSERT INTO computers (world, x, y, z, facing, monitor_size, type, state, owner)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO computers (world, x, y, z, facing, monitor_size, type, state,"
+                + " owner, profile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         Connection connection = database.getSQLConnection();
         try (PreparedStatement statement =
                      connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -227,6 +231,9 @@ public final class ComputerDao {
             statement.setString(7, computer.type());
             statement.setString(8, computer.state().name());
             statement.setString(9, computer.owner() == null ? null : computer.owner().toString());
+            // Written at insert rather than patched afterwards: a machine built in a named case
+            // has its profile from the moment it exists, and a second statement could fail alone.
+            statement.setString(10, computer.profile() == null ? null : computer.profile().name());
             statement.executeUpdate();
 
             try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -335,18 +342,20 @@ public final class ComputerDao {
     public PendingCase insertCase(PendingCase pending) throws SQLException {
         Connection connection = database.getSQLConnection();
         try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO pending_cases (world, x, y, z, facing) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO pending_cases (world, x, y, z, facing, case_type)"
+                        + " VALUES (?, ?, ?, ?, ?, ?)",
                 Statement.RETURN_GENERATED_KEYS)) {
             statement.setString(1, pending.worldName());
             statement.setInt(2, pending.x());
             statement.setInt(3, pending.y());
             statement.setInt(4, pending.z());
             statement.setString(5, pending.facing().name());
+            statement.setString(6, pending.caseType().id());
             statement.executeUpdate();
             try (ResultSet keys = statement.getGeneratedKeys()) {
                 if (keys.next()) {
                     return new PendingCase(keys.getInt(1), pending.worldName(), pending.x(),
-                            pending.y(), pending.z(), pending.facing());
+                            pending.y(), pending.z(), pending.facing(), pending.caseType());
                 }
             }
         }
@@ -357,13 +366,14 @@ public final class ComputerDao {
         List<PendingCase> out = new ArrayList<PendingCase>();
         Map<Integer, Map<String, String>> parts = loadAllCaseComponents();
         try (PreparedStatement statement = database.getSQLConnection().prepareStatement(
-                "SELECT id, world, x, y, z, facing FROM pending_cases");
+                "SELECT id, world, x, y, z, facing, case_type FROM pending_cases");
              ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
                 try {
                     PendingCase pending = new PendingCase(rs.getInt("id"), rs.getString("world"),
                             rs.getInt("x"), rs.getInt("y"), rs.getInt("z"),
-                            BlockFace.valueOf(rs.getString("facing")));
+                            BlockFace.valueOf(rs.getString("facing")),
+                            ComponentType.byId(rs.getString("case_type")));
                     Map<String, String> fitted = parts.get(Integer.valueOf(pending.id()));
                     if (fitted != null) {
                         for (Map.Entry<String, String> entry : fitted.entrySet()) {

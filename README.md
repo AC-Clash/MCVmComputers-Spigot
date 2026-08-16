@@ -312,6 +312,11 @@ together with the accelerator: on a host that runs x86 natively an x86 guest is 
 on one that cannot — Apple Silicon, say — x86 is assumed to mean something old, because nobody runs
 a modern x86 guest at emulated speed on purpose.
 
+Two of them can also be **bought as cases**. A Dell Dimension L500r and a Compaq Presario are placed
+like the plain PC Case, but the machine assembled inside one starts on that profile already — which
+is the point: buying a Dimension is how a player says "Windows 98" without having to know what
+Windows 98 wants. Each has its own model, so they look like what they are on the floor.
+
 The two named machines are real models. Naming a profile "Windows 98" invites the question of *which*
 Windows 98 machine, and a real one answers every field at once. Where the model and compatibility
 disagree, compatibility wins: the real L500r had Intel 810e graphics and AC'97 audio, neither of
