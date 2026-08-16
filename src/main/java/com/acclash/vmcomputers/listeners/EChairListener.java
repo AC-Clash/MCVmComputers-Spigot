@@ -22,23 +22,22 @@ import java.util.concurrent.ConcurrentHashMap;
  * Turns a seated player's movement keys into keystrokes in the guest.
  *
  * <p>While a player rides anything, their client sends its raw movement state to the server every
- * time it changes. That is a keyboard: six keys, edge-triggered, with no client mod, no resource
- * pack and nothing for the player to install -- which is the whole constraint this project is
- * built around.
+ * time it changes. That is a keyboard: five keys, with no client mod, no resource pack and nothing
+ * for the player to install -- which is the whole constraint this project is built around.
  *
  * <h2>Held, not tapped</h2>
  *
- * A game needs to know that forward is <em>being held</em>, not that it was pressed once, so what
- * gets sent is presses and releases rather than taps. That makes the held state something this
- * class owns and has to be careful with: a key sent down and never sent up is stuck down in the
- * guest forever, long after the player has wandered off. Every way out of a chair therefore ends
- * up at {@link #releaseAll} -- standing up, disconnecting, or the chair being taken away.
+ * A game needs to know that forward is <em>being held</em>, not that it was pressed once, so the
+ * keys are sent as presses and releases. That makes the held state something this class owns and
+ * has to be careful with: a key sent down and never sent up is stuck down in the guest forever,
+ * long after the player has wandered off. Every way out of a chair therefore ends up at
+ * {@link #releaseAll} -- standing up, disconnecting, or the chair being taken away.
  *
- * <h2>Why the mode is remembered per seat</h2>
+ * <h2>Why the keys are recorded, not the profile</h2>
  *
- * Held keys are recorded together with the mapping they were sent under. Switching from WASD to
- * the arrows while forward is held would otherwise leave {@code w} down in the guest and start
- * sending {@code Up} as well, with nothing left that could ever release the first one.
+ * Held keys are stored as the keysyms they were actually sent as. A player can switch profile or
+ * rebind mid-keypress, and recording the profile instead would leave {@code w} down in the guest
+ * while {@code Up} started arriving, with nothing left that could ever release the first one.
  */
 public class EChairListener implements Listener {
 

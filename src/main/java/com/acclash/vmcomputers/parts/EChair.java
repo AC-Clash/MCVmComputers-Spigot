@@ -48,10 +48,10 @@ public final class EChair {
      * five inputs, switched by the player.
      */
     public enum KeyMode {
-        /** WASD, space and shift, as a game expects them. */
-        GAME("WASD, space, shift", "for playing"),
-        /** Arrows, enter and tab, for menus, bootloaders and anything you navigate. */
-        MENU("arrows, enter, tab", "for browsing");
+        /** WASD and space, as a game expects them. */
+        GAME("WASD + space", "for playing"),
+        /** Arrows and enter, for menus, bootloaders and anything you navigate. */
+        MENU("arrows + enter", "for browsing");
 
         private final String keys;
         private final String purpose;
@@ -75,24 +75,21 @@ public final class EChair {
     }
 
     /**
-     * The six inputs a seated player can produce.
+     * The five inputs a seated player can produce, all of them held.
      *
-     * <p>Sneak is deliberately not one of them: holding shift is how a player gets out of the
-     * chair, and taking that over would seat them permanently.
-     *
-     * <p>Sprint is the sixth, and it is a held modifier at both ends -- which is why it maps to
-     * one. In a game that is left shift, because that is what "run" is bound to almost everywhere.
-     * In a menu it is tab, which is the key that actually moves you between fields in a BIOS or an
-     * installer, and the one thing the arrows and enter cannot do on their own. Held tab will
-     * auto-repeat in the guest, but sprint is a tap in practice.
+     * <p>Five and not more, and the three that are missing are each missing for a reason worth
+     * recording. Sneak is how a player gets out of the chair; taking it over would seat them
+     * permanently. The scroll wheel is already the guest's mouse wheel, in
+     * {@code PointerListener}. And sprint looks usable but is not: the client reports whether a
+     * player <em>is sprinting</em> rather than whether the sprint key is down, and sprinting needs
+     * forward movement that someone sitting in a chair never has, so the bit never arrives.
      */
     public enum Key {
         FORWARD('w', RfbClient.Keysym.UP),
         LEFT('a', RfbClient.Keysym.LEFT),
         BACK('s', RfbClient.Keysym.DOWN),
         RIGHT('d', RfbClient.Keysym.RIGHT),
-        JUMP(' ', RfbClient.Keysym.RETURN),
-        SPRINT(RfbClient.Keysym.SHIFT_LEFT, RfbClient.Keysym.TAB);
+        JUMP(' ', RfbClient.Keysym.RETURN);
 
         private final int gameKeysym;
         private final int menuKeysym;
@@ -127,7 +124,6 @@ public final class EChair {
         down[Key.BACK.ordinal()] = input.isBackward();
         down[Key.RIGHT.ordinal()] = input.isRight();
         down[Key.JUMP.ordinal()] = input.isJump();
-        down[Key.SPRINT.ordinal()] = input.isSprint();
         return down;
     }
 
