@@ -4,6 +4,7 @@ import com.acclash.vmcomputers.commands.computersubcommands.Audio;
 import com.acclash.vmcomputers.commands.computersubcommands.Create;
 import com.acclash.vmcomputers.utils.Permissions;
 import com.acclash.vmcomputers.commands.computersubcommands.Debug;
+import com.acclash.vmcomputers.commands.computersubcommands.Disk;
 import com.acclash.vmcomputers.commands.computersubcommands.Iso;
 import com.acclash.vmcomputers.commands.computersubcommands.Keys;
 import com.acclash.vmcomputers.commands.computersubcommands.Order;
@@ -33,6 +34,7 @@ public class ComputerCM implements TabExecutor {
         subCommands.add(new Create());
         subCommands.add(new Remove());
         subCommands.add(new Iso());
+        subCommands.add(new Disk());
         subCommands.add(new Type());
         subCommands.add(new Keys());
         subCommands.add(new TestDisplay());

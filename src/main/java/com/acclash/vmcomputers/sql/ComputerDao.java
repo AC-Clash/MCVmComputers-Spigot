@@ -117,6 +117,10 @@ public final class ComputerDao {
             if (!hasColumn(connection, "computers", "owner")) {
                 statement.executeUpdate("ALTER TABLE computers ADD COLUMN owner TEXT");
             }
+            // Null on every existing machine, which is what keeps them on their own disks.
+            if (!hasColumn(connection, "computers", "disk")) {
+                statement.executeUpdate("ALTER TABLE computers ADD COLUMN disk TEXT");
+            }
         }
     }
 
@@ -174,6 +178,7 @@ public final class ComputerDao {
                     rs.getString("type"),
                     Computer.State.valueOf(rs.getString("state")));
             computer.setIsoName(rs.getString("iso"));
+            computer.setDiskImage(rs.getString("disk"));
             String owner = rs.getString("owner");
             if (owner != null) {
                 try {
@@ -224,6 +229,7 @@ public final class ComputerDao {
                         computer.monitorSize(), computer.type(), computer.state());
                 saved.setOwner(computer.owner());
                 saved.setIsoName(computer.isoName());
+                saved.setDiskImage(computer.diskImage());
                 saved.setArchitecture(computer.architecture());
                 return saved;
             }
@@ -439,6 +445,15 @@ public final class ComputerDao {
         try (PreparedStatement statement = database.getSQLConnection()
                 .prepareStatement("UPDATE computers SET iso = ? WHERE id = ?")) {
             statement.setString(1, isoName);
+            statement.setInt(2, id);
+            statement.executeUpdate();
+        }
+    }
+
+    public void updateDisk(int id, String diskImage) throws SQLException {
+        try (PreparedStatement statement = database.getSQLConnection()
+                .prepareStatement("UPDATE computers SET disk = ? WHERE id = ?")) {
+            statement.setString(1, diskImage);
             statement.setInt(2, id);
             statement.executeUpdate();
         }

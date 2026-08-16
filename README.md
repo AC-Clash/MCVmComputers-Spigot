@@ -227,6 +227,7 @@ plugins/vm_computers/
 ├── config.yml
 ├── hardware.db          // SQLite: computers, panels, fitted parts
 ├── isos/                // put installer and live images here
+├── disks/               // put existing disk images here, to boot systems already installed
 ├── hdds/                // one qcow2 per computer, plus ARM firmware state
 └── shared/              // files handed to guests too old to have networking
 ```
@@ -234,12 +235,23 @@ plugins/vm_computers/
 Drop `.iso` files into `isos/` and they appear in game — no restart needed. `/vmcomputers iso` lists
 what it can see.
 
+`disks/` is the way to run a guest that is painful to install through a wall of maps. Install it once
+in a normal QEMU window — Windows 95 is the obvious case — and copy the image in. `qcow2`, `img`,
+`raw`, `vmdk`, `vdi`, `vhd`, `vhdx` and `qed` are all read. `/vmcomputers disk <id> <file>` points a
+computer at one, and from then on that machine boots the supplied image instead of its own.
+
+**Images in `disks/` are yours, and the plugin only ever opens them.** It never creates, resizes or
+deletes one, and `/vmcomputers remove` does not touch them. But the guest writes straight into the
+file, so anything the guest does to that disk is permanent — keep a copy of anything you cannot
+rebuild. Attaching one is admin-only for this reason, where inserting an ISO is not: a CD cannot be
+harmed by the guest that boots it.
+
 This lives outside the plugin's own data folder on purpose: disk images are large and long-lived, so
 reinstalling the plugin must not delete anyone's virtual machines.
 
-**Back up `hardware.db` and `hdds/` together.** The database knows where each computer is and what is
-fitted; the disk images are the guests' actual installed systems. One without the other is not a
-working backup.
+**Back up `hardware.db` and `hdds/` together**, plus `disks/` if you use it. The database knows where
+each computer is and what is fitted; the disk images are the guests' actual installed systems. One
+without the other is not a working backup.
 
 ---
 
@@ -252,6 +264,7 @@ All are subcommands of `/vmcomputers`, aliased `/vmc` and `/computer`.
 | `/vmcomputers create <SMALL\|MEDIUM\|LARGE\|XLARGE> [x86_64\|aarch64]` | Creates a computer outright, skipping the shop. |
 | `/vmcomputers remove [id]` | Removes a computer and its disk. |
 | `/vmcomputers iso [<id> <file\|none>]` | Lists available ISOs, or inserts and ejects one. |
+| `/vmcomputers disk [<id> <file\|none>]` | Lists supplied disk images, or boots a computer from one. Admin-only. |
 | `/vmcomputers type <text>` | Types into the guest. Supports `@RETURN @TAB @ESC @UP`..`@F12`. |
 | `/vmcomputers keys [game\|menu\|bind <input> <key>\|reset]` | Rebinds the chair's keys. |
 | `/vmcomputers audio [id]` | Private link to the guest's sound. |
@@ -272,7 +285,7 @@ Three tiers, split by what a player can lose rather than by what they can touch.
 |---|---|---|
 | `vmcomputers.use` | everyone | Sit at computers, power them on and off, click and type. Covers `iso`, `type`, `keys`, `audio`. |
 | `vmcomputers.build` | everyone | Place cases, assemble computers, order parts. Covers `order`, `phone`, `remove`. |
-| `vmcomputers.admin` | op | Create and remove any computer, and modify machines owned by others. Covers `create`, `parts`, `testdisplay`, `debug`, and implies the other two. |
+| `vmcomputers.admin` | op | Create and remove any computer, and modify machines owned by others. Covers `create`, `disk`, `parts`, `testdisplay`, `debug`, and implies the other two. |
 
 Anyone may *use* a machine. Only its owner may take it apart or change what is in it, because that
 is what destroys someone else's work.

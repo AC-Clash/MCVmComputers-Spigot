@@ -103,6 +103,49 @@ public final class VmSpec {
         }
     }
 
+    /**
+     * One attached disk: where it is, and what format QEMU should read it as.
+     *
+     * <p>The format travels with the path because not every disk is one this plugin made. A machine
+     * can boot an image an admin installed elsewhere and copied in, and those arrive as raw,
+     * {@code vmdk} or {@code vdi} at least as often as qcow2. Assuming qcow2 for those does not
+     * fail cleanly -- QEMU reads the guest's boot sector as a qcow2 header and reports a corrupt
+     * image, which looks nothing like "wrong format".
+     */
+    public static final class DiskImage {
+        private final Path path;
+        private final String format;
+
+        public DiskImage(Path path, String format) {
+            if (path == null) {
+                throw new IllegalArgumentException("disk path is required");
+            }
+            if (format == null || format.isEmpty()) {
+                throw new IllegalArgumentException("disk format is required for " + path);
+            }
+            this.path = path;
+            this.format = format;
+        }
+
+        /** A disk in the format this plugin creates. */
+        public static DiskImage qcow2(Path path) {
+            return new DiskImage(path, "qcow2");
+        }
+
+        public Path path() {
+            return path;
+        }
+
+        public String format() {
+            return format;
+        }
+
+        @Override
+        public String toString() {
+            return path.getFileName() + " (" + format + ")";
+        }
+    }
+
     /** How disks attach to the guest. */
     public enum DiskInterface {
         /** AHCI/SATA on q35, plain IDE on the {@code pc} machine. Universally supported. */
@@ -130,7 +173,7 @@ public final class VmSpec {
     private final Vga vga;
     private final int width;
     private final int height;
-    private final List<Path> disks;
+    private final List<DiskImage> disks;
     private final DiskInterface diskInterface;
     private final Path cdrom;
     private final String bootOrder;
@@ -153,7 +196,7 @@ public final class VmSpec {
         this.vga = b.vga;
         this.width = b.width;
         this.height = b.height;
-        this.disks = Collections.unmodifiableList(new ArrayList<Path>(b.disks));
+        this.disks = Collections.unmodifiableList(new ArrayList<DiskImage>(b.disks));
         this.diskInterface = b.diskInterface;
         this.cdrom = b.cdrom;
         this.bootOrder = b.bootOrder;
@@ -303,18 +346,19 @@ public final class VmSpec {
             // the note on the cdrom below: without those the firmware picks for itself, and after
             // a while it picks the UEFI shell.
             int unit = 0;
-            for (Path disk : disks) {
+            for (DiskImage disk : disks) {
                 a.add("-drive");
-                a.add("if=none,id=hd" + unit + ",format=qcow2,file=" + disk.toAbsolutePath());
+                a.add("if=none,id=hd" + unit + ",format=" + disk.format()
+                        + ",file=" + disk.path().toAbsolutePath());
                 a.add("-device");
                 a.add("virtio-blk-pci,drive=hd" + unit + ",bootindex=" + (unit + 1));
                 unit++;
             }
         } else {
-            for (Path disk : disks) {
+            for (DiskImage disk : disks) {
                 a.add("-drive");
-                a.add("file=" + disk.toAbsolutePath() + ",format=qcow2,if="
-                        + diskInterface.value());
+                a.add("file=" + disk.path().toAbsolutePath() + ",format=" + disk.format()
+                        + ",if=" + diskInterface.value());
             }
         }
 
@@ -419,7 +463,7 @@ public final class VmSpec {
         private Vga vga = Vga.STD;
         private int width = 640;
         private int height = 480;
-        private final List<Path> disks = new ArrayList<Path>();
+        private final List<DiskImage> disks = new ArrayList<DiskImage>();
         private DiskInterface diskInterface = DiskInterface.IDE;
         private Path cdrom;
         private String bootOrder = "dc";
@@ -487,8 +531,8 @@ public final class VmSpec {
             return this;
         }
 
-        public Builder addDisk(Path qcow2) {
-            this.disks.add(qcow2);
+        public Builder addDisk(DiskImage disk) {
+            this.disks.add(disk);
             return this;
         }
 

@@ -127,12 +127,30 @@ public final class VmService {
                 // No hard drive fitted, no disk attached. The bay is the only optional one, and
                 // this is what makes it mean anything: a machine without one boots live media and
                 // forgets everything when it stops, exactly as the bay's description promises.
-                java.nio.file.Path disk =
-                        computer.installedIn(ComponentSlot.HARD_DRIVE) != null
-                                ? VmPaths.diskFor(computer.id())
-                                : null;
-                if (disk == null) {
+                VmSpec.DiskImage disk = null;
+                // Created on demand for the plugin's own images, never for an admin's.
+                boolean createDisk = true;
+                if (computer.installedIn(ComponentSlot.HARD_DRIVE) == null) {
                     post(feedback, "No hard drive fitted: nothing will survive a power cycle.");
+                } else if (computer.diskImage() != null) {
+                    // An image the admin installed elsewhere and copied in. The bay still has to be
+                    // filled -- the drive is where the fiction says a disk lives, and letting an
+                    // imported one bypass it would make the one optional bay meaningless.
+                    java.nio.file.Path imported = VmPaths.resolveDisk(computer.diskImage());
+                    String format = VmPaths.diskFormat(computer.diskImage());
+                    if (imported == null || format == null) {
+                        // Thrown rather than returned so it lands in the catch below, which is what
+                        // sets ERROR and logs. Returning here would leave the machine sitting in
+                        // BOOTING with nothing coming.
+                        throw new IOException("disk image '" + computer.diskImage()
+                                + "' is missing or not a format QEMU reads. Refusing to boot a"
+                                + " blank disk in its place -- run /vmcomputers disk to see what is"
+                                + " available.");
+                    }
+                    disk = new VmSpec.DiskImage(imported, format);
+                    createDisk = false;
+                } else {
+                    disk = VmSpec.DiskImage.qcow2(VmPaths.diskFor(computer.id()));
                 }
                 java.nio.file.Path iso = VmPaths.resolveIso(computer.isoName());
                 if (computer.isoName() != null && iso == null) {
@@ -154,7 +172,7 @@ public final class VmService {
                 boolean networking = plugin.getConfig().getBoolean("guest.networking", true);
                 QemuVirtualMachine machine = QemuVirtualMachine.forComputer(
                         computer.id(), binary, computer.monitorSize(),
-                        disk, iso, memoryMb, cores, networking,
+                        disk, createDisk, iso, memoryMb, cores, networking,
                         line -> plugin.getLogger().info(line));
 
                 MapColorLut palette = plugin.getMapPalette();

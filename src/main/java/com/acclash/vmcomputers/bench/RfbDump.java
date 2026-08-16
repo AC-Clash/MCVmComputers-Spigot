@@ -88,7 +88,7 @@ public final class RfbDump {
         if (opts.containsKey("disk")) {
             Path disk = Paths.get(opts.get("disk"));
             qemu.createDisk(disk, 8L * 1024 * 1024 * 1024);
-            builder.addDisk(disk);
+            builder.addDisk(VmSpec.DiskImage.qcow2(disk));
         }
         if (opts.containsKey("iso")) {
             Path iso = Paths.get(opts.get("iso"));

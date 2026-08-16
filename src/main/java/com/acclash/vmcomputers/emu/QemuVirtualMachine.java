@@ -59,9 +59,19 @@ public final class QemuVirtualMachine implements VirtualMachine {
         });
     }
 
-    /** Builds a spec sized for a monitor and creates the VM. The disk is created if missing. */
+    /**
+     * Builds a spec sized for a monitor and creates the VM.
+     *
+     * @param disk        the disk to attach, or null for a machine with no drive
+     * @param createDisk  whether to create {@code disk} at the standard size if it does not exist.
+     *                    True for the plugin's own images, false for one an admin supplied: an
+     *                    image someone else made must never be created, resized or reformatted
+     *                    here, and a missing one is a mistake to report rather than paper over
+     *                    with a blank disk that silently loses whatever they meant to boot.
+     */
     public static QemuVirtualMachine forComputer(int computerId, QemuBinary qemu, MonitorSize monitor,
-                                                 Path disk, Path iso, int memoryMb, int cpus,
+                                                 VmSpec.DiskImage disk, boolean createDisk, Path iso,
+                                                 int memoryMb, int cpus,
                                                  boolean networking, Consumer<String> logger)
             throws IOException {
         VmSpec.Builder builder = VmSpec.builder("vmcomputer-" + computerId)
@@ -99,7 +109,9 @@ public final class QemuVirtualMachine implements VirtualMachine {
         }
 
         if (disk != null) {
-            qemu.createDisk(disk, 16L * 1024 * 1024 * 1024);
+            if (createDisk) {
+                qemu.createDisk(disk.path(), 16L * 1024 * 1024 * 1024);
+            }
             builder.addDisk(disk);
         }
         if (iso != null) {

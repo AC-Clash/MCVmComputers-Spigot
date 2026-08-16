@@ -44,6 +44,7 @@ public final class Computer {
     private final String type;
     private volatile State state;
     private volatile String isoName;
+    private volatile String diskImage;
     private volatile VmSpec.Architecture architecture = VmSpec.Architecture.X86_64;
     /**
      * Who built it, or null for a machine from before computers had owners.
@@ -185,6 +186,21 @@ public final class Computer {
 
     public void setIsoName(String isoName) {
         this.isoName = isoName;
+    }
+
+    /**
+     * File name of an admin-supplied disk image this computer boots from, or null for its own.
+     *
+     * <p>Set, this replaces the machine's automatic disk entirely rather than adding a second one.
+     * The alternative -- both attached -- means the guest sees two drives and boots whichever the
+     * firmware prefers, which is not a thing anyone asked for.
+     */
+    public String diskImage() {
+        return diskImage;
+    }
+
+    public void setDiskImage(String diskImage) {
+        this.diskImage = diskImage;
     }
 
     /** Who may take this apart. Null on machines built before ownership was recorded. */

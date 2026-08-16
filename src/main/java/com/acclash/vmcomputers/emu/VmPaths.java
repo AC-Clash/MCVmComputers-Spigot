@@ -33,6 +33,23 @@ public final class VmPaths {
         return root().resolve("isos");
     }
 
+    /**
+     * Disk images the admin supplied, as opposed to the ones this plugin creates.
+     *
+     * <p>Separate from {@code hdds} on purpose. Everything in {@code hdds} is owned by the plugin,
+     * named after a computer id and deleted with that computer; everything here belongs to the
+     * admin and is only ever opened, never created, resized or removed. Keeping them in one folder
+     * would make "delete the computer's disk" ambiguous in exactly the case where being wrong is
+     * unrecoverable.
+     *
+     * <p>The point is to install the awkward guests once, by hand, in whatever tool is comfortable,
+     * and copy the result in. Windows 95 is far easier to install in a normal QEMU window than
+     * through a wall of maps.
+     */
+    public static Path diskDirectory() {
+        return root().resolve("disks");
+    }
+
     /** One qcow2 per computer, named by its id. */
     /**
      * Folder handed to guests as a read-only drive.
@@ -75,24 +92,61 @@ public final class VmPaths {
     public static void ensureDirectories() throws IOException {
         java.nio.file.Files.createDirectories(sharedDirectory());
         Files.createDirectories(isoDirectory());
+        Files.createDirectories(diskDirectory());
         Files.createDirectories(root().resolve("hdds"));
     }
 
+    /**
+     * Disk image extensions QEMU can open, mapped to the format name it wants told.
+     *
+     * <p>The format is always passed explicitly rather than left to QEMU's probing. Probing a raw
+     * image means the guest's own first sector decides how the host reads the file, which QEMU
+     * warns about for good reason; naming the format closes that off. It also turns "this file is
+     * not what you think" into an error at boot rather than a guest that reads garbage.
+     */
+    private static final String[][] DISK_FORMATS = {
+        { ".qcow2", "qcow2" },
+        { ".qcow", "qcow" },
+        { ".img", "raw" },
+        { ".raw", "raw" },
+        { ".vmdk", "vmdk" },
+        { ".vdi", "vdi" },
+        { ".vhdx", "vhdx" },
+        { ".vhd", "vpc" },
+        { ".vpc", "vpc" },
+        { ".qed", "qed" },
+    };
+
     /** ISO file names available to insert, sorted. */
     public static List<String> availableIsos() {
-        List<String> names = new ArrayList<String>();
-        File directory = isoDirectory().toFile();
-        File[] files = directory.listFiles();
-        if (files == null) {
-            return names;
+        return namesIn(isoDirectory(), ".iso");
+    }
+
+    /** Admin-supplied disk image names available to attach, sorted. */
+    public static List<String> availableDisks() {
+        List<String> extensions = new ArrayList<String>();
+        for (String[] entry : DISK_FORMATS) {
+            extensions.add(entry[0]);
         }
-        for (File file : files) {
-            if (file.isFile() && file.getName().toLowerCase(Locale.ROOT).endsWith(".iso")) {
-                names.add(file.getName());
+        return namesIn(diskDirectory(), extensions.toArray(new String[0]));
+    }
+
+    /**
+     * The QEMU format name for a disk image, taken from its extension.
+     *
+     * @return the format, or null if the extension is not one QEMU reads
+     */
+    public static String diskFormat(String name) {
+        if (name == null) {
+            return null;
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        for (String[] entry : DISK_FORMATS) {
+            if (lower.endsWith(entry[0])) {
+                return entry[1];
             }
         }
-        Collections.sort(names);
-        return names;
+        return null;
     }
 
     /**
@@ -101,13 +155,55 @@ public final class VmPaths {
      * @return the path, or null if it does not exist or escapes the ISO directory
      */
     public static Path resolveIso(String name) {
+        return resolveWithin(isoDirectory(), name);
+    }
+
+    /**
+     * Resolves an admin-supplied disk image name to a readable file.
+     *
+     * @return the path, or null if it does not exist or escapes the disk directory
+     */
+    public static Path resolveDisk(String name) {
+        return resolveWithin(diskDirectory(), name);
+    }
+
+    private static List<String> namesIn(Path directory, String... extensions) {
+        List<String> names = new ArrayList<String>();
+        File[] files = directory.toFile().listFiles();
+        if (files == null) {
+            return names;
+        }
+        for (File file : files) {
+            if (!file.isFile()) {
+                continue;
+            }
+            String lower = file.getName().toLowerCase(Locale.ROOT);
+            for (String extension : extensions) {
+                if (lower.endsWith(extension)) {
+                    names.add(file.getName());
+                    break;
+                }
+            }
+        }
+        Collections.sort(names);
+        return names;
+    }
+
+    /**
+     * Resolves a bare file name inside one of the plugin's folders.
+     *
+     * <p>The containment check is the whole reason this is not just {@code resolve}. These names
+     * arrive from chat, so a name like {@code ../../server.properties} would otherwise turn a
+     * command any player can run into a way to read -- or with a disk, write -- arbitrary files on
+     * the host.
+     */
+    private static Path resolveWithin(Path directory, String name) {
         if (name == null || name.isEmpty()) {
             return null;
         }
-        Path directory = isoDirectory().toAbsolutePath().normalize();
-        Path candidate = directory.resolve(name).normalize();
-        // A name like "../../etc/passwd" must not reach outside the ISO folder.
-        if (!candidate.startsWith(directory) || !Files.isReadable(candidate)) {
+        Path base = directory.toAbsolutePath().normalize();
+        Path candidate = base.resolve(name).normalize();
+        if (!candidate.startsWith(base) || !Files.isReadable(candidate)) {
             return null;
         }
         return candidate;
