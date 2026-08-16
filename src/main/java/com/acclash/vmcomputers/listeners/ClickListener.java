@@ -4,6 +4,8 @@ import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.computer.Computer;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.emu.VmService;
+import com.acclash.vmcomputers.gui.CaseMenu;
+import com.acclash.vmcomputers.parts.ComponentSlot;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -59,7 +61,13 @@ public class ClickListener implements Listener {
                 seatPlayer(player, clicked.getLocation());
                 e.setCancelled(true);
             } else if (isPowerBlock(computer, clicked)) {
-                togglePower(player, computer);
+                // Bare click powers the machine, sneak-click opens it up. The common action stays
+                // one click; configuring is behind a modifier.
+                if (player.isSneaking()) {
+                    new CaseMenu(player, computer).open();
+                } else {
+                    togglePower(player, computer);
+                }
                 e.setCancelled(true);
             }
         }
@@ -70,6 +78,18 @@ public class ClickListener implements Listener {
         if (screen == null) {
             player.sendMessage(ChatColor.RED + "Computer #" + computer.id()
                     + " has no screen attached; rebuild it.");
+            return;
+        }
+
+        if (!VmService.isRunning(computer.id()) && !computer.isAssembled()) {
+            StringBuilder missing = new StringBuilder();
+            for (ComponentSlot slot : computer.missingComponents()) {
+                missing.append(missing.length() == 0 ? "" : ", ").append(slot.label());
+            }
+            player.sendMessage(ChatColor.RED + "Computer #" + computer.id()
+                    + " still needs: " + missing + ".");
+            player.sendMessage(ChatColor.GRAY
+                    + "Sneak and right-click the tower to open it up and fit parts.");
             return;
         }
 

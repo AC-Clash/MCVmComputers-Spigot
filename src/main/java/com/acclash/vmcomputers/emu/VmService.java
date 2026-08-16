@@ -2,6 +2,8 @@ package com.acclash.vmcomputers.emu;
 
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.parts.ComponentSlot;
+import com.acclash.vmcomputers.parts.ComponentType;
 import com.acclash.vmcomputers.display.ImageScaler;
 import com.acclash.vmcomputers.display.MapColorLut;
 import com.acclash.vmcomputers.display.MonitorScreen;
@@ -81,19 +83,34 @@ public final class VmService {
                 // Every computer gets its own disk so anything installed survives a power cycle.
                 // It is created on first boot rather than at build time, so a computer that is only
                 // ever used with live media costs no disk space.
-                java.nio.file.Path disk = VmPaths.diskFor(computer.id());
+                // No hard drive fitted, no disk attached. The bay is the only optional one, and
+                // this is what makes it mean anything: a machine without one boots live media and
+                // forgets everything when it stops, exactly as the bay's description promises.
+                java.nio.file.Path disk =
+                        computer.installedIn(ComponentSlot.HARD_DRIVE) != null
+                                ? VmPaths.diskFor(computer.id())
+                                : null;
+                if (disk == null) {
+                    post(feedback, "No hard drive fitted: nothing will survive a power cycle.");
+                }
                 java.nio.file.Path iso = VmPaths.resolveIso(computer.isoName());
                 if (computer.isoName() != null && iso == null) {
                     post(feedback, "ISO '" + computer.isoName() + "' is missing; booting without it.");
                 }
 
-                // TODO: choose this when the computer is built, alongside size and architecture.
-                // Until that exists it is one number for every machine, and it has to be the one
-                // that boots a modern desktop: an Ubuntu live session unpacks itself into a
-                // RAM-backed overlay and does not get anywhere on 2 GB.
+                // Memory and cores now come from the parts fitted in the case, so a player who
+                // buys a 64 MB stick gets a machine that behaves like it has 64 MB. That is the
+                // point of the components, and it means a modern desktop needs the 4 GB stick --
+                // an Ubuntu live session unpacks itself into a RAM-backed overlay and does not
+                // get anywhere on 2 GB.
+                int memoryMb = memoryFor(computer);
+                int cores = coresFor(computer);
+                plugin.getLogger().info("Computer #" + computer.id() + " booting with "
+                        + memoryMb + " MB and " + cores + " core(s).");
+
                 QemuVirtualMachine machine = QemuVirtualMachine.forComputer(
                         computer.id(), binary, computer.monitorSize(),
-                        disk, iso, 4096, line -> plugin.getLogger().info(line));
+                        disk, iso, memoryMb, cores, line -> plugin.getLogger().info(line));
 
                 MapColorLut palette = plugin.getMapPalette();
                 byte black = palette.match(0, 0, 0);
@@ -127,6 +144,29 @@ public final class VmService {
             }
             post(feedback, "Computer #" + computer.id() + " powered off.");
         });
+    }
+
+    /**
+     * Guest memory from the fitted RAM stick.
+     *
+     * <p>Falls back to 2048 only if a machine somehow starts with no RAM; power-on requires the
+     * bay to be filled, so in practice this always reads a real component.
+     */
+    private static int memoryFor(Computer computer) {
+        ComponentType ram = computer.installedIn(ComponentSlot.RAM);
+        return ram != null && ram.rating() > 0 ? ram.rating() : 2048;
+    }
+
+    /**
+     * Guest cores, as the host's core count divided by the CPU tier -- the mod's "divided by N"
+     * naming, where a cheaper chip is a bigger divisor. Never fewer than one, and never more than
+     * the host actually has.
+     */
+    private static int coresFor(Computer computer) {
+        ComponentType cpu = computer.installedIn(ComponentSlot.CPU);
+        int hostCores = Runtime.getRuntime().availableProcessors();
+        int divisor = cpu != null && cpu.rating() > 0 ? cpu.rating() : 4;
+        return Math.max(1, Math.min(hostCores, hostCores / divisor));
     }
 
     private static void post(Consumer<String> feedback, String message) {

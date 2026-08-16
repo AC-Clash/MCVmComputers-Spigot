@@ -65,6 +65,7 @@ public class Remove extends ComputerSubCommand {
 
         try {
             VMComputers.getPlugin().getComputerDao().deletePanels(computer.id());
+            VMComputers.getPlugin().getComputerDao().deleteComponents(computer.id());
             VMComputers.getPlugin().getComputerDao().delete(computer.id());
         } catch (SQLException e) {
             player.sendMessage(ChatColor.RED + "Could not delete the computer; see the console.");

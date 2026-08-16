@@ -3,11 +3,17 @@ package com.acclash.vmcomputers.commands.computersubcommands;
 import com.acclash.vmcomputers.VMComputers;
 import com.acclash.vmcomputers.commands.ComputerSubCommand;
 import com.acclash.vmcomputers.computer.Computer;
+import com.acclash.vmcomputers.computer.ComputerBuilder;
 import com.acclash.vmcomputers.computer.ComputerLayout;
 import com.acclash.vmcomputers.display.MonitorSize;
 import com.acclash.vmcomputers.display.MonitorScreen;
 import com.acclash.vmcomputers.emu.QemuBinary;
 import com.acclash.vmcomputers.emu.VmSpec;
+import com.acclash.vmcomputers.parts.ComponentSlot;
+import com.acclash.vmcomputers.parts.ComponentType;
+import com.acclash.vmcomputers.parts.Furniture;
+import com.acclash.vmcomputers.parts.PartModel;
+import com.acclash.vmcomputers.parts.PartRenderer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -138,7 +144,22 @@ public class Create extends ComputerSubCommand {
             return;
         }
 
-        List<Integer> mapIds = build(world, saved);
+        // A computer built by this command arrives assembled: it builds the whole machine, desk
+        // and all, so handing back an empty case that cannot boot would be a strange result. The
+        // ordering route is where parts get fitted one at a time.
+        for (java.util.Map.Entry<ComponentSlot, ComponentType> entry
+                : ComponentType.defaultLoadout(saved.monitorSize()).entrySet()) {
+            saved.install(entry.getKey(), entry.getValue());
+            try {
+                VMComputers.getPlugin().getComputerDao()
+                        .saveComponent(saved.id(), entry.getKey().name(), entry.getValue().id());
+            } catch (SQLException e) {
+                VMComputers.getPlugin().getLogger()
+                        .severe("Could not save components: " + e.getMessage());
+            }
+        }
+
+        List<Integer> mapIds = ComputerBuilder.build(world, saved);
         VMComputers.getPlugin().getRegistry().add(saved);
 
         try {
@@ -170,100 +191,6 @@ public class Create extends ComputerSubCommand {
                     + (int) size.viewingDistance() + " blocks; walk closer for finer pointer control.");
         } else {
             player.sendMessage(ChatColor.GRAY + "Right-click the chair to sit, the tower to power on.");
-        }
-    }
-
-    private List<Integer> build(World world, Computer computer) {
-        ComputerLayout layout = computer.layout();
-        NamespacedKey monitorKey = new NamespacedKey(VMComputers.getPlugin(), "isMonitor");
-        NamespacedKey chairKey = new NamespacedKey(VMComputers.getPlugin(), "isEChair");
-        NamespacedKey idKey = new NamespacedKey(VMComputers.getPlugin(), "computerId");
-
-        // Backing first: item frames need something solid behind them.
-        // applyPhysics=false throughout: physics updates would pop attached blocks such as the
-        // button and pressure plate off as dropped items.
-        for (ComputerLayout.Offset offset : layout.backingBlocks()) {
-            computer.locationOf(world, offset).getBlock().setType(Material.SMOOTH_STONE, false);
-        }
-        for (ComputerLayout.Offset offset : layout.deskBlocks()) {
-            computer.locationOf(world, offset).getBlock().setType(Material.SMOOTH_STONE_SLAB, false);
-        }
-
-        // One map per panel, row-major from the top-left so tile order matches the framebuffer.
-        List<Integer> mapIds = new ArrayList<Integer>();
-        BlockFace screenFacing = computer.facing().getOppositeFace();
-        for (ComputerLayout.Offset offset : layout.screenPanels()) {
-            Location location = computer.locationOf(world, offset);
-            location.getBlock().setType(Material.AIR, false);
-
-            // Renderers are installed by MonitorScreen, which also reattaches them after a
-            // restart. A fresh map is entirely colour 0, which is transparent rather than black,
-            // so until that happens the frames would show the wall behind them.
-            MapView view = Bukkit.createMap(world);
-            mapIds.add(Integer.valueOf(view.getId()));
-
-            ItemStack screen = new ItemStack(Material.FILLED_MAP);
-            MapMeta meta = (MapMeta) screen.getItemMeta();
-            meta.setMapView(view);
-            screen.setItemMeta(meta);
-
-            world.spawn(location, ItemFrame.class, frame -> {
-                frame.setFacingDirection(screenFacing, true);
-                frame.setItem(screen);
-                frame.setVisible(false);
-                frame.setFixed(true);
-                frame.getPersistentDataContainer().set(monitorKey, PersistentDataType.STRING, "true");
-                frame.getPersistentDataContainer().set(idKey, PersistentDataType.INTEGER, computer.id());
-            });
-        }
-
-        if (layout.chair() != null) {
-            Block chairBlock = computer.locationOf(world, layout.chair()).getBlock();
-            chairBlock.setType(Material.SPRUCE_STAIRS, false);
-            Stairs stairs = (Stairs) chairBlock.getBlockData();
-            stairs.setFacing(computer.facing().getOppositeFace());
-            chairBlock.setBlockData(stairs, false);
-
-            Location seat = chairBlock.getLocation().add(0.5, 0, 0.5);
-            world.spawn(seat, org.bukkit.entity.Chicken.class, chicken -> {
-                chicken.getPersistentDataContainer().set(chairKey, PersistentDataType.STRING, "true");
-                chicken.getPersistentDataContainer().set(idKey, PersistentDataType.INTEGER, computer.id());
-                chicken.setAI(false);
-                chicken.setInvisible(true);
-                chicken.setInvulnerable(true);
-                chicken.setSilent(true);
-                chicken.setRotation(yawOf(computer.facing()), 0f);
-            });
-        }
-
-        if (layout.tower() != null) {
-            computer.locationOf(world, layout.tower()).getBlock().setType(Material.SANDSTONE_WALL, false);
-        }
-        if (layout.control() != null) {
-            computer.locationOf(world, layout.control()).getBlock().setType(Material.SANDSTONE_WALL, false);
-        }
-        if (layout.keyboard() != null) {
-            computer.locationOf(world, layout.keyboard()).getBlock()
-                    .setType(Material.HEAVY_WEIGHTED_PRESSURE_PLATE, false);
-        }
-        if (layout.mouse() != null) {
-            Block mouse = computer.locationOf(world, layout.mouse()).getBlock();
-            mouse.setBlockData(Material.STONE_BUTTON.createBlockData("[face=floor]"), false);
-        }
-
-        return mapIds;
-    }
-
-    private static float yawOf(BlockFace facing) {
-        switch (facing) {
-            case SOUTH:
-                return 0f;
-            case WEST:
-                return 90f;
-            case NORTH:
-                return 180f;
-            default:
-                return -90f;
         }
     }
 

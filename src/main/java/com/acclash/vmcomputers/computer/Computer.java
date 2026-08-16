@@ -2,12 +2,18 @@ package com.acclash.vmcomputers.computer;
 
 import com.acclash.vmcomputers.display.MonitorSize;
 import com.acclash.vmcomputers.emu.VmSpec;
+import com.acclash.vmcomputers.parts.ComponentSlot;
+import com.acclash.vmcomputers.parts.ComponentType;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * One computer placed in the world.
@@ -60,6 +66,52 @@ public final class Computer {
     public static boolean isCardinal(BlockFace face) {
         return face == BlockFace.NORTH || face == BlockFace.EAST
                 || face == BlockFace.SOUTH || face == BlockFace.WEST;
+    }
+
+    // ---- installed components -------------------------------------------
+
+    /**
+     * What is fitted in each bay. Held in memory and mirrored to {@code computer_components};
+     * concurrent because the case menu writes on the server thread while boot checks read from
+     * the async task that starts QEMU.
+     */
+    private final Map<ComponentSlot, ComponentType> installed =
+            new ConcurrentHashMap<ComponentSlot, ComponentType>();
+
+    public ComponentType installedIn(ComponentSlot slot) {
+        return installed.get(slot);
+    }
+
+    /** Fits a component, or empties the bay when {@code type} is null. */
+    public void install(ComponentSlot slot, ComponentType type) {
+        if (type == null) {
+            installed.remove(slot);
+        } else {
+            installed.put(slot, type);
+        }
+    }
+
+    public Map<ComponentSlot, ComponentType> installedComponents() {
+        return Collections.unmodifiableMap(new EnumMap<ComponentSlot, ComponentType>(installed));
+    }
+
+    /**
+     * Bays that must be filled before the machine will start, and are not.
+     *
+     * <p>Empty means it is ready to boot.
+     */
+    public List<ComponentSlot> missingComponents() {
+        List<ComponentSlot> missing = new ArrayList<ComponentSlot>();
+        for (ComponentSlot slot : ComponentSlot.values()) {
+            if (slot.required() && !installed.containsKey(slot)) {
+                missing.add(slot);
+            }
+        }
+        return missing;
+    }
+
+    public boolean isAssembled() {
+        return missingComponents().isEmpty();
     }
 
     public int id() {
