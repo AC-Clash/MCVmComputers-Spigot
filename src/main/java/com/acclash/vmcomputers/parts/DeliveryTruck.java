@@ -101,28 +101,34 @@ public final class DeliveryTruck {
     /** How far the hover drifts up and down while it holds station over the pad. */
     private static final double HOVER_BOB = 0.12;
 
-    // The schedule, in ticks from dispatch. Roughly twelve seconds end to end.
+    // The schedule, in ticks from dispatch. Roughly seventeen seconds end to end.
     //
     // It flies like a helicopter rather than a plane: in level, stop over the pad, hold, then
     // straight down. Leaving is the same in reverse -- straight up off the ground first, and only
     // then away. Nothing about that is more expensive than the diagonal it replaced; it is the
     // same two numbers per tick, eased differently.
+    //
+    // The two vertical legs are deliberately the longest things here, seventy ticks each for nine
+    // blocks. Coming straight down is the part worth watching, and at the speed a horizontal leg
+    // can get away with it looks dropped rather than flown. Nothing waits on them either -- the
+    // handover is on its own count -- so their only cost is how long the player stands there,
+    // which is the point.
     private static final int INBOUND_END = 30;
     private static final int GEAR_DOWN = 26;
-    private static final int HOVER_END = 42;
-    private static final int DESCENT_END = 68;
-    private static final int STEVE_OUT = 76;
-    private static final int AT_REAR = 96;
-    private static final int BOX_OUT = 100;
-    private static final int AT_PLAYER = 130;
-    private static final int HANDOVER = 134;
-    private static final int BACK_AT_CAB = 164;
-    private static final int FANS_ON = 164;
-    private static final int STEVE_IN = 168;
-    private static final int LIFT_START = 172;
-    private static final int GEAR_UP = 182;
-    private static final int LIFT_END = 200;
-    private static final int CRUISE_END = 240;
+    private static final int HOVER_END = 48;
+    private static final int DESCENT_END = 118;
+    private static final int STEVE_OUT = 126;
+    private static final int AT_REAR = 146;
+    private static final int BOX_OUT = 150;
+    private static final int AT_PLAYER = 180;
+    private static final int HANDOVER = 184;
+    private static final int BACK_AT_CAB = 214;
+    private static final int FANS_ON = 214;
+    private static final int STEVE_IN = 218;
+    private static final int LIFT_START = 222;
+    private static final int GEAR_UP = 240;
+    private static final int LIFT_END = 292;
+    private static final int CRUISE_END = 332;
 
     /** How long the gear takes to swing, in ticks. The client tweens the whole thing. */
     private static final int GEAR_TIME = 14;
@@ -433,8 +439,10 @@ public final class DeliveryTruck {
             altitude = hoverTop;
         } else if (tick <= HOVER_END) {
             index = road.parkIndex();
-            // Not quite still. A dead-static hover looks like the animation has hung.
-            altitude = hoverTop + Math.sin(tick * 0.45) * HOVER_BOB;
+            // Not quite still. A dead-static hover looks like the animation has hung. Slow --
+            // about a second and a quarter a cycle -- so it reads as holding station rather than
+            // as a wobble.
+            altitude = hoverTop + Math.sin(tick * 0.25) * HOVER_BOB;
         } else {
             double t = (tick - HOVER_END) / (double) (DESCENT_END - HOVER_END);
             index = road.parkIndex();
