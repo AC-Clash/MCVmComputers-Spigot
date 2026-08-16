@@ -36,7 +36,7 @@ Two reference documents are worth reading before touching guest configuration:
 
 ```bash
 ./gradlew build          # compiles + runs tests
-./gradlew test           # 27 tests, all pure logic, ~1s
+./gradlew test           # 57 tests, all pure logic, ~1s
 ./gradlew runServer      # downloads + runs Paper 26.2 into run/ (gitignored)
 ```
 
@@ -76,6 +76,8 @@ java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --o
 /vmcomputers create <SMALL|MEDIUM|LARGE|XLARGE> [x86_64|aarch64]
 /vmcomputers remove [id]
 /vmcomputers iso [<id> <file|none>]
+/vmcomputers disk [<id> <file|none>]     # admin; supplied images, attached read-write
+/vmcomputers profile [<id> <name>]       # guest hardware era
 /vmcomputers type <text>        # @RETURN @TAB @ESC @UP..@F12
 /vmcomputers keys [game|menu|bind <input> <key>|reset]
 /vmcomputers audio              # private link to the guest's sound
@@ -224,6 +226,12 @@ traffic on every head movement.
   exactly those.
 - **An item that is also its own crafting ingredient gets eaten by its own recipe.** The brick phone
   uses `RecipeChoice.ExactChoice` so the recipe book can't auto-fill a phone into a phone.
+- **Static fields initialise in source order, and the catalogue in `ComponentType` runs during it.**
+  A registry declared below the entries that fill it is still null when the first one registers, so
+  the class dies on load. It compiles perfectly. Bit once already with the case set.
+- **A column added to the reader must be added to the `SELECT` too.** `loadAll` names its columns
+  explicitly, so reading a new one throws on the first row and takes every computer with it. Bit
+  once already with `disk` and `profile`.
 - **Check what already owns an event before adding a handler.** Twice now something was built that
   already existed: a scroll handler when `PointerListener` already owned the wheel, and a shift-key
   fix that was already sitting finished on an unmerged branch.
@@ -238,11 +246,18 @@ Play-tested in game: the whole delivery-truck sequence, ordering and checkout, t
 ISO boot on ARM after the `bootindex` fix, the power indicator, and `/vmcomputers type` including
 shifted characters.
 
-Covered by tests (`./gradlew test`, 27 of them, all pure): the display transform including
+Covered by tests (`./gradlew test`, 57 of them, all pure): the display transform including
 rotation-about-pivot and the folded-gear case, the screen ray including the parallax regression,
 image fitting, and the whole key table.
 
 ### Never exercised in game
+
+- **Everything added on 2026-08-16 after the handoff rewrite**: the `disks/` folder, all ten guest
+  profiles, the graphics bay tiers, and the two named cases. The profiles were each started against
+  real QEMU 11.0.3 so the devices and combinations are known good, but nothing has booted an actual
+  guest, and no case has been placed. **The two case models are hand-authored and their facing is a
+  guess** — front bezel at -Z, matching `pc_case`. `/vmcomputers parts dell_dimension_l500r` is the
+  fast check.
 
 - **`AssemblyMenu` and the bay menus** — `fit`/`remove` are where an inventory bug costs a player a
   real item. The shop's checkout is well exercised; assembly is the untouched half.
@@ -256,14 +271,12 @@ image fitting, and the whole key table.
 
 ### Known gaps
 
-- **Guest hardware is chosen by a guess.** Machine type, video chip, disk interface, sound card, NIC
-  and pointer style all follow from architecture alone — the code says so in a `TODO`. This is the
-  gap between "runs Ubuntu" and "runs anything", and it is the next body of work. See the Guest
-  Hardware Manual.
-- **Disks are fixed at 16 GiB** and there is no way to use an image you already have.
-- **The GPU component does nothing** but be required; **the 32-bit motherboard is indistinguishable
-  from the 64-bit one**. Both should become real QEMU knobs or be cut.
-- **No sound-card or network-card component**, though both are real choices.
+- **The plugin's own disks are still fixed at 16 GiB.** Supplied images are any size, but a machine
+  on its own disk gets 16 GiB and no say. Hard drive tiers are the fix.
+- **The 32-bit motherboard is indistinguishable from the 64-bit one.** Should become a real knob —
+  a 3.5 GB ceiling and the `pc` machine — or be cut.
+- **No sound-card or network-card component**, though both are real choices and profiles now give
+  them sensible defaults to override.
 - **No OS catalogue.** ISOs are dropped in a folder by hand. Plan: quickget's per-OS tuning concept
   as a committed JSON manifest — take the idea, not the shell scripts, which scrape vendor pages and
   break constantly.
@@ -277,21 +290,24 @@ image fitting, and the whole key table.
 
 ### Recently closed
 
-Permissions (`vmcomputers.use` / `.build` / `.admin`, with per-computer ownership), a cap on
-concurrent VMs, guest networking as an admin setting, guest audio over HTTP, and the first tests.
+The `disks/` folder, guest profiles, the graphics bay tiers, the Dimension and Presario cases, and
+the README becoming the setup guide. Before that: permissions (`vmcomputers.use` / `.build` /
+`.admin`, with per-computer ownership), a cap on concurrent VMs, guest networking as an admin
+setting, guest audio over HTTP, and the first tests.
 
 ---
 
 ## 7. Next
 
-1. **`disks/` folder** — list existing images the way `isos/` already does, with the same
-   path-escape guard. Smallest change here, and it unblocks testing everything else: you can install
-   Windows 95 once by hand and copy it in.
-2. **Guest profiles** — replace the architecture guess with a named era that supplies machine,
-   firmware, video, disk, sound, NIC and pointer. The change that makes DOS and Win9x possible.
-3. **Point the graphics bay at the video device** — fixes "the GPU does nothing" and the Cirrus
-   problem together (Windows 9x has in-box drivers for Cirrus and nothing else).
-4. **OS catalogue**, starting as a manifest with no downloader.
-5. **Hard drive tiers**, then **sound and network bays**.
-6. **Finish a Debian install** end to end — first real proof a persistent OS survives a power cycle.
-7. **On-screen keyboard.**
+Items 1–3 of the manual's order are done (`disks/`, guest profiles, the graphics bay), plus the two
+named cases. What is left, in order:
+
+1. **Play-test the new hardware.** Nothing below matters if a profile does not boot. Fastest proof:
+   install something in a normal QEMU window, drop it in `disks/`, attach it, power on.
+2. **OS catalogue**, starting as a manifest with no downloader. The profile field is the part that
+   matters — an entry that only says "get it here" still configures the machine.
+3. **Hard drive tiers**, then **sound and network bays**.
+4. **Finish a Debian install** end to end — first real proof a persistent OS survives a power cycle.
+5. **Give the 32-bit motherboard a job**, or cut it.
+6. **On-screen keyboard.**
+7. **Startup report** — host, architecture, accelerator, which profiles are viable here.
