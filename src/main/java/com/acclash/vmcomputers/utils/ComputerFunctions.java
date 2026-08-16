@@ -28,11 +28,26 @@ public class ComputerFunctions {
         MACHINES.put(Integer.valueOf(machine.computerId()), machine);
     }
 
-    /** Stops and forgets one machine. Safe to call when nothing is running. */
+    /**
+     * Stops and forgets one machine. Safe to call when nothing is running.
+     *
+     * <p>Forgotten <em>after</em> the guest has actually gone, not before. Removing it first made
+     * the machine read as off the instant someone asked it to stop, while QEMU was still working
+     * through up to ten seconds of ACPI shutdown with the guest's own screen still up -- so
+     * anything asking "is this running" got the answer the player wanted rather than the true one.
+     * Callers that reach into a machine already null-check its display, so a registered machine
+     * partway through shutting down is safe to look up.
+     */
     public static void stop(int computerId) {
-        VirtualMachine machine = MACHINES.remove(Integer.valueOf(computerId));
-        if (machine != null) {
+        Integer key = Integer.valueOf(computerId);
+        VirtualMachine machine = MACHINES.get(key);
+        if (machine == null) {
+            return;
+        }
+        try {
             machine.shutdown();
+        } finally {
+            MACHINES.remove(key, machine);
         }
     }
 

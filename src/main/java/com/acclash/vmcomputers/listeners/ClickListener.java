@@ -81,6 +81,17 @@ public class ClickListener implements Listener {
             return;
         }
 
+        // Powering on or off takes seconds and happens off the server thread, so the tower is a
+        // button that can be pressed again before the last press has finished. Say so rather than
+        // queue a second start against a machine that is already halfway up.
+        VmService.Transition moving = VmService.transitionOf(computer.id());
+        if (moving != null) {
+            player.sendMessage(ChatColor.GRAY + "Computer #" + computer.id() + " is already "
+                    + (moving == VmService.Transition.STARTING
+                            ? "starting up." : "shutting down."));
+            return;
+        }
+
         if (!VmService.isRunning(computer.id()) && !computer.isAssembled()) {
             StringBuilder missing = new StringBuilder();
             for (ComponentSlot slot : computer.missingComponents()) {

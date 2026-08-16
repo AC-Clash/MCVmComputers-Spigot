@@ -47,8 +47,8 @@ public class CaseMenu extends Menu {
     private final Computer computer;
     private final Map<Integer, ComponentSlot> bays = new HashMap<Integer, ComponentSlot>();
 
-    /** Power state the lever was last drawn from, so a redraw only happens when it changes. */
-    private boolean shownRunning;
+    /** What the power slot was last drawn from, so a redraw only happens when it changes. */
+    private String shownState = "";
 
     public CaseMenu(Player viewer, Computer computer) {
         super(viewer);
@@ -126,14 +126,42 @@ public class CaseMenu extends Menu {
     }
 
     private void drawPower() {
+        shownState = powerToken();
+
+        // Three answers, not two. A machine that has been asked to start is neither on nor off,
+        // and showing it as either is a lie the player can see through -- the screen is still
+        // black, or still has the guest's desktop on it.
+        VmService.Transition moving = VmService.transitionOf(computer.id());
+        if (moving != null) {
+            boolean up = moving == VmService.Transition.STARTING;
+            set(POWER_SLOT, button(Material.CLOCK,
+                    ChatColor.YELLOW + (up ? "Starting up..." : "Shutting down..."),
+                    up ? "QEMU is coming up." : "Waiting for the guest to close down.",
+                    "This can take a few seconds."));
+            return;
+        }
+
         boolean running = VmService.isRunning(computer.id());
-        shownRunning = running;
         set(POWER_SLOT, button(running ? Material.REDSTONE_TORCH : Material.LEVER,
                 running ? ChatColor.GREEN + "Running" : ChatColor.GRAY + "Powered off",
                 running ? "Click to shut down." : "Click to power on.",
                 "",
                 "Right-clicking the tower does",
                 "this without opening the menu."));
+    }
+
+    /**
+     * What the power slot is currently showing, as one comparable value.
+     *
+     * <p>The watcher redraws when this stops matching, so it has to fold every distinguishable
+     * situation into one token -- otherwise a machine going from starting to running would not
+     * count as a change and the clock would sit there forever.
+     */
+    private String powerToken() {
+        VmService.Transition moving = VmService.transitionOf(computer.id());
+        return moving != null
+                ? moving.name()
+                : Boolean.toString(VmService.isRunning(computer.id()));
     }
 
     @Override
@@ -243,6 +271,13 @@ public class CaseMenu extends Menu {
     }
 
     private void togglePower() {
+        // Already on its way somewhere. Without this, clicking twice during the seconds a boot
+        // takes queues a second start against a machine that is halfway up.
+        if (VmService.isBusy(computer.id())) {
+            viewer.playSound(viewer.getLocation(), Sound.BLOCK_LEVER_CLICK, 0.5f, 0.8f);
+            return;
+        }
+
         MonitorScreen screen = VMComputers.getPlugin().getScreen(computer.id());
         if (screen == null) {
             viewer.sendMessage(ChatColor.RED + "This computer has no screen attached; rebuild it.");
@@ -280,7 +315,7 @@ public class CaseMenu extends Menu {
 
     @Override
     protected void tick() {
-        if (VmService.isRunning(computer.id()) != shownRunning) {
+        if (!powerToken().equals(shownState)) {
             refresh();
         }
     }

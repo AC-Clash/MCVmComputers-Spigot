@@ -60,6 +60,36 @@ public final class VmService {
     }
 
     /**
+     * What a computer is doing between being asked and having done it.
+     *
+     * <p>Powering on and off are both slow enough to see -- QEMU has to be found, spawned and
+     * connected to, and a graceful stop waits on the guest -- and both happen off the server
+     * thread. Without somewhere to record that, anything showing power state has only two answers
+     * for three situations, and a machine that has been asked to start looks identical to one
+     * sitting switched off.
+     *
+     * <p>Deliberately not part of {@link Computer.State}: that is persisted, and a server killed
+     * mid-boot would come back up claiming to be starting forever.
+     */
+    public enum Transition {
+        STARTING,
+        STOPPING
+    }
+
+    private static final java.util.Map<Integer, Transition> TRANSITIONS =
+            new java.util.concurrent.ConcurrentHashMap<Integer, Transition>();
+
+    /** What this computer is partway through, or null if it is simply on or off. */
+    public static Transition transitionOf(int computerId) {
+        return TRANSITIONS.get(Integer.valueOf(computerId));
+    }
+
+    /** True while a computer is starting or stopping and should not be asked to do either. */
+    public static boolean isBusy(int computerId) {
+        return TRANSITIONS.containsKey(Integer.valueOf(computerId));
+    }
+
+    /**
      * Boots a computer and connects its screen. Returns immediately; {@code feedback} is invoked on
      * the main thread as the boot progresses.
      */
@@ -70,6 +100,10 @@ public final class VmService {
         }
 
         VMComputers plugin = VMComputers.getPlugin();
+        // Marked before the task is queued, on the thread the caller is already on, so a menu
+        // redrawn on the very next tick already knows this machine is on its way up.
+        TRANSITIONS.put(Integer.valueOf(computer.id()), Transition.STARTING);
+        computer.setState(Computer.State.BOOTING);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 QemuBinary binary = qemu(computer.architecture());
@@ -129,6 +163,10 @@ public final class VmService {
                 computer.setState(Computer.State.ERROR);
                 post(feedback, "Could not start: " + e.getMessage());
                 plugin.getLogger().severe("VM " + computer.id() + " failed to start: " + e);
+            } finally {
+                // Cleared in a finally so a boot that throws does not leave the machine looking
+                // like it is still coming up forever.
+                TRANSITIONS.remove(Integer.valueOf(computer.id()));
             }
         });
     }
@@ -136,13 +174,19 @@ public final class VmService {
     /** Stops a computer and blanks its screen. */
     public static void stop(Computer computer, MonitorScreen screen, Consumer<String> feedback) {
         VMComputers plugin = VMComputers.getPlugin();
+        TRANSITIONS.put(Integer.valueOf(computer.id()), Transition.STOPPING);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            ComputerFunctions.stop(computer.id());
-            computer.setState(Computer.State.OFF);
-            if (screen != null) {
-                screen.fill(plugin.getMapPalette().match(0, 0, 0));
+            try {
+                // Blocks until the guest has really gone -- a graceful stop waits on ACPI.
+                ComputerFunctions.stop(computer.id());
+                computer.setState(Computer.State.OFF);
+                if (screen != null) {
+                    screen.fill(plugin.getMapPalette().match(0, 0, 0));
+                }
+                post(feedback, "Computer #" + computer.id() + " powered off.");
+            } finally {
+                TRANSITIONS.remove(Integer.valueOf(computer.id()));
             }
-            post(feedback, "Computer #" + computer.id() + " powered off.");
         });
     }
 
