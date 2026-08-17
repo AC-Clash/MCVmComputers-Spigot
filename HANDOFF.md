@@ -36,7 +36,7 @@ Two reference documents are worth reading before touching guest configuration:
 
 ```bash
 ./gradlew build          # compiles + runs tests
-./gradlew test           # 57 tests, all pure logic, ~1s
+./gradlew test           # 65 tests, all pure logic, ~1s
 ./gradlew runServer      # downloads + runs Paper 26.2 into run/ (gitignored)
 ```
 
@@ -77,6 +77,7 @@ java -cp out com.acclash.vmcomputers.bench.RfbDump --arch AARCH64 --frames 5 --o
 /vmcomputers remove [id]
 /vmcomputers iso [<id> <file|none>]
 /vmcomputers disk [<id> <file|none>]     # admin; supplied images, attached read-write
+/vmcomputers floppy [<id> <file|none>]   # boot floppies, attached read-only
 /vmcomputers profile [<id> <name>]       # guest hardware era
 /vmcomputers type <text>        # @RETURN @TAB @ESC @UP..@F12
 /vmcomputers keys [game|menu|bind <input> <key>|reset]
@@ -191,6 +192,12 @@ traffic on every head movement.
 
 ### QEMU / guests
 
+- **q35 takes a floppy as readily as `pc`** — QEMU adds the `isa-fdc` controller itself when a
+  floppy drive is asked for. Floppy support is gated on architecture, not machine type. Checked
+  against a real image; the obvious assumption that q35 refuses is wrong.
+- **`qemu-system-i386` is a separate binary and a separate accelerator probe.** It is looked up
+  lazily like the others, so a host that never runs a 32-bit machine never needs it installed.
+
 - **ARM UEFI's per-machine variable store goes stale, and a stale one boots the EFI shell instead
   of the ISO.** It writes `Boot####` entries pinned to exact device paths and prefers them over
   hunting for removable media; change the hardware and every entry points at nothing. The symptom is
@@ -246,14 +253,15 @@ Play-tested in game: the whole delivery-truck sequence, ordering and checkout, t
 ISO boot on ARM after the `bootindex` fix, the power indicator, and `/vmcomputers type` including
 shifted characters.
 
-Covered by tests (`./gradlew test`, 57 of them, all pure): the display transform including
+Covered by tests (`./gradlew test`, 65 of them, all pure): the display transform including
 rotation-about-pivot and the folded-gear case, the screen ray including the parallax regression,
 image fitting, and the whole key table.
 
 ### Never exercised in game
 
-- **Everything added on 2026-08-16 after the handoff rewrite**: the `disks/` folder, all ten guest
-  profiles, the graphics bay tiers, and the two named cases. The profiles were each started against
+- **Everything added on 2026-08-16 after the handoff rewrite**: the `disks/` and `floppies/`
+  folders, all ten guest profiles, the graphics bay tiers, the two named cases, and i386 as a real
+  architecture behind the 32-bit motherboard. The profiles were each started against
   real QEMU 11.0.3 so the devices and combinations are known good, but nothing has booted an actual
   guest, and no case has been placed. **The two case models are hand-authored and their facing is a
   guess** — front bezel at -Z, matching `pc_case`. `/vmcomputers parts dell_dimension_l500r` is the
@@ -273,8 +281,6 @@ image fitting, and the whole key table.
 
 - **The plugin's own disks are still fixed at 16 GiB.** Supplied images are any size, but a machine
   on its own disk gets 16 GiB and no say. Hard drive tiers are the fix.
-- **The 32-bit motherboard is indistinguishable from the 64-bit one.** Should become a real knob —
-  a 3.5 GB ceiling and the `pc` machine — or be cut.
 - **No sound-card or network-card component**, though both are real choices and profiles now give
   them sensible defaults to override.
 - **No OS catalogue.** ISOs are dropped in a folder by hand. Plan: quickget's per-OS tuning concept
@@ -308,6 +314,5 @@ named cases. What is left, in order:
    matters — an entry that only says "get it here" still configures the machine.
 3. **Hard drive tiers**, then **sound and network bays**.
 4. **Finish a Debian install** end to end — first real proof a persistent OS survives a power cycle.
-5. **Give the 32-bit motherboard a job**, or cut it.
-6. **On-screen keyboard.**
-7. **Startup report** — host, architecture, accelerator, which profiles are viable here.
+5. **On-screen keyboard.**
+6. **Startup report** — host, architecture, accelerator, which profiles are viable here.
