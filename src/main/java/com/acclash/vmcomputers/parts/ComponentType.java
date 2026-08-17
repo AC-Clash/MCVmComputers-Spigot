@@ -162,13 +162,22 @@ public final class ComponentType {
             "case_side_panel", "Case Side Panel", Material.GRAY_STAINED_GLASS_PANE, 2,
             Category.PARTS, null, "pc_case_only_glass_sidepanel", "Tinted window for the case."));
 
+    /**
+     * The 32-bit board, and now genuinely a different machine.
+     *
+     * <p>Rating is the width in bits, which is what decides whether the guest runs on
+     * {@code qemu-system-i386} or {@code qemu-system-x86_64}. Fitting this builds an i386 PC, and
+     * an i386 PC cannot run a 64-bit guest -- the same constraint the real board had, and the
+     * reason this part is cheaper.
+     */
     public static final ComponentType MOTHERBOARD = register(new ComponentType(
             "motherboard", "Motherboard", Material.REPEATER, 4, Category.PARTS, ComponentSlot.MOTHERBOARD,
-            "motherboard", "32-bit board. Takes one CPU and one stick of RAM."));
+            "motherboard", "32-bit board. Runs DOS through XP; no 64-bit guest.", 32));
 
     public static final ComponentType MOTHERBOARD_64 = register(new ComponentType(
             "motherboard64", "64-bit Motherboard", Material.COMPARATOR, 8, Category.PARTS,
-            ComponentSlot.MOTHERBOARD, "motherboard64", "Required for a 64-bit guest."));
+            ComponentSlot.MOTHERBOARD, "motherboard64",
+            "Required for a 64-bit guest. Runs everything the 32-bit board does.", 64));
 
     public static final ComponentType CPU_2 = register(new ComponentType(
             "cpu2", "CPU (host cores / 2)", Material.NETHERITE_SCRAP, 10, Category.PARTS, ComponentSlot.CPU,

@@ -57,6 +57,63 @@ class GuestProfileTest {
                 GuestProfile.AUTO.resolve(VmSpec.Architecture.X86_64, false));
     }
 
+    /**
+     * A 32-bit board is only ever fitted deliberately, and nothing modern is 32-bit, so it says
+     * "old guest" far more directly than the accelerator ever could.
+     */
+    @Test
+    void a32BitBoardMeansAnOldGuest() {
+        assertSame(GuestProfile.WIN9X,
+                GuestProfile.AUTO.resolve(VmSpec.Architecture.I386, true));
+        assertSame(GuestProfile.WIN9X,
+                GuestProfile.AUTO.resolve(VmSpec.Architecture.I386, false));
+    }
+
+    /** 32-bit guests run on either width; 64-bit ones do not. That is the board's whole job. */
+    @Test
+    void thirtyTwoBitGuestsRunOnEitherWidth() {
+        assertTrue(GuestProfile.DOS.runsOn(VmSpec.Architecture.I386));
+        assertTrue(GuestProfile.DOS.runsOn(VmSpec.Architecture.X86_64));
+        assertTrue(GuestProfile.DELL_DIMENSION_L500R.runsOn(VmSpec.Architecture.I386));
+        assertTrue(GuestProfile.WINXP.runsOn(VmSpec.Architecture.I386));
+    }
+
+    @Test
+    void sixtyFourBitGuestsRefuseTheSmallerBoard() {
+        assertFalse(GuestProfile.COMPAQ_PRESARIO.runsOn(VmSpec.Architecture.I386));
+        assertFalse(GuestProfile.MODERN_LINUX.runsOn(VmSpec.Architecture.I386));
+        assertFalse(GuestProfile.MODERN_WINDOWS.runsOn(VmSpec.Architecture.I386));
+        assertTrue(GuestProfile.COMPAQ_PRESARIO.runsOn(VmSpec.Architecture.X86_64));
+    }
+
+    /** XP x64 on a 32-bit board is the case this exists to catch, in both directions. */
+    @Test
+    void thePresarioAndTheDimensionDisagreeAboutWidth() {
+        assertTrue(GuestProfile.COMPAQ_PRESARIO.needs64Bit());
+        assertFalse(GuestProfile.DELL_DIMENSION_L500R.needs64Bit());
+    }
+
+    @Test
+    void a32BitMachineIsNotOfferedGuestsItCannotRun() {
+        List<GuestProfile> i386 = GuestProfile.forArchitecture(VmSpec.Architecture.I386);
+        assertTrue(i386.contains(GuestProfile.DELL_DIMENSION_L500R));
+        assertTrue(i386.contains(GuestProfile.DOS));
+        assertFalse(i386.contains(GuestProfile.COMPAQ_PRESARIO));
+        assertFalse(i386.contains(GuestProfile.MODERN_LINUX));
+        assertFalse(i386.contains(GuestProfile.MODERN_ARM));
+    }
+
+    /** Everything BIOS-shaped must apply to both PC widths, or i386 silently loses it. */
+    @Test
+    void bothPcWidthsCountAsX86() {
+        assertTrue(VmSpec.Architecture.I386.isX86());
+        assertTrue(VmSpec.Architecture.X86_64.isX86());
+        assertFalse(VmSpec.Architecture.AARCH64.isX86());
+        assertFalse(VmSpec.Architecture.I386.is64Bit());
+        assertTrue(VmSpec.Architecture.X86_64.is64Bit());
+        assertTrue(VmSpec.Architecture.AARCH64.is64Bit());
+    }
+
     @Test
     void namedProfilesResolveToThemselves() {
         assertSame(GuestProfile.DELL_DIMENSION_L500R,

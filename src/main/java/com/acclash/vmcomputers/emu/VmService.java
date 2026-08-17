@@ -113,9 +113,17 @@ public final class VmService {
         computer.setState(Computer.State.BOOTING);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                QemuBinary binary = qemu(computer.architecture());
+                // The fitted board decides the width, so this is asked before the binary is looked
+                // up -- a 32-bit board is a different emulator, not a flag on the same one. The
+                // profile is read unresolved on purpose: AUTO cannot need 64 bits, and resolving it
+                // would need the accelerator, which needs the binary we are still choosing.
+                VmSpec.Architecture arch = architectureFor(computer, computer.profile());
+                if (arch != computer.architecture()) {
+                    post(feedback, "32-bit motherboard fitted: running as " + arch + ".");
+                }
+                QemuBinary binary = qemu(arch);
                 if (!binary.hasHardwareAcceleration()) {
-                    post(feedback, "No hardware acceleration for " + computer.architecture()
+                    post(feedback, "No hardware acceleration for " + arch
                             + " on this host (" + binary.accelerators() + "); the guest will be very"
                             + " slow. " + QemuBinary.nativeArchitecture() + " guests run natively.");
                 }
@@ -284,6 +292,31 @@ public final class VmService {
      * fitted there is a black screen rather than an old-looking one, and silently ignoring it would
      * leave a player staring at a card they bought and a screen that never lights up.
      */
+    /**
+     * The architecture this machine actually runs at, once the fitted motherboard has its say.
+     *
+     * <p>This is the 32-bit board's whole job. The machine's own architecture says which family it
+     * is; the board says how wide it is, and a 32-bit board means {@code qemu-system-i386}. That is
+     * a real distinction rather than a cosmetic one, because an i386 emulator genuinely cannot run
+     * a 64-bit guest -- which is why fitting the cheap board and then trying to boot XP x64 has to
+     * be refused rather than quietly upgraded.
+     *
+     * @throws IOException when the board and the guest cannot be reconciled
+     */
+    private static VmSpec.Architecture architectureFor(Computer computer, GuestProfile era)
+            throws IOException {
+        VmSpec.Architecture declared = computer.architecture();
+        ComponentType board = computer.installedIn(ComponentSlot.MOTHERBOARD);
+        if (board == null || board.rating() != 32 || !declared.isX86()) {
+            return declared;
+        }
+        if (era.needs64Bit()) {
+            throw new IOException(era.label() + " is a 64-bit guest and this machine has a 32-bit"
+                    + " motherboard. Fit a 64-bit Motherboard, or choose a 32-bit profile.");
+        }
+        return VmSpec.Architecture.I386;
+    }
+
     private static VmSpec.Vga vgaFor(Computer computer, Consumer<String> feedback) {
         ComponentType gpu = computer.installedIn(ComponentSlot.GPU);
         if (gpu == null || gpu.vga() == null) {

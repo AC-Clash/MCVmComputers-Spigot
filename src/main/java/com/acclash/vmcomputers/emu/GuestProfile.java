@@ -74,8 +74,8 @@ public enum GuestProfile {
      */
     COMPAQ_PRESARIO("Compaq Presario (XP x64)", VmSpec.Architecture.X86_64,
             "pc", VmSpec.Vga.STD, VmSpec.DiskInterface.IDE, true,
-            VmSpec.SoundCard.AC97, "rtl8139", null, 4096, false,
-            "Athlon 64. Set up for Windows XP Professional x64 Edition."),
+            VmSpec.SoundCard.AC97, "rtl8139", null, 4096, false, true,
+            "Athlon 64. Set up for Windows XP Professional x64 Edition. Needs a 64-bit board."),
 
     /** Linux from the 2.4 and 2.6 days: PCI, no virtio, and happy with plain VGA. */
     LINUX_LEGACY("Linux 2.4 / 2.6", VmSpec.Architecture.X86_64,
@@ -86,7 +86,7 @@ public enum GuestProfile {
     /** Anything current on x86, with the virtio devices its kernel already has drivers for. */
     MODERN_LINUX("Modern Linux (x86)", VmSpec.Architecture.X86_64,
             "q35", VmSpec.Vga.VIRTIO, VmSpec.DiskInterface.VIRTIO, true,
-            VmSpec.SoundCard.HDA, "virtio-net-pci", null, 0, false,
+            VmSpec.SoundCard.HDA, "virtio-net-pci", null, 0, false, true,
             "virtio throughout: the fast path, and every current kernel has it."),
 
     /**
@@ -98,7 +98,7 @@ public enum GuestProfile {
      */
     MODERN_WINDOWS("Windows 10 / 11", VmSpec.Architecture.X86_64,
             "q35", VmSpec.Vga.STD, VmSpec.DiskInterface.IDE, true,
-            VmSpec.SoundCard.HDA, "e1000", null, 0, false,
+            VmSpec.SoundCard.HDA, "e1000", null, 0, false, true,
             "Like modern Linux but without virtio, which Windows cannot see."),
 
     /** Anything current on ARM. There is no legacy ARM -- nothing old runs on {@code virt}. */
@@ -118,16 +118,27 @@ public enum GuestProfile {
     private final String cpuModel;
     private final int maxMemoryMb;
     private final boolean sharedFolder;
+    private final boolean needs64Bit;
     private final String description;
 
     GuestProfile(String label, VmSpec.Architecture architecture, String description) {
-        this(label, architecture, null, null, null, true, null, null, null, 0, false, description);
+        this(label, architecture, null, null, null, true, null, null, null, 0, false, false,
+                description);
     }
 
     GuestProfile(String label, VmSpec.Architecture architecture, String machine, VmSpec.Vga vga,
                  VmSpec.DiskInterface diskInterface, boolean absolutePointer,
                  VmSpec.SoundCard soundCard, String networkModel, String cpuModel,
                  int maxMemoryMb, boolean sharedFolder, String description) {
+        this(label, architecture, machine, vga, diskInterface, absolutePointer, soundCard,
+                networkModel, cpuModel, maxMemoryMb, sharedFolder, false, description);
+    }
+
+    GuestProfile(String label, VmSpec.Architecture architecture, String machine, VmSpec.Vga vga,
+                 VmSpec.DiskInterface diskInterface, boolean absolutePointer,
+                 VmSpec.SoundCard soundCard, String networkModel, String cpuModel,
+                 int maxMemoryMb, boolean sharedFolder, boolean needs64Bit, String description) {
+        this.needs64Bit = needs64Bit;
         this.label = label;
         this.architecture = architecture;
         this.machine = machine;
@@ -150,9 +161,40 @@ public enum GuestProfile {
         return description;
     }
 
-    /** The architecture this profile is for, or null if it applies to any. */
+    /**
+     * The architecture a machine gets when this profile is chosen, or null if it applies to any.
+     *
+     * <p>Always the 64-bit member of the family. Which width a machine actually runs at is decided
+     * by the motherboard fitted to it, not here -- so a Windows 98 profile hands out x86_64 and
+     * becomes i386 the moment somebody fits a 32-bit board.
+     */
     public VmSpec.Architecture architecture() {
         return architecture;
+    }
+
+    /**
+     * Whether this guest can run on an architecture at all.
+     *
+     * <p>Wider than {@link #architecture()} because 32-bit guests run happily on either width, and
+     * a 32-bit board is a real thing a player can fit. Windows 98 does not care that the emulator
+     * is 64-bit capable; Windows XP x64 very much does.
+     */
+    public boolean runsOn(VmSpec.Architecture arch) {
+        if (architecture == null) {
+            return true;
+        }
+        if (architecture == arch) {
+            return true;
+        }
+        // A 32-bit era guest is equally at home on the 32-bit emulator.
+        return arch == VmSpec.Architecture.I386
+                && architecture == VmSpec.Architecture.X86_64
+                && !needs64Bit;
+    }
+
+    /** Whether this guest is 64-bit and so cannot run on a 32-bit board. */
+    public boolean needs64Bit() {
+        return needs64Bit;
     }
 
     /** Most memory this guest can actually use, or 0 for no ceiling. */
@@ -196,6 +238,11 @@ public enum GuestProfile {
         }
         if (arch == VmSpec.Architecture.AARCH64) {
             return MODERN_ARM;
+        }
+        // A 32-bit board is only ever fitted on purpose, and nothing modern is 32-bit any more,
+        // so it says "old guest" far more clearly than the accelerator ever did.
+        if (arch == VmSpec.Architecture.I386) {
+            return WIN9X;
         }
         // The old guess, kept but narrowed to the case where it was actually reasoning about
         // something. A host that cannot accelerate x86 is a host where nobody runs a modern x86
@@ -241,7 +288,7 @@ public enum GuestProfile {
     public static List<GuestProfile> forArchitecture(VmSpec.Architecture arch) {
         List<GuestProfile> out = new ArrayList<GuestProfile>();
         for (GuestProfile profile : values()) {
-            if (profile.architecture == null || profile.architecture == arch) {
+            if (profile.runsOn(arch)) {
                 out.add(profile);
             }
         }

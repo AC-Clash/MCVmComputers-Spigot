@@ -36,7 +36,7 @@ the people playing. That constraint is the point of the project.
 |---|---|
 | A Spigot or Paper server | Built against the Spigot API only, so either works. The plugin declares `api-version: 26.2`. |
 | Java 21 or newer | The plugin is compiled to Java 21 bytecode. Your server version's own requirement is higher, and it decides — the plugin never raises the bar. |
-| QEMU, on `PATH` | Both `qemu-system-*` and `qemu-img`. On some distributions these are two separate packages. |
+| QEMU, on `PATH` | Both `qemu-system-*` and `qemu-img`. On some distributions these are two separate packages. Install `qemu-system-i386` too if you want 32-bit machines. |
 | Disk space | Each computer with a hard drive fitted gets a 16 GB image, though qcow2 is sparse and only grows as the guest writes. ISOs are the real cost — a desktop Linux is around 4 GB. |
 | A spare TCP port | Default `25566`, for guest audio. Only needed if you want sound. |
 
@@ -316,11 +316,28 @@ themselves — they just look like the guest is broken.
 | `WIN9X` | Windows 95 / 98 | Cirrus graphics, Sound Blaster, 512 MB ceiling. |
 | `DELL_DIMENSION_L500R` | Windows 98 | A Pentium III 500 as sold in 2000. Boots 98 with no driver disk. |
 | `WINXP` | Windows 2000 / XP | USB pointer, AC'97 sound. |
-| `COMPAQ_PRESARIO` | Windows XP x64 Edition | Athlon 64 desktop. Plain VGA, because the Cirrus driver is 32-bit only. |
+| `COMPAQ_PRESARIO` | Windows XP x64 Edition | Athlon 64 desktop. Plain VGA, because the Cirrus driver is 32-bit only. Needs the 64-bit board. |
 | `LINUX_LEGACY` | Linux 2.4 / 2.6 | Predates virtio, has USB. |
 | `MODERN_LINUX` | current Linux on x86 | virtio throughout — the fast path. |
 | `MODERN_WINDOWS` | Windows 10 / 11 | Like the above without virtio, which Windows cannot see. |
 | `MODERN_ARM` | anything on ARM | UEFI and virtio. The only kind of ARM guest there is. |
+
+## The motherboard decides the width
+
+The two motherboards are two different emulators, not a label. A **64-bit Motherboard** runs the
+guest on `qemu-system-x86_64`; the plain **Motherboard** runs it on `qemu-system-i386` and builds a
+genuinely 32-bit PC.
+
+That is a real constraint rather than a cosmetic one — an i386 emulator cannot run a 64-bit guest.
+So a machine with the cheap board and the `COMPAQ_PRESARIO` profile is refused at power-on with a
+message saying which part to change, exactly as the real hardware would have refused. Everything up
+to and including 32-bit XP runs happily on either board.
+
+The 32-bit board also makes `AUTO` unambiguous: nobody fits one by accident and nothing modern is
+32-bit, so it resolves to the Windows 9x era rather than guessing from the accelerator.
+
+If you only ever want 64-bit guests you don't need `qemu-system-i386` installed — the binary is
+looked up the first time a machine that needs it is switched on.
 
 The graphics bay overrides the profile's choice, so a player who buys a **Cirrus Logic Card**, **VGA
 Card**, **SVGA Card** or **Virtio GPU** gets that adapter. The plain **Graphics Card** names nothing

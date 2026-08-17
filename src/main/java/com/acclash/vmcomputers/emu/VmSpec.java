@@ -60,6 +60,18 @@ public final class VmSpec {
 
     public enum Architecture {
         X86_64("qemu-system-x86_64", "q35"),
+        /**
+         * 32-bit x86, which is what the era this plugin cares about actually was.
+         *
+         * <p>Not merely period dressing. A 64-bit binary will run DOS and Windows 95 perfectly
+         * well, so this is not about capability -- it is about the 32-bit motherboard meaning
+         * something. Fitting one builds an i386 PC, and an i386 PC cannot run a 64-bit guest, which
+         * is exactly the constraint the real board had.
+         *
+         * <p>Defaults to {@code pc} rather than {@code q35}: a machine chosen for being 32-bit is
+         * one whose guests predate q35 by a decade.
+         */
+        I386("qemu-system-i386", "pc"),
         /** ARM64. Uses UEFI and virtio throughout -- no BIOS, no VGA, no IDE. */
         AARCH64("qemu-system-aarch64", "virt");
 
@@ -77,6 +89,23 @@ public final class VmSpec {
 
         public String defaultMachine() {
             return defaultMachine;
+        }
+
+        /**
+         * Whether this is a PC, of either width.
+         *
+         * <p>Almost everything that is true of x86_64 here -- a BIOS boot order, a CMOS clock in
+         * local time, ISA cards, a floppy controller -- is equally true of i386, and none of it is
+         * true of ARM. Asking this rather than naming one of them is what stopped i386 quietly
+         * losing its boot order when it was added.
+         */
+        public boolean isX86() {
+            return this == X86_64 || this == I386;
+        }
+
+        /** Whether this architecture can run a 64-bit guest. */
+        public boolean is64Bit() {
+            return this != I386;
         }
     }
 
@@ -356,7 +385,7 @@ public final class VmSpec {
         a.add("-monitor");
         a.add("none");
 
-        if (rtcLocaltime && architecture == Architecture.X86_64) {
+        if (rtcLocaltime && architecture.isX86()) {
             a.add("-rtc");
             a.add("base=localtime");
         }
@@ -419,7 +448,7 @@ public final class VmSpec {
             a.add("if=floppy,index=0,format=raw,readonly=on,file=" + floppy.toAbsolutePath());
         }
 
-        if (bootOrder != null && architecture == Architecture.X86_64) {
+        if (bootOrder != null && architecture.isX86()) {
             // UEFI decides its own boot order; -boot order only applies to BIOS machines.
             a.add("-boot");
             a.add("order=" + bootOrder);
