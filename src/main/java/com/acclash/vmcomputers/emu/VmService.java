@@ -152,6 +152,11 @@ public final class VmService {
                 } else {
                     disk = VmSpec.DiskImage.qcow2(VmPaths.diskFor(computer.id()));
                 }
+                java.nio.file.Path floppy = VmPaths.resolveFloppy(computer.floppyImage());
+                if (computer.floppyImage() != null && floppy == null) {
+                    post(feedback, "Floppy '" + computer.floppyImage()
+                            + "' is missing; booting with an empty drive.");
+                }
                 java.nio.file.Path iso = VmPaths.resolveIso(computer.isoName());
                 if (computer.isoName() != null && iso == null) {
                     post(feedback, "ISO '" + computer.isoName() + "' is missing; booting without it.");
@@ -172,7 +177,7 @@ public final class VmService {
                 boolean networking = plugin.getConfig().getBoolean("guest.networking", true);
                 QemuVirtualMachine machine = QemuVirtualMachine.forComputer(
                         computer.id(), binary, computer.monitorSize(),
-                        disk, createDisk, iso, memoryMb, cores, networking, computer.profile(),
+                        disk, createDisk, iso, floppy, memoryMb, cores, networking, computer.profile(),
                         vgaFor(computer, feedback),
                         line -> plugin.getLogger().info(line));
 

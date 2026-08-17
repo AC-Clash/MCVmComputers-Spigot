@@ -181,6 +181,7 @@ public final class VmSpec {
     private final List<DiskImage> disks;
     private final DiskInterface diskInterface;
     private final Path cdrom;
+    private final Path floppy;
     private final String bootOrder;
     private final boolean rtcLocaltime;
     private final boolean absolutePointer;
@@ -206,6 +207,7 @@ public final class VmSpec {
         this.disks = Collections.unmodifiableList(new ArrayList<DiskImage>(b.disks));
         this.diskInterface = b.diskInterface;
         this.cdrom = b.cdrom;
+        this.floppy = b.floppy;
         this.bootOrder = b.bootOrder;
         this.rtcLocaltime = b.rtcLocaltime;
         this.absolutePointer = b.absolutePointer;
@@ -225,6 +227,11 @@ public final class VmSpec {
 
     public String name() {
         return name;
+    }
+
+    /** Whether a floppy is in the drive, which is what makes booting from one worth offering. */
+    public boolean hasFloppy() {
+        return floppy != null;
     }
 
     public Architecture architecture() {
@@ -406,6 +413,12 @@ public final class VmSpec {
             }
         }
 
+        if (floppy != null && architecture != Architecture.AARCH64) {
+            // index=0 is drive A. QEMU adds the controller itself on both pc and q35.
+            a.add("-drive");
+            a.add("if=floppy,index=0,format=raw,readonly=on,file=" + floppy.toAbsolutePath());
+        }
+
         if (bootOrder != null && architecture == Architecture.X86_64) {
             // UEFI decides its own boot order; -boot order only applies to BIOS machines.
             a.add("-boot");
@@ -487,6 +500,7 @@ public final class VmSpec {
         private final List<DiskImage> disks = new ArrayList<DiskImage>();
         private DiskInterface diskInterface = DiskInterface.IDE;
         private Path cdrom;
+        private Path floppy;
         private String bootOrder = "dc";
         private boolean rtcLocaltime = true;
         private boolean absolutePointer = true;
@@ -566,6 +580,19 @@ public final class VmSpec {
 
         public Builder cdrom(Path iso) {
             this.cdrom = iso;
+            return this;
+        }
+
+        /**
+         * Puts a floppy in the first drive.
+         *
+         * <p>x86 only -- the ARM virt board has no ISA bus and so no floppy controller. Attached
+         * read-only: an install set is write-protected in real life too, nothing that boots from
+         * one needs to write to it, and the alternative is letting any guest scribble on an image
+         * the admin put there for everybody.
+         */
+        public Builder floppy(Path image) {
+            this.floppy = image;
             return this;
         }
 

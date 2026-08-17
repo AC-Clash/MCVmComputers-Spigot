@@ -63,7 +63,7 @@ public final class QemuVirtualMachine implements VirtualMachine {
      */
     public static QemuVirtualMachine forComputer(int computerId, QemuBinary qemu, MonitorSize monitor,
                                                  VmSpec.DiskImage disk, boolean createDisk, Path iso,
-                                                 int memoryMb, int cpus,
+                                                 Path floppy, int memoryMb, int cpus,
                                                  boolean networking, GuestProfile profile,
                                                  VmSpec.Vga vga, Consumer<String> logger)
             throws IOException {
@@ -105,8 +105,15 @@ public final class QemuVirtualMachine implements VirtualMachine {
             builder.addDisk(disk);
         }
         if (iso != null) {
-            builder.cdrom(iso).bootOrder("dc");
+            builder.cdrom(iso);
         }
+        if (floppy != null && qemu.architecture() != VmSpec.Architecture.AARCH64) {
+            builder.floppy(floppy);
+        }
+        // A floppy in the drive is a deliberate act, so it goes to the front of the boot order --
+        // otherwise inserting a Windows 95 boot disk into a machine with a hard disk would do
+        // nothing visible. Without one the order is unchanged: disk, then disc.
+        builder.bootOrder(floppy != null ? "adc" : "dc");
         return new QemuVirtualMachine(computerId, qemu, builder.build(), logger);
     }
 

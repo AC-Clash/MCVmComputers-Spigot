@@ -3,7 +3,9 @@ package com.acclash.vmcomputers.emu;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Extension to QEMU format, for disk images an admin supplied rather than ones the plugin made.
@@ -51,6 +53,27 @@ class DiskFormatTest {
         assertNull(VmPaths.diskFormat("ubuntu.iso"));
         assertNull(VmPaths.diskFormat("noextension"));
         assertNull(VmPaths.diskFormat(null));
+    }
+
+    /**
+     * Floppies are raw sector dumps whatever they are named, so there is no format to work out --
+     * only whether a name is one at all. The overlap with disks on {@code .img} is fine: they live
+     * in different folders and are asked about separately.
+     */
+    @Test
+    void recognisesTheNamesFloppyImagesCome() {
+        assertTrue(VmPaths.isFloppyName("win95boot.img"));
+        assertTrue(VmPaths.isFloppyName("DISK1.IMA"));
+        assertTrue(VmPaths.isFloppyName("drivers.vfd"));
+        assertTrue(VmPaths.isFloppyName("dos.flp"));
+    }
+
+    @Test
+    void refusesWhatIsNotAFloppy() {
+        assertFalse(VmPaths.isFloppyName("win95.qcow2"));
+        assertFalse(VmPaths.isFloppyName("ubuntu.iso"));
+        assertFalse(VmPaths.isFloppyName("readme.txt"));
+        assertFalse(VmPaths.isFloppyName(null));
     }
 
     /** The extension is the end of the name, not merely somewhere in it. */

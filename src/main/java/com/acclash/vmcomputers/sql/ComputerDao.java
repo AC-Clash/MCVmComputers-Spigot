@@ -125,6 +125,10 @@ public final class ComputerDao {
             if (!hasColumn(connection, "computers", "profile")) {
                 statement.executeUpdate("ALTER TABLE computers ADD COLUMN profile TEXT");
             }
+            // Empty drive on every existing machine.
+            if (!hasColumn(connection, "computers", "floppy")) {
+                statement.executeUpdate("ALTER TABLE computers ADD COLUMN floppy TEXT");
+            }
             // Cases placed before there was more than one kind read back as the plain one.
             if (!hasColumn(connection, "pending_cases", "case_type")) {
                 statement.executeUpdate("ALTER TABLE pending_cases ADD COLUMN case_type TEXT");
@@ -159,7 +163,7 @@ public final class ComputerDao {
     public List<Computer> loadAll() throws SQLException {
         List<Computer> out = new ArrayList<Computer>();
         String sql = "SELECT id, world, x, y, z, facing, monitor_size, type, state, iso, arch,"
-                + " owner, disk, profile FROM computers";
+                + " owner, disk, profile, floppy FROM computers";
         try (PreparedStatement statement = database.getSQLConnection().prepareStatement(sql);
              ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
@@ -187,6 +191,7 @@ public final class ComputerDao {
                     Computer.State.valueOf(rs.getString("state")));
             computer.setIsoName(rs.getString("iso"));
             computer.setDiskImage(rs.getString("disk"));
+            computer.setFloppyImage(rs.getString("floppy"));
             // An unknown name means the row predates a rename; AUTO still boots the machine.
             computer.setProfile(com.acclash.vmcomputers.emu.GuestProfile.parse(
                     rs.getString("profile")));
@@ -244,6 +249,7 @@ public final class ComputerDao {
                 saved.setOwner(computer.owner());
                 saved.setIsoName(computer.isoName());
                 saved.setDiskImage(computer.diskImage());
+                saved.setFloppyImage(computer.floppyImage());
                 saved.setProfile(computer.profile());
                 saved.setArchitecture(computer.architecture());
                 return saved;
@@ -473,6 +479,15 @@ public final class ComputerDao {
         try (PreparedStatement statement = database.getSQLConnection()
                 .prepareStatement("UPDATE computers SET profile = ? WHERE id = ?")) {
             statement.setString(1, profile == null ? null : profile.name());
+            statement.setInt(2, id);
+            statement.executeUpdate();
+        }
+    }
+
+    public void updateFloppy(int id, String floppyImage) throws SQLException {
+        try (PreparedStatement statement = database.getSQLConnection()
+                .prepareStatement("UPDATE computers SET floppy = ? WHERE id = ?")) {
+            statement.setString(1, floppyImage);
             statement.setInt(2, id);
             statement.executeUpdate();
         }

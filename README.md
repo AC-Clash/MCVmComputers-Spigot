@@ -228,6 +228,7 @@ plugins/vm_computers/
 ├── hardware.db          // SQLite: computers, panels, fitted parts
 ├── isos/                // put installer and live images here
 ├── disks/               // put existing disk images here, to boot systems already installed
+├── floppies/            // boot floppies and driver disks, for the oldest guests
 ├── hdds/                // one qcow2 per computer, plus ARM firmware state
 └── shared/              // files handed to guests too old to have networking
 ```
@@ -265,6 +266,7 @@ All are subcommands of `/vmcomputers`, aliased `/vmc` and `/computer`.
 | `/vmcomputers remove [id]` | Removes a computer and its disk. |
 | `/vmcomputers iso [<id> <file\|none>]` | Lists available ISOs, or inserts and ejects one. |
 | `/vmcomputers disk [<id> <file\|none>]` | Lists supplied disk images, or boots a computer from one. Admin-only. |
+| `/vmcomputers floppy [<id> <file\|none>]` | Lists floppy images, or puts one in the drive. |
 | `/vmcomputers profile [<id> <name>]` | Sets which era of guest hardware a computer has. See below. |
 | `/vmcomputers type <text>` | Types into the guest. Supports `@RETURN @TAB @ESC @UP`..`@F12`. |
 | `/vmcomputers keys [game\|menu\|bind <input> <key>\|reset]` | Rebinds the chair's keys. |
@@ -277,6 +279,25 @@ All are subcommands of `/vmcomputers`, aliased `/vmc` and `/computer`.
 The pointer is tracked but deliberately never drawn — Minecraft's own crosshair is already exactly
 where it should be, and painting the framebuffer on every head movement costs frames. `debug` exists
 because "invisible and working" looks identical to "invisible and broken". Leave it off.
+
+## Floppies
+
+Old guests need them, and not for nostalgia. **A retail Windows 95 CD is not bootable** — the
+supported way to install it is to boot a DOS floppy carrying CD-ROM drivers and run setup from the
+disc. Windows XP's F6 driver prompt reads a floppy and nothing else either. Without a floppy drive
+those guests cannot be installed from their own media at all.
+
+Drop `.img`, `.ima`, `.vfd`, `.flp`, `.dsk` or `.fd` files into `floppies/` and insert one with
+`/vmcomputers floppy <id> <file>`. The floppy and the CD are separate drives on purpose — installing
+Windows 95 needs both at once.
+
+A machine with a floppy in it **boots from the floppy first**, then its hard disk, then the disc.
+Without one the order is unchanged.
+
+Images are attached **write-protected**, exactly like the write-protect tab on a real install disk.
+Nothing that boots from a floppy needs to write to it, and this is what makes inserting one safe for
+any player rather than admin-only: a guest cannot damage an image the admin put there for everyone.
+x86 only — the ARM board has no floppy controller.
 
 ## Guest profiles
 

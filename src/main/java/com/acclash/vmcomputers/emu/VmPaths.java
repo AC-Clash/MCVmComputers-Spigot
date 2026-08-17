@@ -50,6 +50,18 @@ public final class VmPaths {
         return root().resolve("disks");
     }
 
+    /**
+     * Floppy images, which are how the oldest guests get installed at all.
+     *
+     * <p>Not a nostalgia feature. A retail Windows 95 CD is not bootable, so the supported way to
+     * install it is to boot a DOS floppy carrying CD-ROM drivers and run setup from there; without
+     * a floppy drive that guest cannot be installed from its own media. Windows XP's F6 driver
+     * prompt reads a floppy and nothing else either.
+     */
+    public static Path floppyDirectory() {
+        return root().resolve("floppies");
+    }
+
     /** One qcow2 per computer, named by its id. */
     /**
      * Folder handed to guests as a read-only drive.
@@ -93,6 +105,7 @@ public final class VmPaths {
         java.nio.file.Files.createDirectories(sharedDirectory());
         Files.createDirectories(isoDirectory());
         Files.createDirectories(diskDirectory());
+        Files.createDirectories(floppyDirectory());
         Files.createDirectories(root().resolve("hdds"));
     }
 
@@ -120,6 +133,37 @@ public final class VmPaths {
     /** ISO file names available to insert, sorted. */
     public static List<String> availableIsos() {
         return namesIn(isoDirectory(), ".iso");
+    }
+
+    /**
+     * Floppy image extensions. All of them are raw sector dumps whatever they are called, which is
+     * why there is no format table here the way there is for disks.
+     */
+    private static final String[] FLOPPY_EXTENSIONS =
+            { ".img", ".ima", ".vfd", ".flp", ".dsk", ".fd" };
+
+    /** Floppy image names available to insert, sorted. */
+    public static List<String> availableFloppies() {
+        return namesIn(floppyDirectory(), FLOPPY_EXTENSIONS);
+    }
+
+    /** Resolves a floppy image name to a readable file, or null. */
+    public static Path resolveFloppy(String name) {
+        return resolveWithin(floppyDirectory(), name);
+    }
+
+    /** Whether this name looks like a floppy image at all. */
+    public static boolean isFloppyName(String name) {
+        if (name == null) {
+            return false;
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        for (String extension : FLOPPY_EXTENSIONS) {
+            if (lower.endsWith(extension)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Admin-supplied disk image names available to attach, sorted. */

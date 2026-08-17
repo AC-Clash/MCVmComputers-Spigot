@@ -45,6 +45,7 @@ public final class Computer {
     private volatile State state;
     private volatile String isoName;
     private volatile String diskImage;
+    private volatile String floppyImage;
     private volatile com.acclash.vmcomputers.emu.GuestProfile profile =
             com.acclash.vmcomputers.emu.GuestProfile.AUTO;
     private volatile VmSpec.Architecture architecture = VmSpec.Architecture.X86_64;
@@ -218,6 +219,20 @@ public final class Computer {
 
     public void setDiskImage(String diskImage) {
         this.diskImage = diskImage;
+    }
+
+    /**
+     * File name of the floppy in this computer's drive, or null.
+     *
+     * <p>Separate from the ISO because a machine installing Windows 95 needs both at once: the
+     * floppy carries the CD-ROM drivers, and the disc carries setup.
+     */
+    public String floppyImage() {
+        return floppyImage;
+    }
+
+    public void setFloppyImage(String floppyImage) {
+        this.floppyImage = floppyImage;
     }
 
     /**
