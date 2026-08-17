@@ -36,7 +36,7 @@ Two reference documents are worth reading before touching guest configuration:
 
 ```bash
 ./gradlew build          # compiles + runs tests
-./gradlew test           # 65 tests, all pure logic, ~1s
+./gradlew test           # 67 tests, all pure logic, ~1s
 ./gradlew runServer      # downloads + runs Paper 26.2 into run/ (gitignored)
 ```
 
@@ -192,6 +192,15 @@ traffic on every head movement.
 
 ### QEMU / guests
 
+- **On a BIOS machine the IDE slot a drive lands in is everything.** Index 0 is the primary master,
+  which DOS and Windows call C:, and QEMU assigns indices in the order `-drive` arguments are
+  written. The shared folder used to be emitted before the disks and so became C: -- Windows 95
+  setup installed itself onto a vvfat overlay mounted `snapshot=on`, every write was thrown away at
+  power-off, and the real disk stayed empty. It looked exactly like "the disk is not being written
+  to". Every IDE drive now carries an explicit `index=`.
+- **DOS and Windows 9x are uniprocessor.** `-smp 2` is at best ignored and at worst trips them over
+  the MP tables. Capped per profile.
+
 - **q35 takes a floppy as readily as `pc`** — QEMU adds the `isa-fdc` controller itself when a
   floppy drive is asked for. Floppy support is gated on architecture, not machine type. Checked
   against a real image; the obvious assumption that q35 refuses is wrong.
@@ -253,7 +262,7 @@ Play-tested in game: the whole delivery-truck sequence, ordering and checkout, t
 ISO boot on ARM after the `bootindex` fix, the power indicator, and `/vmcomputers type` including
 shifted characters.
 
-Covered by tests (`./gradlew test`, 65 of them, all pure): the display transform including
+Covered by tests (`./gradlew test`, 67 of them, all pure): the display transform including
 rotation-about-pivot and the folded-gear case, the screen ray including the parallax regression,
 image fitting, and the whole key table.
 

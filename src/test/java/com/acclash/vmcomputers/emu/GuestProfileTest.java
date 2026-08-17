@@ -140,6 +140,28 @@ class GuestProfileTest {
         assertEquals(4096, GuestProfile.COMPAQ_PRESARIO.clampMemory(4096));
     }
 
+    /**
+     * DOS and Windows 9x are uniprocessor. Handed a second core they either ignore it or trip over
+     * the MP tables that come with it, and the machine that shipped as a Windows 98 box was never
+     * going to have two.
+     */
+    @Test
+    void preSmpGuestsGetOneCore() {
+        assertEquals(1, GuestProfile.DOS.clampCpus(8));
+        assertEquals(1, GuestProfile.WIN9X.clampCpus(8));
+        assertEquals(1, GuestProfile.DELL_DIMENSION_L500R.clampCpus(8));
+        // And a ceiling never raises what was asked for.
+        assertEquals(1, GuestProfile.WIN9X.clampCpus(1));
+    }
+
+    @Test
+    void everythingWithSmpKeepsItsCores() {
+        assertEquals(8, GuestProfile.WINXP.clampCpus(8));
+        assertEquals(8, GuestProfile.COMPAQ_PRESARIO.clampCpus(8));
+        assertEquals(8, GuestProfile.MODERN_LINUX.clampCpus(8));
+        assertEquals(8, GuestProfile.MODERN_ARM.clampCpus(8));
+    }
+
     /** Pre-USB guests need a relative PS/2 mouse; an absolute tablet leaves them with no pointer. */
     @Test
     void onlyGuestsWithUsbGetAnAbsolutePointer() {

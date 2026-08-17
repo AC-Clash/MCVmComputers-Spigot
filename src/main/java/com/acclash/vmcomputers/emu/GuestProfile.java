@@ -202,6 +202,30 @@ public enum GuestProfile {
         return maxMemoryMb;
     }
 
+    /**
+     * Most cores this guest can actually use, or 0 for no ceiling.
+     *
+     * <p>Listed rather than derived. DOS and Windows 9x are uniprocessor -- handed a second CPU
+     * they either ignore it or trip over the MP tables that come with it -- and every rule that
+     * would infer that from another field is a rule the next profile breaks.
+     */
+    public int maxCpus() {
+        switch (this) {
+            case DOS:
+            case WIN9X:
+            case DELL_DIMENSION_L500R:
+                return 1;
+            default:
+                return 0;
+        }
+    }
+
+    /** Caps requested cores at what this guest can survive. */
+    public int clampCpus(int requested) {
+        int cap = maxCpus();
+        return cap > 0 ? Math.min(requested, cap) : requested;
+    }
+
     /** Whether this guest is old enough to need files handed to it on a fake disk. */
     public boolean wantsSharedFolder() {
         return sharedFolder;

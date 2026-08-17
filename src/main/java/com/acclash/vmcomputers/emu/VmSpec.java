@@ -333,17 +333,6 @@ public final class VmSpec {
             }
         }
 
-        if (sharedFolder != null) {
-            a.add("-drive");
-            // snapshot=on rather than readonly=on, for two reasons. QEMU refuses to attach a
-            // read-only IDE hard disk at all ("Block node is read-only"), and vvfat's writable
-            // mode has a long history of eating the host directory behind it. A snapshot gives the
-            // guest a disk it can write to freely -- DOS wants somewhere to save a config -- while
-            // every write lands in a throwaway overlay and the folder on the host is never touched.
-            a.add("file=fat:" + sharedFolder.toAbsolutePath()
-                    + ",format=raw,if=ide,snapshot=on");
-        }
-
         if (audio) {
             // The backend is "none": QEMU still mixes the guest's audio, it just has nowhere local
             // to play it. That is exactly what is wanted -- the samples are captured off the VNC
@@ -404,10 +393,35 @@ public final class VmSpec {
                 unit++;
             }
         } else {
+            // Every IDE drive gets an explicit index, because the slot a disk lands in is the
+            // whole game on a BIOS machine: index 0 is the primary master, which DOS and Windows
+            // call C:, and an installer writes there.
+            //
+            // This was a real bug. The shared folder was emitted first and so took index 0, which
+            // meant Windows 95 setup installed itself onto the vvfat overlay -- mounted
+            // snapshot=on, so every write was discarded when the machine stopped. The hard disk
+            // sat at index 1 and stayed empty, and setup could never be resumed. Position is
+            // stated here rather than left to the order these happen to be written.
+            int index = 0;
             for (DiskImage disk : disks) {
                 a.add("-drive");
                 a.add("file=" + disk.path().toAbsolutePath() + ",format=" + disk.format()
-                        + ",if=" + diskInterface.value());
+                        + ",if=" + diskInterface.value() + ",index=" + index);
+                index++;
+            }
+            if (sharedFolder != null) {
+                // Behind the real disks, never in front of them.
+                //
+                // snapshot=on rather than readonly=on, for two reasons. QEMU refuses to attach a
+                // read-only IDE hard disk at all ("Block node is read-only"), and vvfat's writable
+                // mode has a long history of eating the host directory behind it. A snapshot gives
+                // the guest a disk it can write to freely -- DOS wants somewhere to save a config
+                // -- while every write lands in a throwaway overlay and the folder on the host is
+                // never touched. That is fine for a scratch drive and fatal for a boot drive, which
+                // is exactly why this must not be index 0.
+                a.add("-drive");
+                a.add("file=fat:" + sharedFolder.toAbsolutePath()
+                        + ",format=raw,if=ide,snapshot=on,index=" + index);
             }
         }
 

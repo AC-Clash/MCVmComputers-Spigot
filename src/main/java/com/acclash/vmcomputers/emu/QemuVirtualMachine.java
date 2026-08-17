@@ -70,7 +70,6 @@ public final class QemuVirtualMachine implements VirtualMachine {
         VmSpec.Builder builder = VmSpec.builder("vmcomputer-" + computerId)
                 .architecture(qemu.architecture())
                 .resolution(monitor.guestWidth(), monitor.guestHeight())
-                .cpus(cpus)
                 // Passed in rather than read here: this package stays free of Bukkit, and whether
                 // guests get a network card is an admin's decision rather than an emulator one.
                 .networking(networking);
@@ -85,7 +84,7 @@ public final class QemuVirtualMachine implements VirtualMachine {
         if (vga != null && qemu.architecture() != VmSpec.Architecture.AARCH64) {
             builder.vga(vga);
         }
-        builder.memoryMb(era.clampMemory(memoryMb));
+        builder.memoryMb(era.clampMemory(memoryMb)).cpus(era.clampCpus(cpus));
         if (era.wantsSharedFolder()) {
             // No network drivers, no clipboard: a folder on a fake disk is how anything gets in or
             // out of a guest this old.
